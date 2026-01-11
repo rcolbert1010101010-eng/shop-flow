@@ -9,7 +9,34 @@ export const settingsRepoApi: SettingsRepo = {
     return useShopStore.getState().settings;
   },
   async updateSettings(settings: Partial<SystemSettings>) {
-    const updatedSettings = await apiClient.put<SystemSettings>('/settings', settings);
-    useShopStore.getState().updateSettings(updatedSettings);
+    // Optimistically update local store first
+    useShopStore.getState().updateSettings(settings);
+
+    // Fire-and-forget server sync; do not block or throw on failure
+    void apiClient
+      .put<SystemSettings>('/settings', settings)
+      .then((updated) => {
+        useShopStore.getState().updateSettings(updated);
+      })
+      .catch((err) => {
+        console.warn('Settings sync failed; will keep local version', err);
+      });
+  },
+
+  async logSettingHistory(payload: any) {
+    // Best-effort; ignore failures
+    void apiClient.post('/settings/history', payload).catch((err) => {
+      console.warn('Settings history sync failed', err);
+    });
+  },
+
+  async listSettingHistory(args?: { key?: string; limit?: number }) {
+    try {
+      const res = await apiClient.get('/settings/history', { params: args });
+      return res || [];
+    } catch (err) {
+      console.warn('Settings history fetch failed', err);
+      return [];
+    }
   },
 };

@@ -816,6 +816,11 @@ export const useShopStore = create<ShopState>()(
           typeof localStorage !== 'undefined'
             ? ((localStorage.getItem(NEG_QOH_POLICY_KEY) as SystemSettings['inventory_negative_qoh_policy']) || 'WARN')
             : 'WARN',
+        default_price_level: 'retail',
+        minimum_margin_percent: 0,
+        ai_enabled: true,
+        ai_confirm_risky_actions: true,
+        negative_inventory_policy: 'warn',
       },
 
       updateSettings: (newSettings) =>

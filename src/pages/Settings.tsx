@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,49 +13,106 @@ import {
 import { useRepos } from '@/repos';
 import { useToast } from '@/hooks/use-toast';
 import { Save, Edit, X } from 'lucide-react';
-import { useShopStore } from '@/stores/shopStore';
+import { useSystemSettings } from '@/hooks/useSystemSettings';
+import { SYSTEM_SETTINGS_REGISTRY, type SystemSettingKey } from '@/config/systemSettingsRegistry';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
 
 export default function Settings() {
   const { settings, updateSettings } = useRepos().settings;
+  const { listResolved, set, getResolved, listHistory } = useSystemSettings();
   const { toast } = useToast();
   const [editing, setEditing] = useState(false);
-  const [formData, setFormData] = useState(() => ({
-    shop_name: settings?.shop_name ?? '',
-    default_labor_rate: (settings?.default_labor_rate ?? 0).toString(),
-    default_tax_rate: (settings?.default_tax_rate ?? 0).toString(),
-    currency: settings?.currency ?? 'USD',
-    units: settings?.units ?? 'imperial',
-    markup_retail_percent: (settings?.markup_retail_percent ?? 0).toString(),
-    markup_fleet_percent: (settings?.markup_fleet_percent ?? 0).toString(),
-    markup_wholesale_percent: (settings?.markup_wholesale_percent ?? 0).toString(),
-    session_user_name: settings?.session_user_name || '',
-    inventory_negative_qoh_policy: settings?.inventory_negative_qoh_policy || 'WARN',
-  }));
+  const [syncStatus, setSyncStatus] = useState<'synced' | 'pending'>('synced');
+  const resolvedSettings = useMemo(() => listResolved(), [listResolved]);
+  const [formData, setFormData] = useState<Record<SystemSettingKey | string, any>>({});
+  const [draft, setDraft] = useState<Record<SystemSettingKey | string, any>>({});
+  const [pendingChanges, setPendingChanges] = useState<
+    { key: SystemSettingKey; oldValue: any; newValue: any; sensitivity?: string; requiresReason?: boolean }[]
+  >([]);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmReason, setConfirmReason] = useState('');
+  const [isApplying, setIsApplying] = useState(false);
+  const [historyItems, setHistoryItems] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyFilter, setHistoryFilter] = useState<'all' | SystemSettingKey>('all');
 
   const hydrateForm = useCallback(() => {
-    if (!settings) return;
-    setFormData({
-      shop_name: settings.shop_name ?? '',
-      default_labor_rate: (settings.default_labor_rate ?? 0).toString(),
-      default_tax_rate: (settings.default_tax_rate ?? 0).toString(),
-      currency: settings.currency ?? 'USD',
-      units: settings.units ?? 'imperial',
-      markup_retail_percent: (settings.markup_retail_percent ?? 0).toString(),
-      markup_fleet_percent: (settings.markup_fleet_percent ?? 0).toString(),
-      markup_wholesale_percent: (settings.markup_wholesale_percent ?? 0).toString(),
-      session_user_name: settings.session_user_name || '',
-      inventory_negative_qoh_policy: settings.inventory_negative_qoh_policy || 'WARN',
-    });
-  }, [settings]);
+    const fromResolved = listResolved().reduce<Record<string, any>>((acc, item) => {
+      acc[item.key] = item.value;
+      return acc;
+    }, {});
+    const next = {
+      ...fromResolved,
+      shop_name: settings?.shop_name ?? '',
+      default_labor_rate: (settings?.default_labor_rate ?? 0).toString(),
+      default_tax_rate: (settings?.default_tax_rate ?? 0).toString(),
+      currency: settings?.currency ?? 'USD',
+      units: settings?.units ?? 'imperial',
+      markup_retail_percent: (settings?.markup_retail_percent ?? 0).toString(),
+      markup_fleet_percent: (settings?.markup_fleet_percent ?? 0).toString(),
+      markup_wholesale_percent: (settings?.markup_wholesale_percent ?? 0).toString(),
+      session_user_name: settings?.session_user_name || '',
+      inventory_negative_qoh_policy: settings?.inventory_negative_qoh_policy || 'WARN',
+      minimum_margin_percent: (fromResolved.minimum_margin_percent ?? 0).toString(),
+      labor_rate: (fromResolved.labor_rate ?? 0).toString(),
+    };
+    setFormData(next);
+    setDraft(next);
+  }, [listResolved, settings]);
 
   useEffect(() => {
     if (!editing) {
       hydrateForm();
     }
-  }, [settings, editing, hydrateForm]);
+  }, [settings, editing, hydrateForm, resolvedSettings]);
+
+  useEffect(() => {
+    const loadHistory = async () => {
+      setHistoryLoading(true);
+      try {
+        const rows = await listHistory({
+          key: historyFilter === 'all' ? undefined : historyFilter,
+          limit: 20,
+        });
+        setHistoryItems(rows || []);
+      } catch (err) {
+        setHistoryItems([]);
+      } finally {
+        setHistoryLoading(false);
+      }
+    };
+    void loadHistory();
+  }, [historyFilter, listHistory]);
+
+  const applySetting = async (key: SystemSettingKey, newValue: any, reason?: string) => {
+    const actorLabel = (draft as any).session_user_name || undefined;
+    try {
+      await set(key, newValue, { reason, source: 'ui', actorLabel });
+    } catch (err: any) {
+      toast({
+        title: 'Validation Error',
+        description: err?.message || 'Unable to update setting',
+        variant: 'destructive',
+      });
+      return false;
+    }
+    return true;
+  };
+
+  const handleFieldChange = (key: SystemSettingKey, newValue: any) => {
+    setDraft((prev) => ({ ...prev, [key]: newValue }));
+  };
 
   const handleSave = async () => {
-    if (!formData.shop_name.trim()) {
+    if (!draft.shop_name?.trim?.()) {
       toast({
         title: 'Validation Error',
         description: 'Shop name is required',
@@ -64,67 +121,121 @@ export default function Settings() {
       return;
     }
 
-    const parsePercent = (value: string) => {
-      const num = parseFloat(value);
-      return Number.isFinite(num) ? num : 0;
+    setSyncStatus('pending');
+
+    // Diff settings vs resolved to find changes
+    const entries = Object.keys(SYSTEM_SETTINGS_REGISTRY) as SystemSettingKey[];
+    const changes: { key: SystemSettingKey; oldValue: any; newValue: any; sensitivity?: string; requiresReason?: boolean }[] = [];
+    for (const key of entries) {
+      const entry = SYSTEM_SETTINGS_REGISTRY[key];
+      const oldValue = getResolved(key).value;
+      const newValueRaw = draft[key];
+      const newValue =
+        entry.valueType === 'number' ? (newValueRaw === '' ? null : Number(newValueRaw)) : newValueRaw;
+
+      if (newValue === undefined || newValue === null || (entry.valueType === 'number' && Number.isNaN(newValue))) continue;
+      if (newValue === oldValue) continue;
+
+      changes.push({ key, oldValue, newValue, sensitivity: entry.sensitivity, requiresReason: entry.requiresReason });
+    }
+
+    if (changes.length === 0) {
+      toast({ title: 'No changes', description: 'Nothing to save.' });
+      setEditing(false);
+      setSyncStatus('synced');
+      return;
+    }
+
+    const protectedChanges = changes.filter(
+      (c) => c.sensitivity === 'protected' || c.sensitivity === 'critical'
+    );
+    if (protectedChanges.length > 0) {
+      setPendingChanges(protectedChanges);
+      setConfirmReason('');
+      setConfirmOpen(true);
+      setSyncStatus('synced');
+      return;
+    }
+
+    // Apply non-protected changes immediately
+    for (const change of changes) {
+      if (change.newValue === null || Number.isNaN(change.newValue)) {
+        toast({ title: 'Validation Error', description: 'Invalid numeric value', variant: 'destructive' });
+        setSyncStatus('synced');
+        return;
+      }
+      await applySetting(change.key, change.newValue);
+    }
+
+    // Persist legacy settings fields
+    const legacyPayload = {
+      shop_name: draft.shop_name?.trim?.() ?? draft.shop_name,
+      default_labor_rate: Number(draft.default_labor_rate) || 0,
+      default_tax_rate: Number(draft.default_tax_rate) || 0,
+      currency: draft.currency,
+      units: draft.units,
+      markup_retail_percent: Number((draft as any).markup_retail_percent ?? 0),
+      markup_fleet_percent: Number((draft as any).markup_fleet_percent ?? 0),
+      markup_wholesale_percent: Number((draft as any).markup_wholesale_percent ?? 0),
+      session_user_name: (draft as any).session_user_name?.trim?.() ?? '',
+      inventory_negative_qoh_policy: (draft as any).inventory_negative_qoh_policy,
+      minimum_margin_percent: Number(draft.minimum_margin_percent) || 0,
+      labor_rate: Number(draft.labor_rate) || 0,
     };
 
-    const markupRetail = parsePercent(formData.markup_retail_percent);
-    const markupFleet = parsePercent(formData.markup_fleet_percent);
-    const markupWholesale = parsePercent(formData.markup_wholesale_percent);
+    await updateSettings(legacyPayload);
 
-    const hasInvalidMarkup =
-      [markupRetail, markupFleet, markupWholesale].some((num) => num < 0 || num > 1000);
+    toast({
+      title: 'Settings Updated',
+      description: 'Your changes have been saved',
+    });
+    setEditing(false);
+    setSyncStatus('synced');
+  };
 
-    if (hasInvalidMarkup) {
+  const resetConfirmation = () => {
+    setPendingChanges([]);
+    setConfirmReason('');
+    setConfirmOpen(false);
+  };
+
+  const confirmPending = async () => {
+    if (pendingChanges.length === 0) return;
+    const requiresReason = pendingChanges.some((c) => c.requiresReason);
+    if (requiresReason && confirmReason.trim().length < 5) {
       toast({
-        title: 'Validation Error',
-        description: 'Markup percentages must be between 0 and 1000.',
+        title: 'Reason required',
+        description: 'Please provide at least 5 characters.',
         variant: 'destructive',
       });
       return;
     }
+    setIsApplying(true);
+    await Promise.allSettled(
+      pendingChanges.map((change) =>
+        applySetting(
+          change.key,
+          change.newValue,
+          change.requiresReason ? confirmReason.trim() : confirmReason.trim() || undefined
+        )
+      )
+    );
+    setIsApplying(false);
+    setEditing(false);
+    hydrateForm();
+    resetConfirmation();
+    toast({
+      title: 'Settings Updated',
+      description: 'Protected changes saved',
+    });
+  };
 
-    const payload = {
-      shop_name: formData.shop_name.trim(),
-      default_labor_rate: parseFloat(formData.default_labor_rate) || 0,
-      default_tax_rate: parseFloat(formData.default_tax_rate) || 0,
-      currency: formData.currency,
-      units: formData.units,
-      markup_retail_percent: markupRetail,
-      markup_fleet_percent: markupFleet,
-      markup_wholesale_percent: markupWholesale,
-      session_user_name: formData.session_user_name.trim(),
-      inventory_negative_qoh_policy: formData.inventory_negative_qoh_policy,
-    };
-
-    try {
-      await updateSettings(payload);
-      toast({
-        title: 'Settings Updated',
-        description: 'Your changes have been saved',
-      });
-      setEditing(false);
-    } catch (error) {
-      useShopStore.getState().updateSettings(payload);
-      if (typeof localStorage !== 'undefined') {
-        const trimmed = payload.session_user_name.trim();
-        if (trimmed) {
-          localStorage.setItem('rhp.session_user_name', trimmed);
-        } else {
-          localStorage.removeItem('rhp.session_user_name');
-        }
-        if (payload.inventory_negative_qoh_policy) {
-          localStorage.setItem('rhp.inventory_negative_qoh_policy', payload.inventory_negative_qoh_policy);
-        }
-      }
-      toast({
-        title: 'Saved locally',
-        description: 'Server unavailable — settings stored locally for this browser session.',
-        variant: 'destructive',
-      });
-      setEditing(false);
-    }
+  const formatHistoryValue = (row: any, prefix: 'old' | 'new') => {
+    const type = row[`${prefix}_value_type`];
+    if (type === 'number') return row[`${prefix}_value_number`];
+    if (type === 'boolean') return String(row[`${prefix}_value_bool`]);
+    if (type === 'string') return row[`${prefix}_value_text`];
+    return row[`${prefix}_value_json`] ?? '';
   };
 
   return (
@@ -145,7 +256,7 @@ export default function Settings() {
                 <X className="w-4 h-4 mr-2" />
                 Cancel
               </Button>
-              <Button onClick={handleSave}>
+              <Button onClick={handleSave} disabled={confirmOpen || isApplying}>
                 <Save className="w-4 h-4 mr-2" />
                 Save
               </Button>
@@ -164,172 +275,198 @@ export default function Settings() {
           )
         }
       />
+      <div className="flex items-center justify-between mb-4 text-sm text-muted-foreground">
+        <span>Status: {syncStatus === 'synced' ? 'Synced' : 'Pending sync'}</span>
+        <span className="text-xs">Values update immediately; background sync is offline-friendly.</span>
+      </div>
 
       <div className="form-section max-w-xl">
         <h2 className="text-lg font-semibold mb-4">Shop Information</h2>
         <div className="space-y-4">
-          <div>
-            <Label htmlFor="shop_name">Shop Name *</Label>
-            <Input
-              id="shop_name"
-              value={formData.shop_name}
-              onChange={(e) => setFormData({ ...formData, shop_name: e.target.value })}
-              disabled={!editing}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="default_labor_rate">Default Labor Rate ($/hr)</Label>
-              <Input
-                id="default_labor_rate"
-                type="number"
-                step="0.01"
-                value={formData.default_labor_rate}
-                onChange={(e) => setFormData({ ...formData, default_labor_rate: e.target.value })}
-                disabled={!editing}
-              />
-            </div>
-            <div>
-              <Label htmlFor="default_tax_rate">Default Tax Rate (%)</Label>
-              <Input
-                id="default_tax_rate"
-                type="number"
-                step="0.01"
-                value={formData.default_tax_rate}
-                onChange={(e) => setFormData({ ...formData, default_tax_rate: e.target.value })}
-                disabled={!editing}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="currency">Currency</Label>
-              <Select
-                value={formData.currency}
-                onValueChange={(value) => setFormData({ ...formData, currency: value })}
-                disabled={!editing}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="USD">USD ($)</SelectItem>
-                  <SelectItem value="CAD">CAD ($)</SelectItem>
-                  <SelectItem value="EUR">EUR (€)</SelectItem>
-                  <SelectItem value="GBP">GBP (£)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="units">Units</Label>
-              <Select
-                value={formData.units}
-                onValueChange={(value) => setFormData({ ...formData, units: value })}
-                disabled={!editing}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="imperial">Imperial (miles, gallons)</SelectItem>
-                  <SelectItem value="metric">Metric (km, liters)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="negative_qoh_policy">Negative Inventory (QOH) Policy</Label>
-              <Select
-                value={formData.inventory_negative_qoh_policy}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, inventory_negative_qoh_policy: value as typeof formData.inventory_negative_qoh_policy })
-                }
-                disabled={!editing}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="WARN">Warn</SelectItem>
-                  <SelectItem value="BLOCK">Block</SelectItem>
-                  <SelectItem value="ALLOW">Allow</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div>
-            <Label htmlFor="session_user_name">Session User Name</Label>
-            <Input
-              id="session_user_name"
-              value={formData.session_user_name}
-              onChange={(e) => setFormData({ ...formData, session_user_name: e.target.value })}
-              disabled={!editing}
-              placeholder="Used for audit logging until auth is implemented"
-            />
-          </div>
+          {(['labor_rate', 'negative_inventory_policy', 'default_price_level', 'minimum_margin_percent', 'ai_enabled', 'ai_confirm_risky_actions'] as SystemSettingKey[]).map((key) => {
+            const entry = SYSTEM_SETTINGS_REGISTRY[key];
+            const value = draft[key] ?? '';
+            if (entry.valueType === 'number') {
+              return (
+                <div key={key}>
+                  <Label>{entry.label}</Label>
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    value={value}
+                    onChange={(e) => handleFieldChange(key, e.target.value)}
+                    disabled={!editing}
+                  />
+                  <p className="text-xs text-muted-foreground">{entry.description}</p>
+                </div>
+              );
+            }
+            if (entry.valueType === 'boolean') {
+              return (
+                <div key={key} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4"
+                    checked={Boolean(value)}
+                    disabled={!editing}
+                    onChange={(e) => handleFieldChange(key, e.target.checked)}
+                  />
+                  <div>
+                    <p className="font-medium">{entry.label}</p>
+                    <p className="text-xs text-muted-foreground">{entry.description}</p>
+                  </div>
+                </div>
+              );
+            }
+            if (entry.valueType === 'string' && entry.constraints?.allowedValues) {
+              return (
+                <div key={key}>
+                  <Label>{entry.label}</Label>
+                  <Select
+                    value={String(value)}
+                    onValueChange={(v) => handleFieldChange(key, v)}
+                    disabled={!editing}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={entry.label} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {entry.constraints.allowedValues.map((opt) => (
+                        <SelectItem key={opt} value={opt}>
+                          {opt.toUpperCase()}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">{entry.description}</p>
+                </div>
+              );
+            }
+            return null;
+          })}
         </div>
       </div>
 
       <div className="form-section max-w-xl mt-6">
-        <h2 className="text-lg font-semibold mb-4">Pricing</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div>
-            <Label htmlFor="markup_retail_percent">Retail Markup (%)</Label>
-            <Input
-              id="markup_retail_percent"
-              type="number"
-              min="0"
-              max="1000"
-              step="0.01"
-              value={formData.markup_retail_percent}
-              onChange={(e) => setFormData({ ...formData, markup_retail_percent: e.target.value })}
-              disabled={!editing}
-            />
-          </div>
-          <div>
-            <Label htmlFor="markup_fleet_percent">Fleet Markup (%)</Label>
-            <Input
-              id="markup_fleet_percent"
-              type="number"
-              min="0"
-              max="1000"
-              step="0.01"
-              value={formData.markup_fleet_percent}
-              onChange={(e) => setFormData({ ...formData, markup_fleet_percent: e.target.value })}
-              disabled={!editing}
-            />
-          </div>
-          <div>
-            <Label htmlFor="markup_wholesale_percent">Wholesale Markup (%)</Label>
-            <Input
-              id="markup_wholesale_percent"
-              type="number"
-              min="0"
-              max="1000"
-              step="0.01"
-              value={formData.markup_wholesale_percent}
-              onChange={(e) => setFormData({ ...formData, markup_wholesale_percent: e.target.value })}
-              disabled={!editing}
-            />
-          </div>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-lg font-semibold">Change History</h2>
+          <Select value={historyFilter} onValueChange={(v) => setHistoryFilter(v as any)}>
+            <SelectTrigger className="w-52">
+              <SelectValue placeholder="Filter by setting" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All settings</SelectItem>
+              {(Object.keys(SYSTEM_SETTINGS_REGISTRY) as SystemSettingKey[]).map((key) => (
+                <SelectItem key={key} value={key}>
+                  {SYSTEM_SETTINGS_REGISTRY[key].label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
+        {historyLoading ? (
+          <p className="text-sm text-muted-foreground">Loading history…</p>
+        ) : historyItems.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No history available.</p>
+        ) : (
+          <div className="space-y-2 text-sm">
+            {historyItems.map((row, idx) => {
+              const label =
+                SYSTEM_SETTINGS_REGISTRY[(row.setting_key as SystemSettingKey) ?? '']?.label ||
+                row.setting_key;
+              const oldVal = formatHistoryValue(row, 'old');
+              const newVal = formatHistoryValue(row, 'new');
+              return (
+                <div key={`${row.id || idx}`} className="border rounded-md px-3 py-2 flex justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="font-medium">
+                      {label}{' '}
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(row.created_at).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {oldVal} → {newVal} · source: {row.source || 'ui'}
+                      {row.reason ? ` · reason: ${row.reason}` : ''}
+                    </div>
+                  </div>
+                  <div className="text-right text-xs text-muted-foreground">
+                    Actor: {row.actor_label || '—'}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      <div className="form-section max-w-xl mt-6">
-        <h2 className="text-lg font-semibold mb-4">About</h2>
-        <div className="text-sm text-muted-foreground space-y-2">
-          <p><strong>ShopPro</strong> - Heavy-Duty Repair Shop Management System</p>
-          <p>Operational Core Edition</p>
-          <p className="text-xs mt-4">
-            Note: Changes to labor rate only affect new labor lines. Existing labor lines retain their original rate.
-          </p>
+      {import.meta.env.DEV && (
+        <div className="form-section max-w-xl mt-6">
+          <h2 className="text-lg font-semibold mb-4">Diagnostics (DEV)</h2>
+          <div className="text-sm space-y-2">
+            {resolvedSettings.map((r) => (
+              <div key={r.key} className="flex justify-between border rounded-md px-3 py-2">
+                <div>
+                  <div className="font-medium">{r.key}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {r.label} · {r.category} · {r.valueType}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="font-mono text-sm">{String(r.value)}</div>
+                  <div className="text-xs text-muted-foreground">{r.source}</div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
+
+      <Dialog open={confirmOpen} onOpenChange={(open) => !open && resetConfirmation()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm changes</DialogTitle>
+          </DialogHeader>
+          {pendingChanges.length > 0 && (
+            <div className="space-y-3">
+              <div className="space-y-2">
+                {pendingChanges.map((c) => (
+                  <div key={c.key} className="flex items-center justify-between gap-2">
+                    <div>
+                      <div className="font-medium">{SYSTEM_SETTINGS_REGISTRY[c.key].label}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {String(c.oldValue)} → {String(c.newValue)}
+                      </div>
+                    </div>
+                    <Badge variant={c.sensitivity === 'critical' ? 'destructive' : 'secondary'}>
+                      {c.sensitivity?.toUpperCase()}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+              {pendingChanges.some((c) => c.requiresReason) && (
+                <div className="space-y-1">
+                  <Label>Reason (required)</Label>
+                  <Textarea
+                    value={confirmReason}
+                    onChange={(e) => setConfirmReason(e.target.value)}
+                    placeholder="Provide context for these changes"
+                  />
+                  <p className="text-xs text-muted-foreground">At least 5 characters.</p>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={resetConfirmation}>
+              Cancel
+            </Button>
+            <Button onClick={confirmPending} disabled={isApplying}>
+              {isApplying ? 'Saving…' : 'Confirm Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

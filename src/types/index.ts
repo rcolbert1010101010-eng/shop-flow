@@ -15,6 +15,11 @@ export interface SystemSettings {
   markup_wholesale_percent: number;
   session_user_name?: string;
   inventory_negative_qoh_policy?: NegativeInventoryPolicy;
+  default_price_level?: 'retail' | 'fleet' | 'wholesale';
+  minimum_margin_percent?: number;
+  ai_enabled?: boolean;
+  ai_confirm_risky_actions?: boolean;
+  negative_inventory_policy?: 'warn' | 'block' | 'allow';
 }
 
 // Customer

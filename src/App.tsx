@@ -49,6 +49,12 @@ import ReceivingHistory from "@/pages/ReceivingHistory";
 import ReceivingReceiptDetail from "@/pages/ReceivingReceiptDetail";
 import InvoiceDetail from "@/pages/InvoiceDetail";
 import InvoiceRegistry from "@/pages/InvoiceRegistry";
+import ReportsHome from "@/pages/Reports";
+import WorkInProcessReport from "@/pages/reports/WorkInProcessReport";
+import WorkOrdersWaitingPartsReport from "@/pages/reports/WorkOrdersWaitingPartsReport";
+import WorkOrdersReport from "@/pages/reports/WorkOrdersReport";
+import SalesOrdersReport from "@/pages/reports/SalesOrdersReport";
+import LowStockPartsReport from "@/pages/reports/LowStockPartsReport";
 
 const queryClient = new QueryClient();
 
@@ -100,7 +106,13 @@ const App = () => (
               <Route path="/returns/:id" element={<ReturnDetail />} />
               <Route path="/warranty" element={<WarrantyClaims />} />
               <Route path="/warranty/:id" element={<WarrantyClaimDetail />} />
+              <Route path="/reports" element={<ReportsHome />} />
               <Route path="/reports/returns-warranty" element={<ReturnsWarrantyReport />} />
+              <Route path="/reports/work-in-process" element={<WorkInProcessReport />} />
+              <Route path="/reports/work-orders-waiting-parts" element={<WorkOrdersWaitingPartsReport />} />
+              <Route path="/reports/work-orders" element={<WorkOrdersReport />} />
+              <Route path="/reports/sales-orders" element={<SalesOrdersReport />} />
+              <Route path="/reports/low-stock" element={<LowStockPartsReport />} />
               <Route path="/payments" element={<PaymentsPage />} />
               <Route path="/cycle-counts" element={<CycleCounts />} />
               <Route path="/cycle-counts/:id" element={<CycleCountDetail />} />

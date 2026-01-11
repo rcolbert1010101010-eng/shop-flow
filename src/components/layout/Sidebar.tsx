@@ -48,6 +48,7 @@ const navItems: NavItem[] = [
   { type: 'link', path: '/sales-orders', label: 'Sales Orders', icon: ShoppingCart },
   { type: 'link', path: '/invoices', label: 'Invoices', icon: FileText },
   { type: 'link', path: '/payments', label: 'Payments', icon: CreditCard },
+  { type: 'link', path: '/reports', label: 'Reports', icon: BarChart2 },
   {
     type: 'group',
     key: 'serviceOrders',

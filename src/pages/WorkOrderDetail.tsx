@@ -49,6 +49,7 @@ import { useShopStore } from '@/stores/shopStore';
 import { useToast } from '@/hooks/use-toast';
 import { Save, Plus, Trash2, FileCheck, Printer, Edit, X, Clock, Square, Shield, RotateCcw, Check, Pencil, X as XIcon, Info, ClipboardList } from 'lucide-react';
 import { SmartSearchSelect } from '@/components/common/SmartSearchSelect';
+import { useSystemSettings } from '@/hooks/useSystemSettings';
 import { Switch } from '@/components/ui/switch';
 import { QuickAddDialog } from '@/components/ui/quick-add-dialog';
 import { PrintWorkOrder, PrintWorkOrderPickList } from '@/components/print/PrintInvoice';
@@ -339,6 +340,7 @@ export default function WorkOrderDetail() {
   const [isBrowseCustomersOpen, setIsBrowseCustomersOpen] = useState(false);
   const [browseCustomersActiveOnly, setBrowseCustomersActiveOnly] = useState(true);
   const [browseCustomersPage, setBrowseCustomersPage] = useState(0);
+  const { get: getSystemSetting } = useSystemSettings();
   const currentOrder = workOrders.find((o) => o.id === id) || order;
   const currentOrderId = currentOrder?.id ?? null;
   const currentOrderUpdatedAt =
@@ -422,6 +424,7 @@ export default function WorkOrderDetail() {
     }
   }, [currentOrder, paymentAmount, payments.summary.balanceDue]);
   const workOrderActualHours = currentOrder ? getWorkOrderActualHours(currentOrder.id) : 0;
+  const laborRate = getSystemSetting('labor_rate');
   const jobProfitSummaries = useMemo(() => {
     const summary: Record<string, JobProfitSummary> = {};
     jobLines.forEach((job) => {
@@ -445,7 +448,7 @@ export default function WorkOrderDetail() {
           laborCost += entryHours * rate;
         }
       });
-      const laborRevenue = jobActualHours * settings.default_labor_rate;
+      const laborRevenue = jobActualHours * laborRate;
       const revenue = partsRevenue + laborRevenue;
       const cost = partsCost + laborCost;
       const margin = revenue - cost;
@@ -464,7 +467,7 @@ export default function WorkOrderDetail() {
       };
     });
     return summary;
-  }, [jobLines, partLines, laborLines, parts, technicians, settings.default_labor_rate, getJobTimeEntries, getJobActualHours]);
+  }, [jobLines, partLines, laborLines, parts, technicians, laborRate, getJobTimeEntries, getJobActualHours]);
   const woProfitTotals = useMemo(() => {
     const totals = Object.values(jobProfitSummaries).reduce(
       (acc, summary) => ({
@@ -481,7 +484,7 @@ export default function WorkOrderDetail() {
       ...totals,
       marginPercent: revenue > 0 ? (totals.margin / revenue) * 100 : 0,
     };
-  }, [jobProfitSummaries]);
+  }, [jobProfitSummaries, laborRate]);
 const jobReadinessValues = Object.values(jobReadinessById);
   const hasWaitingPartsStatus = jobLines.some((job) => job.status === 'WAITING_PARTS');
   const hasWaitingApprovalStatus = jobLines.some((job) => job.status === 'WAITING_APPROVAL');
@@ -2796,7 +2799,7 @@ const jobReadinessValues = Object.values(jobReadinessById);
 
             <TabsContent value="labor">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-medium">Labor (Rate: ${settings.default_labor_rate}/hr)</h3>
+                <h3 className="font-medium">Labor (Rate: ${laborRate}/hr)</h3>
                 {!isInvoiced && (
                   <Button size="sm" onClick={() => openLaborDialog(null)}>
                     <Plus className="w-4 h-4 mr-2" />

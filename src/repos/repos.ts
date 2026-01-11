@@ -51,6 +51,8 @@ import type { PlasmaPricingSettings } from '@/services/plasmaPricingService';
 export interface SettingsRepo {
   settings: SystemSettings;
   updateSettings: (settings: Partial<SystemSettings>) => void;
+  logSettingHistory?: (payload: any) => Promise<void> | void;
+  listSettingHistory?: (args?: { key?: string; limit?: number }) => Promise<any[]>;
 }
 
 export interface CustomersRepo {
