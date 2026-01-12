@@ -103,23 +103,25 @@ export default function SalesOrders() {
         }
       />
 
-      <div className="flex justify-end gap-2 mb-4">
-        {(['open', 'estimate', 'partial', 'completed', 'invoiced', 'cancelled', 'deleted'] as const).map((filter) => (
-          <Button
-            key={filter}
-            variant={statusFilter === filter ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setStatusFilter(filter)}
-          >
-            {filter === 'open' && 'Open'}
-            {filter === 'estimate' && 'Estimates'}
-            {filter === 'partial' && 'Partial'}
-            {filter === 'completed' && 'Completed'}
-            {filter === 'invoiced' && 'Invoiced'}
-            {filter === 'cancelled' && 'Cancelled'}
-            {filter === 'deleted' && 'Deleted'}
-          </Button>
-        ))}
+      <div className="mb-4 overflow-x-auto">
+        <div className="flex justify-end gap-2 min-w-max pr-1">
+          {(['open', 'estimate', 'partial', 'completed', 'invoiced', 'cancelled', 'deleted'] as const).map((filter) => (
+            <Button
+              key={filter}
+              variant={statusFilter === filter ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setStatusFilter(filter)}
+            >
+              {filter === 'open' && 'Open'}
+              {filter === 'estimate' && 'Estimates'}
+              {filter === 'partial' && 'Partial'}
+              {filter === 'completed' && 'Completed'}
+              {filter === 'invoiced' && 'Invoiced'}
+              {filter === 'cancelled' && 'Cancelled'}
+              {filter === 'deleted' && 'Deleted'}
+            </Button>
+          ))}
+        </div>
       </div>
 
       <DataTable

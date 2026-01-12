@@ -706,9 +706,9 @@ export default function UnitForm() {
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="customer_id">Customer *</Label>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <SmartSearchSelect
-                      className="flex-1 min-w-0"
+                      className="flex-1 min-w-0 w-full sm:w-auto"
                       value={formData.customer_id || null}
                       onChange={(id) => {
                         const next = id ?? '';
@@ -722,7 +722,7 @@ export default function UnitForm() {
                     <Button
                       type="button"
                       variant="outline"
-                      className="flex-shrink-0"
+                      className="flex-shrink-0 w-full sm:w-auto"
                       onClick={() => setIsBrowseCustomersOpen(true)}
                     >
                       Browse customers

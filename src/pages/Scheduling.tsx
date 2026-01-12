@@ -1052,7 +1052,7 @@ export default function Scheduling() {
         title="Scheduling"
         subtitle="Plan technician workload for the week."
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 min-w-0">
             <Select value={technicianFilter} onValueChange={(val) => setTechnicianFilter(val as typeof technicianFilter)}>
               <SelectTrigger className="w-44">
                 <SelectValue placeholder="All technicians" />

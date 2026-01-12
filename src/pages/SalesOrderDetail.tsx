@@ -168,7 +168,6 @@ export default function SalesOrderDetail() {
   const [isBrowseCustomersOpen, setIsBrowseCustomersOpen] = useState(false);
   const [browseCustomersActiveOnly, setBrowseCustomersActiveOnly] = useState(true);
   const [browseCustomersPage, setBrowseCustomersPage] = useState(0);
-  const showMobileActionBar = isMobile && !isLocked;
 
   const currentOrder = salesOrders.find((o) => o.id === id) || order;
   const customer = customers.find((c) => c.id === (currentOrder?.customer_id || selectedCustomerId));
@@ -346,6 +345,7 @@ export default function SalesOrderDetail() {
   const isEstimate = currentOrder?.status === 'ESTIMATE';
   const isCancelled = currentOrder?.status === 'CANCELLED';
   const isLocked = isInvoiced || isCancelled;
+  const showMobileActionBar = isMobile && !isLocked;
   const isCustomerOnHold = Boolean(customer?.credit_hold);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const statusLabel =
