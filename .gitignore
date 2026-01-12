@@ -28,3 +28,4 @@ scripts/
 # Local backups
 *.bak
 
+.vercel

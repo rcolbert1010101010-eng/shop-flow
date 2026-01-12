@@ -6,6 +6,7 @@ import { useRepos } from '@/repos';
 
 export function useSystemSettings() {
   const { settings: settingsRepo } = useRepos();
+  const settingsPreviewEnabled = (import.meta as any).env?.VITE_SETTINGS_PREVIEW === 'true';
   const seededRef = useRef(false);
 
   useEffect(() => {
@@ -15,7 +16,7 @@ export function useSystemSettings() {
       try {
         await ensureDefaultSettings((missing) => settingsRepo.updateSettings(missing));
       } catch (err) {
-        if (import.meta.env.DEV) {
+        if (settingsPreviewEnabled) {
           // eslint-disable-next-line no-console
           console.warn('ensureDefaultSettings failed', err);
         }

@@ -26,6 +26,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 
 export default function Settings() {
+  const settingsPreviewEnabled = (import.meta as any).env?.VITE_SETTINGS_PREVIEW === 'true';
   const { settings, updateSettings } = useRepos().settings;
   const { listResolved, set, getResolved, listHistory } = useSystemSettings();
   const { toast } = useToast();
@@ -400,7 +401,7 @@ export default function Settings() {
         )}
       </div>
 
-      {import.meta.env.DEV && (
+      {settingsPreviewEnabled && (
         <div className="form-section max-w-xl mt-6">
           <h2 className="text-lg font-semibold mb-4">Diagnostics (DEV)</h2>
           <div className="text-sm space-y-2">
