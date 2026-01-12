@@ -183,7 +183,10 @@ export function Sidebar() {
           variant="ghost"
           size="icon"
           onClick={() => setCollapsed(false)}
-          className="fixed top-4 left-4 z-50 bg-card shadow-md border border-border hover:bg-accent"
+          className={cn(
+            'fixed top-4 left-4 z-50 bg-card shadow-md border border-border hover:bg-accent',
+            'no-print'
+          )}
         >
           <Menu className="w-5 h-5" />
         </Button>
@@ -191,7 +194,7 @@ export function Sidebar() {
 
       <aside
         className={cn(
-          'h-screen flex flex-col transition-all duration-300',
+          'h-screen flex flex-col transition-all duration-300 no-print',
           sidebarColors.bg,
           sidebarColors.border,
           'border-r',

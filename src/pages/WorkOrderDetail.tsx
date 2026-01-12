@@ -47,7 +47,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useShopStore } from '@/stores/shopStore';
 import { useToast } from '@/hooks/use-toast';
-import { Save, Plus, Trash2, FileCheck, Printer, Edit, X, Clock, Square, Shield, RotateCcw, Check, Pencil, X as XIcon, Info, ClipboardList } from 'lucide-react';
+import { Save, Plus, Trash2, FileCheck, Printer, Edit, X, Clock, Square, Shield, RotateCcw, Check, Pencil, X as XIcon, Info, ClipboardList, Sparkles } from 'lucide-react';
 import { SmartSearchSelect } from '@/components/common/SmartSearchSelect';
 import { useSystemSettings } from '@/hooks/useSystemSettings';
 import { Switch } from '@/components/ui/switch';
@@ -61,6 +61,8 @@ import { AddUnitDialog } from '@/components/units/AddUnitDialog';
 import { useRepos } from '@/repos';
 import { summarizeFabJob } from '@/services/fabJobSummary';
 import { usePayments } from '@/hooks/usePayments';
+import { AIAssistPanel } from '@/components/ai/AIAssistPanel';
+import { suggestParts } from '@/services/aiAssist/aiAssistPreview';
 import type {
   FabJobLine,
   PlasmaJobLine,
@@ -263,6 +265,7 @@ export default function WorkOrderDetail() {
   };
   const formatNumber = (value: number | string | null | undefined, digits = 2) =>
     toNumeric(value).toFixed(digits);
+  const aiAssistEnabled = (import.meta as any).env?.VITE_AI_ASSIST_PREVIEW === 'true';
 
   const isNew = id === 'new';
   const unitFromQuery = searchParams.get('unit_id') || '';
@@ -276,6 +279,7 @@ export default function WorkOrderDetail() {
   const [addPartDialogOpen, setAddPartDialogOpen] = useState(false);
   const [selectedPartId, setSelectedPartId] = useState('');
   const [partQty, setPartQty] = useState('1');
+  const [aiPartsQuery, setAiPartsQuery] = useState('');
   const [newPartDialogOpen, setNewPartDialogOpen] = useState(false);
   const [newPartData, setNewPartData] = useState({
     part_number: '',
@@ -301,9 +305,11 @@ export default function WorkOrderDetail() {
   const [newCustomerName, setNewCustomerName] = useState('');
   const [quickAddUnitOpen, setQuickAddUnitOpen] = useState(false);
   const [newUnitName, setNewUnitName] = useState('');
+  const [aiAssistOpen, setAiAssistOpen] = useState(false);
 
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [notesValue, setNotesValue] = useState('');
+  const [aiOriginalNote, setAiOriginalNote] = useState<string | null>(null);
   const [showInvoiceDialog, setShowInvoiceDialog] = useState(false);
   const [showCoreReturnDialog, setShowCoreReturnDialog] = useState(false);
   const [coreReturnLineId, setCoreReturnLineId] = useState<string | null>(null);
@@ -373,6 +379,10 @@ export default function WorkOrderDetail() {
   useEffect(() => {
     setBrowsePartsPage(0);
   }, [browsePartsInStockOnly]);
+  const aiPartSuggestions = useMemo(
+    () => (aiAssistEnabled ? suggestParts(aiPartsQuery, parts) : []),
+    [aiAssistEnabled, aiPartsQuery, parts]
+  );
   const jobLines: WorkOrderJobLine[] = useMemo(
     () => (currentOrder ? getWorkOrderJobLines(currentOrder.id) : []),
     [currentOrder, currentOrderId, currentOrderUpdatedAt, getWorkOrderJobLines]
@@ -1222,6 +1232,12 @@ const jobReadinessValues = Object.values(jobReadinessById);
     toast({ title: 'Notes Updated' });
   };
 
+  const handleAiApplyNote = (original: string, rewritten: string) => {
+    setAiOriginalNote(original);
+    setNotesValue(rewritten);
+    setIsEditingNotes(true);
+  };
+
   const handleAddPayment = async () => {
     if (!currentOrder) return;
     const amountValue = toNumeric(paymentAmount);
@@ -1731,89 +1747,97 @@ const jobReadinessValues = Object.values(jobReadinessById);
         }
         backTo="/work-orders"
         actions={
-          !isInvoiced ? (
-            <>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setSheetPrintMode('TECH');
-                  requestAnimationFrame(() => {
-                    window.print();
-                    setSheetPrintMode('NONE');
-                  });
-                }}
-              >
-                <Printer className="w-4 h-4 mr-2" />
-                Tech Print
+          <div className="flex flex-wrap gap-2 items-center">
+            {aiAssistEnabled && currentOrder && (
+              <Button variant="outline" onClick={() => setAiAssistOpen(true)}>
+                <Sparkles className="w-4 h-4 mr-2" />
+                AI Assist
               </Button>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setPrintMode('picklist');
-                  setTimeout(() => window.print(), 0);
-                }}
-              >
-                <Printer className="w-4 h-4 mr-2" />
-                Pick List
-              </Button>
-              {isSchedulable && (
-                <Button variant="default" onClick={handleSendToSchedule}>
-                  <ClipboardList className="w-4 h-4 mr-2" />
-                  Send to Schedule
-                </Button>
-              )}
-              {isEstimate ? (
+            )}
+            {!isInvoiced ? (
+              <>
                 <Button
-                  variant="default"
+                  variant="outline"
                   onClick={() => {
-                    const result = workOrderRepo.woConvertToOpen(currentOrder.id);
-                    if (!result.success) {
-                      toast({ title: 'Error', description: result.error, variant: 'destructive' });
-                    } else {
-                      toast({ title: 'Converted', description: 'Estimate converted to work order' });
-                    }
+                    setSheetPrintMode('TECH');
+                    requestAnimationFrame(() => {
+                      window.print();
+                      setSheetPrintMode('NONE');
+                    });
                   }}
                 >
-                  Convert to Work Order
+                  <Printer className="w-4 h-4 mr-2" />
+                  Tech Print
                 </Button>
-              ) : (
                 <Button
-                  onClick={() => setShowInvoiceDialog(true)}
-                  disabled={isCustomerOnHold}
-                  title={isCustomerOnHold ? 'Customer is on credit hold' : undefined}
+                  variant="outline"
+                  onClick={() => {
+                    setPrintMode('picklist');
+                    setTimeout(() => window.print(), 0);
+                  }}
                 >
-                  <FileCheck className="w-4 h-4 mr-2" />
-                  Invoice
+                  <Printer className="w-4 h-4 mr-2" />
+                  Pick List
                 </Button>
-              )}
-            </>
-          ) : (
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setSheetPrintMode('TECH');
-                  requestAnimationFrame(() => {
-                    window.print();
-                    setSheetPrintMode('NONE');
-                  });
-                }}
-              >
-                <Printer className="w-4 h-4 mr-2" />
-                Tech Print
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setPrintMode('picklist');
-                  setTimeout(() => window.print(), 0);
-                }}
-              >
-                <Printer className="w-4 h-4 mr-2" />
-                Pick List
-              </Button>
-            </div>
-          )
+                {isSchedulable && (
+                  <Button variant="default" onClick={handleSendToSchedule}>
+                    <ClipboardList className="w-4 h-4 mr-2" />
+                    Send to Schedule
+                  </Button>
+                )}
+                {isEstimate ? (
+                  <Button
+                    variant="default"
+                    onClick={() => {
+                      const result = workOrderRepo.woConvertToOpen(currentOrder.id);
+                      if (!result.success) {
+                        toast({ title: 'Error', description: result.error, variant: 'destructive' });
+                      } else {
+                        toast({ title: 'Converted', description: 'Estimate converted to work order' });
+                      }
+                    }}
+                  >
+                    Convert to Work Order
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => setShowInvoiceDialog(true)}
+                    disabled={isCustomerOnHold}
+                    title={isCustomerOnHold ? 'Customer is on credit hold' : undefined}
+                  >
+                    <FileCheck className="w-4 h-4 mr-2" />
+                    Invoice
+                  </Button>
+                )}
+              </>
+            ) : (
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSheetPrintMode('TECH');
+                    requestAnimationFrame(() => {
+                      window.print();
+                      setSheetPrintMode('NONE');
+                    });
+                  }}
+                >
+                  <Printer className="w-4 h-4 mr-2" />
+                  Tech Print
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setPrintMode('picklist');
+                    setTimeout(() => window.print(), 0);
+                  }}
+                >
+                  <Printer className="w-4 h-4 mr-2" />
+                  Pick List
+                </Button>
+              </div>
+            )}
+          </div>
         }
       />
 
@@ -1968,11 +1992,9 @@ const jobReadinessValues = Object.values(jobReadinessById);
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    setSheetPrintMode('OVERVIEW');
-                    requestAnimationFrame(() => {
-                      window.print();
-                      setSheetPrintMode('NONE');
-                    });
+                    if (currentOrder?.id) {
+                      navigate(`/print/work-orders/${currentOrder.id}`);
+                    }
                   }}
                   className="print:hidden"
                 >
@@ -4094,6 +4116,36 @@ const jobReadinessValues = Object.values(jobReadinessById);
         </div>
       </div>
 
+      {aiAssistEnabled && currentOrder && (
+        <Dialog open={aiAssistOpen} onOpenChange={setAiAssistOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>AI Assist (Preview)</DialogTitle>
+              <DialogDescription>This is a demo. No external AI calls.</DialogDescription>
+            </DialogHeader>
+            <AIAssistPanel
+              context={{
+                type: 'workOrder',
+                order: currentOrder,
+                customer,
+                unit,
+                partLines,
+                laborLines,
+                chargeLines,
+              }}
+              parts={parts}
+              notesValue={notesValue}
+              originalStoredNote={aiOriginalNote}
+              onApplyNote={(original, rewritten) => handleAiApplyNote(original, rewritten)}
+              onSelectPart={(partId) => {
+                setSelectedPartId(partId);
+                setAddPartDialogOpen(true);
+              }}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
+
       {/* Print Invoice */}
       {/* Print Invoice */}
       {currentOrder && (
@@ -4149,6 +4201,42 @@ const jobReadinessValues = Object.values(jobReadinessById);
                 </Button>
               </div>
             </div>
+            {aiAssistEnabled && (
+              <div className="space-y-2">
+                <Label className="text-sm">Parts Lookup Assist (Preview)</Label>
+                <Input
+                  value={aiPartsQuery}
+                  onChange={(e) => setAiPartsQuery(e.target.value)}
+                  placeholder="Describe a part or paste a part number"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Demo suggestions only. Selecting just fills the picker and never auto-adds a line.
+                </p>
+                <div className="space-y-1 max-h-32 overflow-auto">
+                  {aiPartSuggestions.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Start typing to see suggestions.</p>
+                  ) : (
+                    aiPartSuggestions.map((suggestion) => (
+                      <div key={suggestion.id} className="flex items-center justify-between rounded-md border px-3 py-2">
+                        <div className="text-sm">
+                          <div className="font-medium">
+                            {suggestion.partNumber} — {suggestion.description || 'Part'}
+                          </div>
+                          <div className="text-xs text-muted-foreground">Reason: {suggestion.reason}</div>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setSelectedPartId(suggestion.id)}
+                        >
+                          Use
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
             <div>
               <Label>Quantity</Label>
               <Input type="number" min="1" value={partQty} onChange={(e) => setPartQty(e.target.value)} />

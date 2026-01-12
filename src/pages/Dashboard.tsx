@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/command';
 import { Wrench, ShoppingCart, AlertTriangle, DollarSign, Shield, ClipboardList, Clock3, Search, LayoutDashboard, RotateCw, Command as CommandIcon } from 'lucide-react';
 import type { ScheduleItem, WorkOrder, Customer, Unit, Part } from '@/types';
+import { inventoryInsights } from '@/services/aiAssist/aiAssistPreview';
 
 const VIEW_STORAGE_KEY = 'dashboard-view';
 
@@ -105,6 +106,7 @@ const formatAgeLabel = (ageMs: number) => {
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const aiAssistEnabled = (import.meta as any).env?.VITE_AI_ASSIST_PREVIEW === 'true';
   const {
     workOrders,
     salesOrders,
@@ -181,6 +183,10 @@ export default function Dashboard() {
   const activeView = useMemo(
     () => DASHBOARD_VIEWS.find((view) => view.id === selectedViewId) ?? DASHBOARD_VIEWS[0],
     [selectedViewId]
+  );
+  const aiInsights = useMemo(
+    () => (aiAssistEnabled ? inventoryInsights({ parts, workOrders, salesOrders }) : []),
+    [aiAssistEnabled, parts, workOrders, salesOrders]
   );
 
   const secondsSinceUpdate = Math.max(0, Math.floor((now - lastUpdatedAt) / 1000));
@@ -1072,6 +1078,26 @@ export default function Dashboard() {
             />
           ))}
         </div>
+      )}
+
+      {aiAssistEnabled && (
+        <Card className="border border-muted/70">
+          <CardHeader className="space-y-1">
+            <CardTitle className="text-base font-semibold">AI Insights (Preview)</CardTitle>
+            <p className="text-xs text-muted-foreground">This is a demo. No external AI calls.</p>
+          </CardHeader>
+          <CardContent>
+            {aiInsights.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Connect data feeds to enable insights.</p>
+            ) : (
+              <ul className="space-y-2 list-disc list-inside text-sm">
+                {aiInsights.map((insight, idx) => (
+                  <li key={idx}>{insight}</li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       <Card>

@@ -55,6 +55,7 @@ import WorkOrdersWaitingPartsReport from "@/pages/reports/WorkOrdersWaitingParts
 import WorkOrdersReport from "@/pages/reports/WorkOrdersReport";
 import SalesOrdersReport from "@/pages/reports/SalesOrdersReport";
 import LowStockPartsReport from "@/pages/reports/LowStockPartsReport";
+import WorkOrderPrintOverview from "@/pages/print/WorkOrderPrintOverview";
 
 const queryClient = new QueryClient();
 
@@ -66,6 +67,7 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <Routes>
+            <Route path="/print/work-orders/:id" element={<WorkOrderPrintOverview />} />
             <Route element={<MainLayout />}>
               <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<Dashboard />} />

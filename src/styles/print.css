@@ -1,0 +1,102 @@
+.print-only {
+  display: none;
+}
+
+@media print {
+  @page {
+    margin: 12mm;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  #root,
+  #root > div {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  #root > div {
+    display: block !important;
+  }
+
+  main,
+  [role="main"] {
+    width: 100% !important;
+    max-width: none !important;
+    overflow: visible !important;
+    height: auto !important;
+    padding: 0 !important;
+  }
+
+  aside,
+  nav,
+  header,
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .print-document {
+    display: block !important;
+    width: 100% !important;
+  }
+
+  .page-container {
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+  }
+
+  .page-container > div:first-child {
+    display: block !important;
+  }
+
+  .card,
+  .card-elevated,
+  .table-container,
+  .shadow,
+  [class*="shadow-"] {
+    box-shadow: none !important;
+    border-color: #e5e7eb !important;
+    background: #fff !important;
+  }
+
+  .rounded-lg,
+  .rounded-md,
+  .rounded-xl {
+    border-radius: 0 !important;
+  }
+
+  table {
+    page-break-inside: auto;
+    border-collapse: collapse !important;
+    width: 100% !important;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  button {
+    display: inline-flex !important;
+  }
+}

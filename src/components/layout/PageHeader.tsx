@@ -35,7 +35,7 @@ export function PageHeader({ title, subtitle, description, backTo, actions }: Pa
             )}
           </div>
         </div>
-        {actions && <div className="flex items-center gap-2">{actions}</div>}
+        {actions && <div className="flex items-center gap-2 no-print">{actions}</div>}
       </div>
       {description && <div className="text-sm text-muted-foreground">{description}</div>}
     </div>

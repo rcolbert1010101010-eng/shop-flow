@@ -36,7 +36,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useRepos } from '@/repos';
 import { useToast } from '@/hooks/use-toast';
-import { Save, Plus, Trash2, FileCheck, Printer, Edit, X, Shield, RotateCcw, Check, Pencil, X as XIcon } from 'lucide-react';
+import { Save, Plus, Trash2, FileCheck, Printer, Edit, X, Shield, RotateCcw, Check, Pencil, X as XIcon, Sparkles } from 'lucide-react';
 import { QuickAddDialog } from '@/components/ui/quick-add-dialog';
 import { PrintSalesOrder, PrintSalesOrderPickList } from '@/components/print/PrintInvoice';
 import { calcPartPriceForLevel, getPartCostBasis } from '@/domain/pricing/partPricing';
@@ -58,6 +58,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { AIAssistPanel } from '@/components/ai/AIAssistPanel';
+import { suggestParts } from '@/services/aiAssist/aiAssistPreview';
 
 const BROWSE_PARTS_PAGE_SIZE = 25;
 
@@ -117,6 +119,7 @@ export default function SalesOrderDetail() {
   const [addPartDialogOpen, setAddPartDialogOpen] = useState(false);
   const [selectedPartId, setSelectedPartId] = useState('');
   const [partQty, setPartQty] = useState('1');
+  const [aiPartsQuery, setAiPartsQuery] = useState('');
   const [newPartDialogOpen, setNewPartDialogOpen] = useState(false);
   const [newPartData, setNewPartData] = useState({
     part_number: '',
@@ -131,15 +134,18 @@ export default function SalesOrderDetail() {
   const [newCustomerName, setNewCustomerName] = useState('');
   const [editingPriceLineId, setEditingPriceLineId] = useState<string | null>(null);
   const [priceDraft, setPriceDraft] = useState<string>('');
+  const [aiAssistOpen, setAiAssistOpen] = useState(false);
   
   const toNumber = (value: number | string | null | undefined) => {
     const numeric = typeof value === 'number' ? value : value != null ? Number(value) : NaN;
     return Number.isFinite(numeric) ? numeric : 0;
   };
   const formatMoney = (value: number | string | null | undefined) => toNumber(value).toFixed(2);
+  const aiAssistEnabled = (import.meta as any).env?.VITE_AI_ASSIST_PREVIEW === 'true';
 
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [notesValue, setNotesValue] = useState('');
+  const [aiOriginalNote, setAiOriginalNote] = useState<string | null>(null);
   const notesRef = useRef<HTMLTextAreaElement | null>(null);
   const initialFocusRequested = useRef(false);
   const [isDirty, setIsDirty] = useState(false);
@@ -254,6 +260,10 @@ export default function SalesOrderDetail() {
     [customerUnits]
   );
   const activeParts = parts.filter((p) => p.is_active);
+  const aiPartSuggestions = useMemo(
+    () => (aiAssistEnabled ? suggestParts(aiPartsQuery, activeParts) : []),
+    [aiAssistEnabled, aiPartsQuery, activeParts]
+  );
   const partPickerItems = useMemo(
     () =>
       activeParts.map((part) => {
@@ -351,6 +361,10 @@ export default function SalesOrderDetail() {
   const orderLines = useMemo(
     () => (currentOrder ? getSalesOrderLines(currentOrder.id) : []),
     [currentOrder, currentOrderId, currentOrderUpdatedAt, getSalesOrderLines]
+  );
+  const chargeLines = useMemo(
+    () => (currentOrder ? getSalesOrderChargeLines(currentOrder.id) : []),
+    [currentOrder, currentOrderId, currentOrderUpdatedAt, getSalesOrderChargeLines]
   );
   const orderTotal = toNumber(currentOrder?.total);
   const payments = usePayments('SALES_ORDER', currentOrder?.id, orderTotal);
@@ -617,6 +631,13 @@ export default function SalesOrderDetail() {
     setIsEditingNotes(false);
     toast({ title: 'Notes Updated' });
     setIsDirty(false);
+  };
+
+  const handleAiApplyNote = (original: string, rewritten: string) => {
+    setAiOriginalNote(original);
+    setNotesValue(rewritten);
+    setIsEditingNotes(true);
+    setIsDirty(true);
   };
 
   const handleAddPayment = async () => {
@@ -932,6 +953,12 @@ export default function SalesOrderDetail() {
         }
         actions={
           <div className="flex flex-wrap gap-2">
+            {aiAssistEnabled && currentOrder && (
+              <Button variant="outline" onClick={() => setAiAssistOpen(true)}>
+                <Sparkles className="w-4 h-4 mr-2" />
+                AI Assist
+              </Button>
+            )}
             {currentOrder && <StatusBadge status={currentOrder.status} />}
             <Button variant="outline" onClick={() => window.print()}>
               <Printer className="w-4 h-4 mr-2" />
@@ -1427,6 +1454,35 @@ export default function SalesOrderDetail() {
         </>
       )}
 
+      {aiAssistEnabled && currentOrder && (
+        <Dialog open={aiAssistOpen} onOpenChange={setAiAssistOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>AI Assist (Preview)</DialogTitle>
+              <DialogDescription>This is a demo. No external AI calls.</DialogDescription>
+            </DialogHeader>
+            <AIAssistPanel
+              context={{
+                type: 'salesOrder',
+                order: currentOrder,
+                customer,
+                unit,
+                lines: orderLines,
+                chargeLines,
+              }}
+              parts={parts}
+              notesValue={notesValue}
+              originalStoredNote={aiOriginalNote}
+              onApplyNote={handleAiApplyNote}
+              onSelectPart={(partId) => {
+                setSelectedPartId(partId);
+                setAddPartDialogOpen(true);
+              }}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
+
       {/* Add Part Dialog */}
       <Dialog open={addPartDialogOpen} onOpenChange={setAddPartDialogOpen}>
         <DialogContent className="max-w-3xl w-full">
@@ -1461,6 +1517,42 @@ export default function SalesOrderDetail() {
                 </Button>
               </div>
             </div>
+            {aiAssistEnabled && (
+              <div className="space-y-2">
+                <Label className="text-sm">Parts Lookup Assist (Preview)</Label>
+                <Input
+                  value={aiPartsQuery}
+                  onChange={(e) => setAiPartsQuery(e.target.value)}
+                  placeholder="Describe a part or paste a part number"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Demo only. Selecting fills the picker and never auto-adds a line.
+                </p>
+                <div className="space-y-1 max-h-32 overflow-auto">
+                  {aiPartSuggestions.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Start typing to see suggestions.</p>
+                  ) : (
+                    aiPartSuggestions.map((suggestion) => (
+                      <div key={suggestion.id} className="flex items-center justify-between rounded-md border px-3 py-2">
+                        <div className="text-sm">
+                          <div className="font-medium">
+                            {suggestion.partNumber} — {suggestion.description || 'Part'}
+                          </div>
+                          <div className="text-xs text-muted-foreground">Reason: {suggestion.reason}</div>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setSelectedPartId(suggestion.id)}
+                        >
+                          Use
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
             <div>
               <Label>Quantity</Label>
               <Input type="number" min="1" value={partQty} onChange={(e) => setPartQty(e.target.value)} />
