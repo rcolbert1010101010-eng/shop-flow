@@ -442,7 +442,7 @@ export default function Dashboard() {
       return num.toLowerCase().includes(q) || desc.toLowerCase().includes(q);
     }).map((p) => ({
       id: p.id,
-      label: (p as any).part_number ?? p.name ?? 'Part',
+      label: p.part_number ?? (p as any).name ?? 'Part',
       detail: p.description,
       route: '/inventory', // no direct part detail route noted
     }));
@@ -549,8 +549,8 @@ export default function Dashboard() {
     if (showWarrantyCard) {
       cards.splice(3, 0, {
         title: 'Warranty Exposure',
-        value: warrantyExposure > 0 ? `$${warrantyExposure.toFixed(2)}` : '—',
-        description: 'Includes warranty labor + parts',
+        value: warrantyExposure > 0 ? warrantyExposure : 0,
+        description: `$${warrantyExposure.toFixed(2)} - Includes warranty labor + parts`,
         icon: Shield,
         tone: warrantyExposure > 0 ? 'warning' as const : 'default' as const,
         onClick: () => navigate('/work-orders?filter=warranty'),

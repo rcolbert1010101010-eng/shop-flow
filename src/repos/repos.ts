@@ -372,6 +372,8 @@ export interface InvoicesRepo {
   createFromWorkOrder(input: { workOrderId: string }): Promise<{ invoiceId: string }>;
   getById(input: { invoiceId: string }): Promise<import('@/types').Invoice>;
   listLines(input: { invoiceId: string }): Promise<import('@/types').InvoiceLine[]>;
+  voidInvoice?(input: { invoiceId: string; reason: string }): Promise<import('@/types').Invoice>;
+  listAll?(): Promise<import('@/types').Invoice[]>;
 }
 
 export interface Repos {
