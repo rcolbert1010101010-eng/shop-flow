@@ -26,7 +26,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 
 export default function Settings() {
-  const settingsPreviewEnabled = (import.meta as any).env?.VITE_SETTINGS_PREVIEW === 'true';
+  const env = (import.meta as any).env ?? {};
+  const settingsPreviewEnabled = import.meta.env.DEV || env.VITE_SETTINGS_PREVIEW === 'true';
   const { settings, updateSettings } = useRepos().settings;
   const { listResolved, set, getResolved, listHistory } = useSystemSettings();
   const { toast } = useToast();

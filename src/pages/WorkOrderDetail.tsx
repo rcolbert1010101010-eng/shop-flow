@@ -269,7 +269,8 @@ export default function WorkOrderDetail() {
   };
   const formatNumber = (value: number | string | null | undefined, digits = 2) =>
     toNumeric(value).toFixed(digits);
-  const aiAssistEnabled = (import.meta as any).env?.VITE_AI_ASSIST_PREVIEW === 'true';
+  const env = (import.meta as any).env || {};
+  const aiAssistEnabled = import.meta.env.DEV || env.VITE_AI_ASSIST_PREVIEW === 'true';
   const isMobile = useIsMobile();
 
   const isNew = id === 'new';
