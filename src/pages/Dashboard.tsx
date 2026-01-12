@@ -107,7 +107,8 @@ const formatAgeLabel = (ageMs: number) => {
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const aiAssistEnabled = (import.meta as any).env?.VITE_AI_ASSIST_PREVIEW === 'true';
+  const env = (import.meta as any).env || {};
+  const aiAssistEnabled = import.meta.env.DEV || env.VITE_AI_ASSIST_PREVIEW === 'true';
   const isMobile = useIsMobile();
   const {
     workOrders,

@@ -145,7 +145,8 @@ export default function SalesOrderDetail() {
     return Number.isFinite(numeric) ? numeric : 0;
   };
   const formatMoney = (value: number | string | null | undefined) => toNumber(value).toFixed(2);
-  const aiAssistEnabled = (import.meta as any).env?.VITE_AI_ASSIST_PREVIEW === 'true';
+  const env = (import.meta as any).env || {};
+  const aiAssistEnabled = import.meta.env.DEV || env.VITE_AI_ASSIST_PREVIEW === 'true';
   const isMobile = useIsMobile();
 
   const [isEditingNotes, setIsEditingNotes] = useState(false);

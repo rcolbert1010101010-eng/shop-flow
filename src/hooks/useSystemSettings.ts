@@ -6,7 +6,8 @@ import { useRepos } from '@/repos';
 
 export function useSystemSettings() {
   const { settings: settingsRepo } = useRepos();
-  const settingsPreviewEnabled = (import.meta as any).env?.VITE_SETTINGS_PREVIEW === 'true';
+  const env = (import.meta as any).env || {};
+  const settingsPreviewEnabled = import.meta.env.DEV || env.VITE_SETTINGS_PREVIEW === 'true';
   const seededRef = useRef(false);
 
   useEffect(() => {
