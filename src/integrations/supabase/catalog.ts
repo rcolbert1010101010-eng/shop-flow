@@ -2,6 +2,11 @@ import { Part } from '@/types';
 import { supabase } from './client';
 
 export async function fetchParts(): Promise<Part[]> {
+  if (!supabase) {
+    // App can run in offline/mock mode without a configured backend
+    return [];
+  }
+
   const { data, error } = await supabase
     .from('parts')
     .select('*')
@@ -14,3 +19,4 @@ export async function fetchParts(): Promise<Part[]> {
 
   return (data ?? []) as Part[];
 }
+

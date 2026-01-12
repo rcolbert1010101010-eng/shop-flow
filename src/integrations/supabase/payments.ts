@@ -38,6 +38,11 @@ const mapPayment = (row: any): Payment => ({
 });
 
 export async function fetchPayments(orderType: PaymentOrderType, orderId: string): Promise<Payment[]> {
+  if (!supabase) {
+    // App can run in offline/mock mode without a configured backend
+    return [];
+  }
+
   const { data, error } = await supabase
     .from('payments')
     .select('*')
@@ -130,6 +135,11 @@ export function computePaymentSummary(payments: Payment[] | undefined, orderTota
 }
 
 export async function fetchAllPayments(filter?: PaymentsFilter): Promise<Payment[]> {
+  if (!supabase) {
+    // App can run in offline/mock mode without a configured backend
+    return [];
+  }
+
   let query = supabase.from('payments').select('*');
 
   if (filter?.orderType) {
