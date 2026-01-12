@@ -62,6 +62,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Edit, Save, X, Trash2, Wrench, ShoppingCart, Clock3, Plus } from 'lucide-react';
 import type { PaymentTerms, PreferredContactMethod, Unit } from '@/types';
 import { AddUnitDialog } from '@/components/units/AddUnitDialog';
+import { useIsMobile } from '@/hooks/useIsMobile';
+import { MobileActionBar, MobileActionBarSpacer } from '@/components/common/MobileActionBar';
 
 export default function CustomerDetail() {
   const { id } = useParams<{ id: string }>();
@@ -73,6 +75,7 @@ export default function CustomerDetail() {
   const { workOrders } = repos.workOrders;
   const { salesOrders } = repos.salesOrders;
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const [editing, setEditing] = useState(false);
   const [workOrderDialogOpen, setWorkOrderDialogOpen] = useState(false);
   const [salesOrderDialogOpen, setSalesOrderDialogOpen] = useState(false);
@@ -839,6 +842,26 @@ export default function CustomerDetail() {
         </div>
       </div>
 
+      {editing && isMobile && (
+        <div className="no-print">
+          <MobileActionBar
+            primary={
+              <Button onClick={handleSave} className="flex-1">
+                <Save className="w-4 h-4 mr-2" />
+                Save
+              </Button>
+            }
+            secondary={
+              <Button variant="outline" onClick={() => setEditing(false)} className="flex-1">
+                <X className="w-4 h-4 mr-2" />
+                Cancel
+              </Button>
+            }
+          />
+          <MobileActionBarSpacer />
+        </div>
+      )}
+
       <Dialog
         open={workOrderDialogOpen}
         onOpenChange={(open) => {
@@ -1030,10 +1053,12 @@ export default function CustomerDetail() {
               onChange={(e) => setViewWoSearch(e.target.value)}
             />
             <Tabs defaultValue="open" className="space-y-3">
-              <TabsList>
-                <TabsTrigger value="open">Open</TabsTrigger>
-                <TabsTrigger value="all">All</TabsTrigger>
-              </TabsList>
+              <div className="overflow-x-auto">
+                <TabsList className="inline-flex min-w-max">
+                  <TabsTrigger value="open">Open</TabsTrigger>
+                  <TabsTrigger value="all">All</TabsTrigger>
+                </TabsList>
+              </div>
               <TabsContent value="open">
                 <div className="rounded-md border overflow-auto max-h-[60vh]">
                   <Table>
@@ -1145,10 +1170,12 @@ export default function CustomerDetail() {
               onChange={(e) => setViewSoSearch(e.target.value)}
             />
             <Tabs defaultValue="open" className="space-y-3">
-              <TabsList>
-                <TabsTrigger value="open">Open</TabsTrigger>
-                <TabsTrigger value="all">All</TabsTrigger>
-              </TabsList>
+              <div className="overflow-x-auto">
+                <TabsList className="inline-flex min-w-max">
+                  <TabsTrigger value="open">Open</TabsTrigger>
+                  <TabsTrigger value="all">All</TabsTrigger>
+                </TabsList>
+              </div>
               <TabsContent value="open">
                 <div className="rounded-md border overflow-auto max-h-[60vh]">
                   <Table>

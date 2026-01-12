@@ -60,6 +60,10 @@ import {
 } from '@/components/ui/dialog';
 import { AIAssistPanel } from '@/components/ai/AIAssistPanel';
 import { suggestParts } from '@/services/aiAssist/aiAssistPreview';
+import { ResponsiveDataList } from '@/components/common/ResponsiveDataList';
+import { AdaptiveDialog } from '@/components/common/AdaptiveDialog';
+import { MobileActionBar, MobileActionBarSpacer } from '@/components/common/MobileActionBar';
+import { useIsMobile } from '@/hooks/useIsMobile';
 
 const BROWSE_PARTS_PAGE_SIZE = 25;
 
@@ -142,6 +146,7 @@ export default function SalesOrderDetail() {
   };
   const formatMoney = (value: number | string | null | undefined) => toNumber(value).toFixed(2);
   const aiAssistEnabled = (import.meta as any).env?.VITE_AI_ASSIST_PREVIEW === 'true';
+  const isMobile = useIsMobile();
 
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [notesValue, setNotesValue] = useState('');
@@ -163,6 +168,7 @@ export default function SalesOrderDetail() {
   const [isBrowseCustomersOpen, setIsBrowseCustomersOpen] = useState(false);
   const [browseCustomersActiveOnly, setBrowseCustomersActiveOnly] = useState(true);
   const [browseCustomersPage, setBrowseCustomersPage] = useState(0);
+  const showMobileActionBar = isMobile && !isLocked;
 
   const currentOrder = salesOrders.find((o) => o.id === id) || order;
   const customer = customers.find((c) => c.id === (currentOrder?.customer_id || selectedCustomerId));
@@ -1150,164 +1156,363 @@ export default function SalesOrderDetail() {
             )}
           </div>
 
-          <div className="table-container">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Part #</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead className="text-center">Warranty</TableHead>
-                  <TableHead className="text-center">Core</TableHead>
-                  <TableHead className="text-right">Qty</TableHead>
-                  <TableHead className="text-right">Price</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                  {!isLocked && <TableHead className="w-10"></TableHead>}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {orderLines.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">No parts added yet</TableCell>
-                  </TableRow>
-                ) : (
-                  orderLines.map((line) => {
-                    const part = parts.find((p) => p.id === line.part_id);
-                    const priceLevel = customer?.price_level ?? 'RETAIL';
-                    const suggestedUnitPrice = part ? calcPartPriceForLevel(part, settings, priceLevel) : null;
-                    const showSuggested =
-                      suggestedUnitPrice != null && Math.abs(suggestedUnitPrice - line.unit_price) > 0.009;
-                    const { basis } = part ? getPartCostBasis(part) : { basis: null };
-                    return (
-                      <TableRow key={line.id} className={line.is_warranty ? 'bg-accent/30' : ''}>
-                        <TableCell className="font-mono">{part?.part_number || '-'}</TableCell>
-                        <TableCell>{part?.description || '-'}</TableCell>
-                        <TableCell className="text-center">
-                          {!isLocked ? (
-                            <Checkbox
-                              checked={line.is_warranty}
-                              onCheckedChange={() => {
-                                soToggleWarranty(line.id);
+          {isMobile && orderLines.length === 0 ? (
+            <div className="rounded-lg border bg-card text-muted-foreground p-4 text-center">No parts added yet</div>
+          ) : (
+            <ResponsiveDataList
+              items={orderLines}
+              renderMobileCard={(line) => {
+                const part = parts.find((p) => p.id === line.part_id);
+                const priceLevel = customer?.price_level ?? 'RETAIL';
+                const suggestedUnitPrice = part ? calcPartPriceForLevel(part, settings, priceLevel) : null;
+                const showSuggested =
+                  suggestedUnitPrice != null && Math.abs(suggestedUnitPrice - line.unit_price) > 0.009;
+                const { basis } = part ? getPartCostBasis(part) : { basis: null };
+                const isEditingPrice = editingPriceLineId === line.id;
+                return (
+                  <div
+                    className={`border rounded-lg p-3 space-y-3 ${
+                      line.is_warranty ? 'bg-accent/30 border-accent/60' : 'bg-card'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-1 min-w-0">
+                        <div className="font-mono font-semibold text-sm whitespace-nowrap truncate">
+                          {part?.part_number || '-'}
+                        </div>
+                        <div className="text-sm text-muted-foreground break-words">
+                          {part?.description || line.description || '-'}
+                        </div>
+                        <div className="flex flex-wrap gap-2 text-xs">
+                          {line.is_warranty && (
+                            <Badge variant="secondary" className="flex items-center gap-1">
+                              <Shield className="w-3 h-3" />
+                              Warranty
+                            </Badge>
+                          )}
+                          {line.core_charge > 0 && (
+                            <Badge variant="outline" className="flex items-center gap-1">
+                              <RotateCcw className="w-3 h-3" />
+                              Core ${formatMoney(line.core_charge)}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      {!isLocked && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemoveLine(line.id)}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="w-4 h-4 mr-1" />
+                          Remove
+                        </Button>
+                      )}
+                    </div>
+
+                    {line.core_charge > 0 && (
+                      <div className="flex items-center gap-2 text-xs">
+                        {line.core_status === 'CORE_OWED' ? (
+                          <Button size="sm" variant="outline" onClick={() => handleMarkCoreReturned(line.id)} className="h-7 text-xs">
+                            Core Owed (${line.core_charge})
+                          </Button>
+                        ) : line.core_status === 'CORE_CREDITED' ? (
+                          <Badge variant="secondary" className="flex items-center gap-1">
+                            <RotateCcw className="w-3 h-3" />
+                            Credited
+                          </Badge>
+                        ) : null}
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div className="space-y-1">
+                        <div className="text-xs text-muted-foreground">Qty</div>
+                        {isLocked ? (
+                          <div className="font-medium">{line.quantity}</div>
+                        ) : (
+                          <Input
+                            type="number"
+                            min="1"
+                            value={line.quantity}
+                            onChange={(e) => handleUpdateQty(line.id, parseInt(e.target.value) || 0)}
+                            className="w-full"
+                          />
+                        )}
+                      </div>
+                      <div className="space-y-1">
+                        <div className="text-xs text-muted-foreground">Price</div>
+                        {isLocked ? (
+                          <div className="font-medium">${formatMoney(line.unit_price)}</div>
+                        ) : isEditingPrice ? (
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={priceDraft}
+                              onChange={(e) => setPriceDraft(e.target.value)}
+                              className="w-full text-right"
+                            />
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => {
+                                const parsed = parseFloat(priceDraft);
+                                const result = soUpdateLineUnitPrice(line.id, parsed);
+                                if (!result.success) {
+                                  toast({ title: 'Error', description: result.error, variant: 'destructive' });
+                                  return;
+                                }
+                                setEditingPriceLineId(null);
+                                setPriceDraft('');
                                 setIsDirty(true);
                               }}
-                            />
-                          ) : line.is_warranty ? (
-                            <Badge variant="secondary"><Shield className="w-3 h-3" /></Badge>
-                          ) : null}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {line.core_charge > 0 && (
-                            <div className="flex items-center justify-center gap-1">
-                              {line.core_status === 'CORE_OWED' ? (
-                                <Button size="sm" variant="outline" onClick={() => handleMarkCoreReturned(line.id)} className="h-6 text-xs">
-                                  Core Owed (${line.core_charge})
-                                </Button>
-                              ) : line.core_status === 'CORE_CREDITED' ? (
-                                <Badge variant="secondary"><RotateCcw className="w-3 h-3 mr-1" />Credited</Badge>
-                              ) : null}
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {isLocked ? line.quantity : (
-                            <Input type="number" min="1" value={line.quantity} onChange={(e) => handleUpdateQty(line.id, parseInt(e.target.value) || 0)} className="w-16 text-right" />
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex flex-col items-end gap-1">
-                            {isLocked ? (
-                              <span>${formatMoney(line.unit_price)}</span>
-                            ) : editingPriceLineId === line.id ? (
-                              <div className="flex items-center justify-end gap-2">
-                                <Input
-                                  type="number"
-                                  step="0.01"
-                                  value={priceDraft}
-                                  onChange={(e) => setPriceDraft(e.target.value)}
-                                  className="w-24 h-8 text-right"
-                                />
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  onClick={() => {
-                                    const parsed = parseFloat(priceDraft);
-                                    const result = soUpdateLineUnitPrice(line.id, parsed);
-                                    if (!result.success) {
-                                      toast({ title: 'Error', description: result.error, variant: 'destructive' });
-                                      return;
-                                    }
-                                    setEditingPriceLineId(null);
-                                    setPriceDraft('');
-                                    setIsDirty(true);
-                                  }}
-                                >
-                                  <Check className="w-4 h-4" />
-                                </Button>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  onClick={() => {
-                                    setEditingPriceLineId(null);
-                                    setPriceDraft('');
-                                  }}
-                                >
-                                  <XIcon className="w-4 h-4" />
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    if (suggestedUnitPrice != null) {
-                                      setPriceDraft(formatMoney(suggestedUnitPrice));
-                                    }
-                                  }}
-                                >
-                                  Reset
-                                </Button>
-                              </div>
-                            ) : (
-                              <div className="flex items-center justify-end gap-2">
-                                <span>${formatMoney(line.unit_price)}</span>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  onClick={() => {
-                                    setEditingPriceLineId(line.id);
-                                    setPriceDraft(formatMoney(line.unit_price));
-                                  }}
-                                >
-                                  <Pencil className="w-4 h-4" />
-                                </Button>
-                              </div>
-                            )}
-                            {showSuggested && (
-                              <span className="text-xs text-muted-foreground">
-                                Suggested ({priceLevel}): ${formatMoney(suggestedUnitPrice!)}
-                              </span>
-                            )}
-                            {basis !== null && line.unit_price < basis && (
-                              <span className="text-xs text-destructive">
-                                Warning: below cost (basis ${formatMoney(basis)})
-                              </span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right font-medium">
-                          {line.is_warranty ? <span className="text-muted-foreground">$0.00</span> : `$${formatMoney(line.line_total)}`}
-                        </TableCell>
-                        {!isLocked && (
-                          <TableCell>
-                            <Button variant="ghost" size="icon" onClick={() => handleRemoveLine(line.id)} className="text-destructive hover:text-destructive">
-                              <Trash2 className="w-4 h-4" />
+                            >
+                              <Check className="w-4 h-4" />
                             </Button>
-                          </TableCell>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => {
+                                setEditingPriceLineId(null);
+                                setPriceDraft('');
+                              }}
+                            >
+                              <XIcon className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                if (suggestedUnitPrice != null) {
+                                  setPriceDraft(formatMoney(suggestedUnitPrice));
+                                }
+                              }}
+                            >
+                              Reset
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">${formatMoney(line.unit_price)}</span>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => {
+                                setEditingPriceLineId(line.id);
+                                setPriceDraft(formatMoney(line.unit_price));
+                              }}
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                          </div>
                         )}
+                        {showSuggested && (
+                          <span className="text-xs text-muted-foreground">
+                            Suggested ({priceLevel}): ${formatMoney(suggestedUnitPrice!)}
+                          </span>
+                        )}
+                        {basis !== null && line.unit_price < basis && (
+                          <span className="text-xs text-destructive">
+                            Warning: below cost (basis ${formatMoney(basis)})
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground text-xs">Warranty</span>
+                        {!isLocked ? (
+                          <Checkbox
+                            checked={line.is_warranty}
+                            onCheckedChange={() => {
+                              soToggleWarranty(line.id);
+                              setIsDirty(true);
+                            }}
+                          />
+                        ) : line.is_warranty ? (
+                          <Badge variant="secondary" className="flex items-center gap-1">
+                            <Shield className="w-3 h-3" />
+                            Warranty
+                          </Badge>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">No</span>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xs text-muted-foreground">Line Total</div>
+                        <div className="font-semibold">
+                          {line.is_warranty ? <span className="text-muted-foreground">$0.00</span> : `$${formatMoney(line.line_total)}`}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }}
+              renderDesktop={(items) => (
+                <div className="table-container overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Part #</TableHead>
+                        <TableHead>Description</TableHead>
+                        <TableHead className="text-center">Warranty</TableHead>
+                        <TableHead className="text-center">Core</TableHead>
+                        <TableHead className="text-right">Qty</TableHead>
+                        <TableHead className="text-right">Price</TableHead>
+                        <TableHead className="text-right">Total</TableHead>
+                        {!isLocked && <TableHead className="w-10"></TableHead>}
                       </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                    </TableHeader>
+                    <TableBody>
+                      {items.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={8} className="text-center text-muted-foreground py-8">No parts added yet</TableCell>
+                        </TableRow>
+                      ) : (
+                        items.map((line) => {
+                          const part = parts.find((p) => p.id === line.part_id);
+                          const priceLevel = customer?.price_level ?? 'RETAIL';
+                          const suggestedUnitPrice = part ? calcPartPriceForLevel(part, settings, priceLevel) : null;
+                          const showSuggested =
+                            suggestedUnitPrice != null && Math.abs(suggestedUnitPrice - line.unit_price) > 0.009;
+                          const { basis } = part ? getPartCostBasis(part) : { basis: null };
+                          return (
+                            <TableRow key={line.id} className={line.is_warranty ? 'bg-accent/30' : ''}>
+                              <TableCell className="font-mono">{part?.part_number || '-'}</TableCell>
+                              <TableCell>{part?.description || '-'}</TableCell>
+                              <TableCell className="text-center">
+                                {!isLocked ? (
+                                  <Checkbox
+                                    checked={line.is_warranty}
+                                    onCheckedChange={() => {
+                                      soToggleWarranty(line.id);
+                                      setIsDirty(true);
+                                    }}
+                                  />
+                                ) : line.is_warranty ? (
+                                  <Badge variant="secondary"><Shield className="w-3 h-3" /></Badge>
+                                ) : null}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                {line.core_charge > 0 && (
+                                  <div className="flex items-center justify-center gap-1">
+                                    {line.core_status === 'CORE_OWED' ? (
+                                      <Button size="sm" variant="outline" onClick={() => handleMarkCoreReturned(line.id)} className="h-6 text-xs">
+                                        Core Owed (${line.core_charge})
+                                      </Button>
+                                    ) : line.core_status === 'CORE_CREDITED' ? (
+                                      <Badge variant="secondary"><RotateCcw className="w-3 h-3 mr-1" />Credited</Badge>
+                                    ) : null}
+                                  </div>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {isLocked ? line.quantity : (
+                                  <Input type="number" min="1" value={line.quantity} onChange={(e) => handleUpdateQty(line.id, parseInt(e.target.value) || 0)} className="w-16 text-right" />
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex flex-col items-end gap-1">
+                                  {isLocked ? (
+                                    <span>${formatMoney(line.unit_price)}</span>
+                                  ) : editingPriceLineId === line.id ? (
+                                    <div className="flex items-center justify-end gap-2">
+                                      <Input
+                                        type="number"
+                                        step="0.01"
+                                        value={priceDraft}
+                                        onChange={(e) => setPriceDraft(e.target.value)}
+                                        className="w-24 h-8 text-right"
+                                      />
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        onClick={() => {
+                                          const parsed = parseFloat(priceDraft);
+                                          const result = soUpdateLineUnitPrice(line.id, parsed);
+                                          if (!result.success) {
+                                            toast({ title: 'Error', description: result.error, variant: 'destructive' });
+                                            return;
+                                          }
+                                          setEditingPriceLineId(null);
+                                          setPriceDraft('');
+                                          setIsDirty(true);
+                                        }}
+                                      >
+                                        <Check className="w-4 h-4" />
+                                      </Button>
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        onClick={() => {
+                                          setEditingPriceLineId(null);
+                                          setPriceDraft('');
+                                        }}
+                                      >
+                                        <XIcon className="w-4 h-4" />
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => {
+                                          if (suggestedUnitPrice != null) {
+                                            setPriceDraft(formatMoney(suggestedUnitPrice));
+                                          }
+                                        }}
+                                      >
+                                        Reset
+                                      </Button>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center justify-end gap-2">
+                                      <span>${formatMoney(line.unit_price)}</span>
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        onClick={() => {
+                                          setEditingPriceLineId(line.id);
+                                          setPriceDraft(formatMoney(line.unit_price));
+                                        }}
+                                      >
+                                        <Pencil className="w-4 h-4" />
+                                      </Button>
+                                    </div>
+                                  )}
+                                  {showSuggested && (
+                                    <span className="text-xs text-muted-foreground">
+                                      Suggested ({priceLevel}): ${formatMoney(suggestedUnitPrice!)}
+                                    </span>
+                                  )}
+                                  {basis !== null && line.unit_price < basis && (
+                                    <span className="text-xs text-destructive">
+                                      Warning: below cost (basis ${formatMoney(basis)})
+                                    </span>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-right font-medium">
+                                {line.is_warranty ? <span className="text-muted-foreground">$0.00</span> : `$${formatMoney(line.line_total)}`}
+                              </TableCell>
+                              {!isLocked && (
+                                <TableCell>
+                                  <Button variant="ghost" size="icon" onClick={() => handleRemoveLine(line.id)} className="text-destructive hover:text-destructive">
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </TableCell>
+                              )}
+                            </TableRow>
+                          );
+                        })
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            />
+          )}
 
           {/* Totals */}
           <div className="mt-4 flex justify-end">
@@ -1442,6 +1647,39 @@ export default function SalesOrderDetail() {
         </div>
       </div>
 
+      {showMobileActionBar && (
+        <div className="no-print">
+          <MobileActionBar
+            primary={
+              <Button size="sm" onClick={() => setAddPartDialogOpen(true)} className="flex-1">
+                <Plus className="w-4 h-4 mr-2" />
+                Add Part
+              </Button>
+            }
+            secondary={
+              isEstimate ? (
+                <Button size="sm" variant="outline" onClick={handleConvertToOpen} className="flex-1">
+                  <Save className="w-4 h-4 mr-2" />
+                  Convert
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowInvoiceDialog(true)}
+                  disabled={isCustomerOnHold}
+                  className="flex-1"
+                >
+                  <FileCheck className="w-4 h-4 mr-2" />
+                  Invoice
+                </Button>
+              )
+            }
+          />
+          <MobileActionBarSpacer />
+        </div>
+      )}
+
       {/* Print Invoice */}
       {currentOrder && (
         <>
@@ -1484,12 +1722,20 @@ export default function SalesOrderDetail() {
       )}
 
       {/* Add Part Dialog */}
-      <Dialog open={addPartDialogOpen} onOpenChange={setAddPartDialogOpen}>
-        <DialogContent className="max-w-3xl w-full">
-          <DialogHeader>
-            <DialogTitle>Add Part</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
+      <AdaptiveDialog
+        open={addPartDialogOpen}
+        onOpenChange={setAddPartDialogOpen}
+        title="Add Part"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setAddPartDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddPart}>Save</Button>
+          </div>
+        }
+      >
+          <div className="space-y-4">
             <div>
               <Label>Part *</Label>
               <div className="flex items-center gap-2">
@@ -1558,14 +1804,7 @@ export default function SalesOrderDetail() {
               <Input type="number" min="1" value={partQty} onChange={(e) => setPartQty(e.target.value)} />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAddPartDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleAddPart}>Save</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </AdaptiveDialog>
 
       <Dialog open={isBrowsePartsOpen} onOpenChange={setIsBrowsePartsOpen}>
         <DialogContent className="max-w-4xl">

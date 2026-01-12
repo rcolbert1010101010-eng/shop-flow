@@ -95,7 +95,7 @@ export default function WorkOrderPrintOverview() {
     window.close();
   };
 
-  const shopName = repos.settings?.settings?.shop_name || 'ShopPro';
+  const shopName = repos.settings?.settings?.shop_name || 'ShopFlow';
   const createdDate = workOrder ? new Date(workOrder.created_at).toLocaleDateString() : '';
 
   if (!workOrder) {

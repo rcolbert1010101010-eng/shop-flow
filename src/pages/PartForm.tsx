@@ -43,6 +43,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import { useIsMobile } from '@/hooks/useIsMobile';
+import { MobileActionBar, MobileActionBarSpacer } from '@/components/common/MobileActionBar';
 
 const toNumber = (value: number | string | null | undefined) => {
   const numeric = typeof value === 'number' ? value : value != null ? Number(value) : NaN;
@@ -77,6 +79,7 @@ export default function PartForm() {
   const { settings } = repos.settings;
   const { toast } = useToast();
   const sessionUserName = (settings.session_user_name || 'system').trim() || 'system';
+  const isMobile = useIsMobile();
 
   const isNew = id === 'new';
   const part = !isNew ? parts.find((p) => p.id === id) : null;
@@ -1384,6 +1387,26 @@ export default function PartForm() {
           />
         </div>
       </QuickAddDialog>
+
+      {editing && isMobile && (
+        <div className="no-print">
+          <MobileActionBar
+            primary={
+              <Button onClick={handleSave} className="flex-1">
+                <Save className="w-4 h-4 mr-2" />
+                Save
+              </Button>
+            }
+            secondary={
+              <Button variant="outline" onClick={() => setEditing(false)} className="flex-1">
+                <X className="w-4 h-4 mr-2" />
+                Cancel
+              </Button>
+            }
+          />
+          <MobileActionBarSpacer />
+        </div>
+      )}
     </div>
   );
 }

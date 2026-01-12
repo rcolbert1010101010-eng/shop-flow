@@ -63,6 +63,10 @@ import { summarizeFabJob } from '@/services/fabJobSummary';
 import { usePayments } from '@/hooks/usePayments';
 import { AIAssistPanel } from '@/components/ai/AIAssistPanel';
 import { suggestParts } from '@/services/aiAssist/aiAssistPreview';
+import { AdaptiveDialog } from '@/components/common/AdaptiveDialog';
+import { ResponsiveDataList } from '@/components/common/ResponsiveDataList';
+import { MobileActionBar, MobileActionBarSpacer } from '@/components/common/MobileActionBar';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import type {
   FabJobLine,
   PlasmaJobLine,
@@ -266,6 +270,7 @@ export default function WorkOrderDetail() {
   const formatNumber = (value: number | string | null | undefined, digits = 2) =>
     toNumeric(value).toFixed(digits);
   const aiAssistEnabled = (import.meta as any).env?.VITE_AI_ASSIST_PREVIEW === 'true';
+  const isMobile = useIsMobile();
 
   const isNew = id === 'new';
   const unitFromQuery = searchParams.get('unit_id') || '';
@@ -340,6 +345,7 @@ export default function WorkOrderDetail() {
   const [fabWarnings, setFabWarnings] = useState<string[]>([]);
   const [plasmaWarnings, setPlasmaWarnings] = useState<string[]>([]);
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
+  const [expandedLaborNotes, setExpandedLaborNotes] = useState<Record<string, boolean>>({});
   const [isBrowsePartsOpen, setIsBrowsePartsOpen] = useState(false);
   const [browsePartsInStockOnly, setBrowsePartsInStockOnly] = useState(false);
   const [browsePartsPage, setBrowsePartsPage] = useState(0);
@@ -842,6 +848,7 @@ const jobReadinessValues = Object.values(jobReadinessById);
 
   const isInvoiced = currentOrder?.status === 'INVOICED';
   const isEstimate = currentOrder?.status === 'ESTIMATE';
+  const showMobileActionBar = isMobile && !!currentOrder && !isInvoiced;
   const workOrderClaims = useMemo(
     () => (currentOrder ? getClaimsByWorkOrder(currentOrder.id) : []),
     [currentOrder, getClaimsByWorkOrder]
@@ -1975,16 +1982,18 @@ const jobReadinessValues = Object.values(jobReadinessById);
         {/* Parts & Labor */}
         <div className="lg:col-span-2">
           <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as typeof activeTab)} className="w-full">
-          <TabsList className="mb-4 print:hidden">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="jobs">Jobs</TabsTrigger>
-            <TabsTrigger value="activity">Activity</TabsTrigger>
-            <TabsTrigger value="parts">Parts ({partLines.length})</TabsTrigger>
-            <TabsTrigger value="labor">Labor ({laborLines.length})</TabsTrigger>
-            <TabsTrigger value="fabrication">Fabrication ({fabLines.length})</TabsTrigger>
-            <TabsTrigger value="plasma">Plasma ({plasmaLines.length})</TabsTrigger>
-            {timeEntries.length > 0 && <TabsTrigger value="time">Time ({timeEntries.length})</TabsTrigger>}
-          </TabsList>
+          <div className="print:hidden overflow-x-auto">
+            <TabsList className="mb-4 min-w-max inline-flex">
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="jobs">Jobs</TabsTrigger>
+              <TabsTrigger value="activity">Activity</TabsTrigger>
+              <TabsTrigger value="parts">Parts ({partLines.length})</TabsTrigger>
+              <TabsTrigger value="labor">Labor ({laborLines.length})</TabsTrigger>
+              <TabsTrigger value="fabrication">Fabrication ({fabLines.length})</TabsTrigger>
+              <TabsTrigger value="plasma">Plasma ({plasmaLines.length})</TabsTrigger>
+              {timeEntries.length > 0 && <TabsTrigger value="time">Time ({timeEntries.length})</TabsTrigger>}
+            </TabsList>
+          </div>
 
             <TabsContent value="overview">
               <div className="flex justify-end mb-4 print:hidden">
@@ -2682,68 +2691,94 @@ const jobReadinessValues = Object.values(jobReadinessById);
                   </Button>
                 )}
               </div>
-              <div className="table-container">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Part #</TableHead>
-                      <TableHead>Description</TableHead>
-                      <TableHead className="text-center">Warranty</TableHead>
-                      <TableHead className="text-center">Core</TableHead>
-                      <TableHead className="text-right">Qty</TableHead>
-                      <TableHead className="text-right">Price</TableHead>
-                      <TableHead className="text-right">Total</TableHead>
-                      {!isInvoiced && <TableHead className="w-10"></TableHead>}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {partLines.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={8} className="text-center text-muted-foreground py-8">No parts added yet</TableCell>
-                      </TableRow>
-                    ) : (
-                      partLines.map((line) => {
-                        const part = parts.find((p) => p.id === line.part_id);
-                        return (
-                          <TableRow key={line.id} className={line.is_warranty ? 'bg-accent/30' : ''}>
-                            <TableCell className="font-mono">{part?.part_number || '-'}</TableCell>
-                            <TableCell>{part?.description || '-'}</TableCell>
-                            <TableCell className="text-center">
-                              {!isInvoiced ? (
-                                <Checkbox checked={line.is_warranty} onCheckedChange={() => woTogglePartWarranty(line.id)} />
-                              ) : line.is_warranty ? (
-                                <Badge variant="secondary"><Shield className="w-3 h-3" /></Badge>
-                              ) : null}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              {line.core_charge > 0 && (
-                                <div className="flex items-center justify-center gap-1">
-                                  {line.core_status === 'CORE_OWED' ? (
-                                    <Button size="sm" variant="outline" onClick={() => handleMarkCoreReturned(line.id)} className="h-6 text-xs">
-                                      Core Owed (${line.core_charge})
-                                    </Button>
-                                  ) : line.core_status === 'CORE_CREDITED' ? (
-                                    <Badge variant="secondary"><RotateCcw className="w-3 h-3 mr-1" />Credited</Badge>
-                                  ) : null}
-                                </div>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {isInvoiced ? line.quantity : (
-                                <Input type="number" min="1" value={line.quantity} onChange={(e) => handleUpdateQty(line.id, parseInt(e.target.value) || 0)} className="w-16 text-right" />
-                              )}
-                            </TableCell>
-                        <TableCell className="text-right">
+              {isMobile && partLines.length === 0 ? (
+                <div className="rounded-lg border bg-card text-muted-foreground p-4 text-center">No parts added yet</div>
+              ) : (
+              <ResponsiveDataList
+                items={partLines}
+                renderMobileCard={(line) => {
+                  const part = parts.find((p) => p.id === line.part_id);
+                  const isEditingPrice = editingPriceLineId === line.id;
+                  return (
+                    <div
+                      className={`border rounded-lg p-3 space-y-3 ${
+                        line.is_warranty ? 'bg-accent/30 border-accent/60' : 'bg-card'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-1 min-w-0">
+                          <div className="font-semibold font-mono text-sm whitespace-nowrap truncate">{part?.part_number || '-'}</div>
+                          <div className="text-sm text-muted-foreground break-words">{part?.description || '-'}</div>
+                          <div className="flex flex-wrap gap-2 text-xs">
+                            {line.is_warranty && (
+                              <Badge variant="secondary" className="flex items-center gap-1">
+                                <Shield className="w-3 h-3" />
+                                Warranty
+                              </Badge>
+                            )}
+                            {line.core_charge > 0 && (
+                              <Badge variant="outline" className="flex items-center gap-1">
+                                <RotateCcw className="w-3 h-3" />
+                                Core ${formatNumber(line.core_charge)}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        {!isInvoiced && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemovePartLine(line.id)}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="w-4 h-4 mr-1" />
+                            Remove
+                          </Button>
+                        )}
+                      </div>
+
+                      {line.core_charge > 0 && (
+                        <div className="flex items-center gap-2 text-xs">
+                          {line.core_status === 'CORE_OWED' ? (
+                            <Button size="sm" variant="outline" onClick={() => handleMarkCoreReturned(line.id)} className="h-7 text-xs">
+                              Core Owed (${line.core_charge})
+                            </Button>
+                          ) : line.core_status === 'CORE_CREDITED' ? (
+                            <Badge variant="secondary" className="flex items-center gap-1">
+                              <RotateCcw className="w-3 h-3" />
+                              Credited
+                            </Badge>
+                          ) : null}
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div className="space-y-1">
+                          <div className="text-xs text-muted-foreground">Qty</div>
                           {isInvoiced ? (
-                            `$${formatNumber(line.unit_price)}`
-                          ) : editingPriceLineId === line.id ? (
-                            <div className="flex items-center justify-end gap-2">
+                            <div className="font-medium">{line.quantity}</div>
+                          ) : (
+                            <Input
+                              type="number"
+                              min="1"
+                              value={line.quantity}
+                              onChange={(e) => handleUpdateQty(line.id, parseInt(e.target.value) || 0)}
+                              className="w-full"
+                            />
+                          )}
+                        </div>
+                        <div className="space-y-1">
+                          <div className="text-xs text-muted-foreground">Price</div>
+                          {isInvoiced ? (
+                            <div className="font-medium">${formatNumber(line.unit_price)}</div>
+                          ) : isEditingPrice ? (
+                            <div className="flex items-center gap-2">
                               <Input
                                 type="number"
                                 step="0.01"
                                 value={priceDraft}
                                 onChange={(e) => setPriceDraft(e.target.value)}
-                                className="w-24 h-8 text-right"
+                                className="w-full text-right"
                               />
                               <Button
                                 size="icon"
@@ -2785,8 +2820,8 @@ const jobReadinessValues = Object.values(jobReadinessById);
                               </Button>
                             </div>
                           ) : (
-                            <div className="flex items-center justify-end gap-2">
-                              <span>${formatNumber(line.unit_price)}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">${formatNumber(line.unit_price)}</span>
                               <Button
                                 size="icon"
                                 variant="ghost"
@@ -2799,24 +2834,172 @@ const jobReadinessValues = Object.values(jobReadinessById);
                               </Button>
                             </div>
                           )}
-                        </TableCell>
-                            <TableCell className="text-right font-medium">
-                              {line.is_warranty ? <span className="text-muted-foreground">$0.00</span> : `$${formatNumber(line.line_total)}`}
-                            </TableCell>
-                            {!isInvoiced && (
-                              <TableCell>
-                                <Button variant="ghost" size="icon" onClick={() => handleRemovePartLine(line.id)} className="text-destructive hover:text-destructive">
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              </TableCell>
-                            )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground text-xs">Warranty</span>
+                          {!isInvoiced ? (
+                            <Checkbox checked={line.is_warranty} onCheckedChange={() => woTogglePartWarranty(line.id)} />
+                          ) : line.is_warranty ? (
+                            <Badge variant="secondary" className="flex items-center gap-1">
+                              <Shield className="w-3 h-3" />
+                              Warranty
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">No</span>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xs text-muted-foreground">Line Total</div>
+                          <div className="font-semibold">
+                            {line.is_warranty ? <span className="text-muted-foreground">$0.00</span> : `$${formatNumber(line.line_total)}`}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }}
+                renderDesktop={(items) => (
+                  <div className="table-container overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Part #</TableHead>
+                          <TableHead>Description</TableHead>
+                          <TableHead className="text-center">Warranty</TableHead>
+                          <TableHead className="text-center">Core</TableHead>
+                          <TableHead className="text-right">Qty</TableHead>
+                          <TableHead className="text-right">Price</TableHead>
+                          <TableHead className="text-right">Total</TableHead>
+                          {!isInvoiced && <TableHead className="w-10"></TableHead>}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {items.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={8} className="text-center text-muted-foreground py-8">No parts added yet</TableCell>
                           </TableRow>
-                        );
-                      })
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
+                        ) : (
+                          items.map((line) => {
+                            const part = parts.find((p) => p.id === line.part_id);
+                            return (
+                              <TableRow key={line.id} className={line.is_warranty ? 'bg-accent/30' : ''}>
+                                <TableCell className="font-mono">{part?.part_number || '-'}</TableCell>
+                                <TableCell>{part?.description || '-'}</TableCell>
+                                <TableCell className="text-center">
+                                  {!isInvoiced ? (
+                                    <Checkbox checked={line.is_warranty} onCheckedChange={() => woTogglePartWarranty(line.id)} />
+                                  ) : line.is_warranty ? (
+                                    <Badge variant="secondary"><Shield className="w-3 h-3" /></Badge>
+                                  ) : null}
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  {line.core_charge > 0 && (
+                                    <div className="flex items-center justify-center gap-1">
+                                      {line.core_status === 'CORE_OWED' ? (
+                                        <Button size="sm" variant="outline" onClick={() => handleMarkCoreReturned(line.id)} className="h-6 text-xs">
+                                          Core Owed (${line.core_charge})
+                                        </Button>
+                                      ) : line.core_status === 'CORE_CREDITED' ? (
+                                        <Badge variant="secondary"><RotateCcw className="w-3 h-3 mr-1" />Credited</Badge>
+                                      ) : null}
+                                    </div>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  {isInvoiced ? line.quantity : (
+                                    <Input type="number" min="1" value={line.quantity} onChange={(e) => handleUpdateQty(line.id, parseInt(e.target.value) || 0)} className="w-16 text-right" />
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  {isInvoiced ? (
+                                    `$${formatNumber(line.unit_price)}`
+                                  ) : editingPriceLineId === line.id ? (
+                                    <div className="flex items-center justify-end gap-2">
+                                      <Input
+                                        type="number"
+                                        step="0.01"
+                                        value={priceDraft}
+                                        onChange={(e) => setPriceDraft(e.target.value)}
+                                        className="w-24 h-8 text-right"
+                                      />
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        onClick={() => {
+                                          const parsed = parseFloat(priceDraft);
+                                          const result = woUpdateLineUnitPrice(line.id, parsed);
+                                          if (!result.success) {
+                                            toast({ title: 'Error', description: result.error, variant: 'destructive' });
+                                            return;
+                                          }
+                                          setEditingPriceLineId(null);
+                                          setPriceDraft('');
+                                        }}
+                                      >
+                                        <Check className="w-4 h-4" />
+                                      </Button>
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        onClick={() => {
+                                          setEditingPriceLineId(null);
+                                          setPriceDraft('');
+                                        }}
+                                      >
+                                        <XIcon className="w-4 h-4" />
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => {
+                                          const suggested = part ? calcPartPriceForLevel(part, settings, priceLevel) : null;
+                                          if (suggested != null) {
+                                            setPriceDraft(formatNumber(suggested));
+                                          }
+                                        }}
+                                      >
+                                        Reset
+                                      </Button>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center justify-end gap-2">
+                                      <span>${formatNumber(line.unit_price)}</span>
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        onClick={() => {
+                                          setEditingPriceLineId(line.id);
+                                          setPriceDraft(formatNumber(line.unit_price));
+                                        }}
+                                      >
+                                        <Pencil className="w-4 h-4" />
+                                      </Button>
+                                    </div>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-right font-medium">
+                                  {line.is_warranty ? <span className="text-muted-foreground">$0.00</span> : `$${formatNumber(line.line_total)}`}
+                                </TableCell>
+                                {!isInvoiced && (
+                                  <TableCell>
+                                    <Button variant="ghost" size="icon" onClick={() => handleRemovePartLine(line.id)} className="text-destructive hover:text-destructive">
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  </TableCell>
+                                )}
+                              </TableRow>
+                            );
+                          })
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              />
+              )}
             </TabsContent>
 
             <TabsContent value="labor">
@@ -2829,57 +3012,146 @@ const jobReadinessValues = Object.values(jobReadinessById);
                   </Button>
                 )}
               </div>
-              <div className="table-container">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Description</TableHead>
-                      <TableHead>Technician</TableHead>
-                      <TableHead className="text-center">Warranty</TableHead>
-                      <TableHead className="text-right">Hours</TableHead>
-                      <TableHead className="text-right">Rate</TableHead>
-                      <TableHead className="text-right">Total</TableHead>
-                      {!isInvoiced && <TableHead className="w-10"></TableHead>}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {laborLines.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={7} className="text-center text-muted-foreground py-8">No labor added yet</TableCell>
-                      </TableRow>
-                    ) : (
-                      laborLines.map((line) => {
-                        const tech = technicians.find((t) => t.id === line.technician_id);
-                        return (
-                          <TableRow key={line.id} className={line.is_warranty ? 'bg-accent/30' : ''}>
-                            <TableCell>{line.description}</TableCell>
-                            <TableCell>{tech?.name || '-'}</TableCell>
-                            <TableCell className="text-center">
-                              {!isInvoiced ? (
-                                <Checkbox checked={line.is_warranty} onCheckedChange={() => woToggleLaborWarranty(line.id)} />
-                            ) : line.is_warranty ? (
-                                <Badge variant="secondary"><Shield className="w-3 h-3" /></Badge>
-                              ) : null}
-                            </TableCell>
-                            <TableCell className="text-right">{line.hours}</TableCell>
-                            <TableCell className="text-right">${formatNumber(line.rate)}</TableCell>
-                            <TableCell className="text-right font-medium">
-                              {line.is_warranty ? <span className="text-muted-foreground">$0.00</span> : `$${formatNumber(line.line_total)}`}
-                            </TableCell>
-                            {!isInvoiced && (
-                              <TableCell>
-                                <Button variant="ghost" size="icon" onClick={() => handleRemoveLaborLine(line.id)} className="text-destructive hover:text-destructive">
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              </TableCell>
+              {isMobile && laborLines.length === 0 ? (
+                <div className="rounded-lg border bg-card text-muted-foreground p-4 text-center">No labor added yet</div>
+              ) : (
+              <ResponsiveDataList
+                items={laborLines}
+                renderMobileCard={(line) => {
+                  const tech = technicians.find((t) => t.id === line.technician_id);
+                  const expanded = expandedLaborNotes[line.id];
+                  const laborNotes = (line as any).notes ?? line.description ?? '';
+                  const hasLongNotes = laborNotes.length > 120;
+                  return (
+                    <div
+                      className={`border rounded-lg p-3 space-y-3 ${
+                        line.is_warranty ? 'bg-accent/30 border-accent/60' : 'bg-card'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-1 min-w-0">
+                          <div className="font-semibold break-words">{line.description || 'Labor'}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {tech?.name ? `Tech: ${tech.name}` : 'No technician'}
+                          </div>
+                          <div className="text-sm text-muted-foreground leading-snug">
+                            <span className={`${expanded ? '' : 'line-clamp-2'}`}>{laborNotes || '—'}</span>
+                            {hasLongNotes && (
+                              <button
+                                type="button"
+                                className="text-xs text-primary ml-1"
+                                onClick={() =>
+                                  setExpandedLaborNotes((prev) => ({ ...prev, [line.id]: !prev[line.id] }))
+                                }
+                              >
+                                {expanded ? 'Less' : 'More'}
+                              </button>
                             )}
+                          </div>
+                        </div>
+                        {!isInvoiced && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveLaborLine(line.id)}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="w-4 h-4 mr-1" />
+                            Remove
+                          </Button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div className="space-y-1">
+                          <div className="text-xs text-muted-foreground">Hours</div>
+                          <div className="font-medium">{line.hours}</div>
+                        </div>
+                        <div className="space-y-1">
+                          <div className="text-xs text-muted-foreground">Rate</div>
+                          <div className="font-medium">${formatNumber(line.rate)}</div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground text-xs">Warranty</span>
+                          {!isInvoiced ? (
+                            <Checkbox checked={line.is_warranty} onCheckedChange={() => woToggleLaborWarranty(line.id)} />
+                          ) : line.is_warranty ? (
+                            <Badge variant="secondary" className="flex items-center gap-1">
+                              <Shield className="w-3 h-3" />
+                              Warranty
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">No</span>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xs text-muted-foreground">Line Total</div>
+                          <div className="font-semibold">
+                            {line.is_warranty ? <span className="text-muted-foreground">$0.00</span> : `$${formatNumber(line.line_total)}`}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }}
+                renderDesktop={(items) => (
+                  <div className="table-container overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Description</TableHead>
+                          <TableHead>Technician</TableHead>
+                          <TableHead className="text-center">Warranty</TableHead>
+                          <TableHead className="text-right">Hours</TableHead>
+                          <TableHead className="text-right">Rate</TableHead>
+                          <TableHead className="text-right">Total</TableHead>
+                          {!isInvoiced && <TableHead className="w-10"></TableHead>}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {items.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={7} className="text-center text-muted-foreground py-8">No labor added yet</TableCell>
                           </TableRow>
-                        );
-                      })
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
+                        ) : (
+                          items.map((line) => {
+                            const tech = technicians.find((t) => t.id === line.technician_id);
+                            return (
+                              <TableRow key={line.id} className={line.is_warranty ? 'bg-accent/30' : ''}>
+                                <TableCell>{line.description}</TableCell>
+                                <TableCell>{tech?.name || '-'}</TableCell>
+                                <TableCell className="text-center">
+                                  {!isInvoiced ? (
+                                    <Checkbox checked={line.is_warranty} onCheckedChange={() => woToggleLaborWarranty(line.id)} />
+                            ) : line.is_warranty ? (
+                                    <Badge variant="secondary"><Shield className="w-3 h-3" /></Badge>
+                                  ) : null}
+                                </TableCell>
+                                <TableCell className="text-right">{line.hours}</TableCell>
+                                <TableCell className="text-right">${formatNumber(line.rate)}</TableCell>
+                                <TableCell className="text-right font-medium">
+                                  {line.is_warranty ? <span className="text-muted-foreground">$0.00</span> : `$${formatNumber(line.line_total)}`}
+                                </TableCell>
+                                {!isInvoiced && (
+                                  <TableCell>
+                                    <Button variant="ghost" size="icon" onClick={() => handleRemoveLaborLine(line.id)} className="text-destructive hover:text-destructive">
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  </TableCell>
+                                )}
+                              </TableRow>
+                            );
+                          })
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              />
+              )}
             </TabsContent>
 
             <TabsContent value="fabrication">
@@ -4159,13 +4431,53 @@ const jobReadinessValues = Object.values(jobReadinessById);
         </>
       )}
 
+      {showMobileActionBar && (
+        <div className="no-print">
+          <MobileActionBar
+            primary={
+              <div className="flex w-full gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowInvoiceDialog(true)}
+                  disabled={isCustomerOnHold}
+                  className="flex-1"
+                >
+                  <FileCheck className="w-4 h-4 mr-2" />
+                  Invoice
+                </Button>
+                <Button size="sm" onClick={() => openPartDialog(null)} className="flex-1">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Part
+                </Button>
+              </div>
+            }
+            secondary={
+              <Button size="sm" variant="outline" onClick={() => openLaborDialog(null)} className="flex-1">
+                <Plus className="w-4 h-4 mr-2" />
+                Add Labor
+              </Button>
+            }
+          />
+          <MobileActionBarSpacer />
+        </div>
+      )}
+
       {/* Add Part Dialog */}
-      <Dialog open={addPartDialogOpen} onOpenChange={handlePartDialogOpenChange}>
-        <DialogContent className="max-w-3xl w-full">
-          <DialogHeader>
-            <DialogTitle>Add Part</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
+      <AdaptiveDialog
+        open={addPartDialogOpen}
+        onOpenChange={handlePartDialogOpenChange}
+        title="Add Part"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => handlePartDialogOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddPart}>Save</Button>
+          </div>
+        }
+      >
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label>Part *</Label>
               <div className="flex items-center gap-2">
@@ -4242,14 +4554,7 @@ const jobReadinessValues = Object.values(jobReadinessById);
               <Input type="number" min="1" value={partQty} onChange={(e) => setPartQty(e.target.value)} />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => handlePartDialogOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleAddPart}>Save</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </AdaptiveDialog>
 
       <Dialog open={isBrowsePartsOpen} onOpenChange={setIsBrowsePartsOpen}>
         <DialogContent className="max-w-4xl">
@@ -4438,7 +4743,19 @@ const jobReadinessValues = Object.values(jobReadinessById);
       </QuickAddDialog>
 
       {/* Add Labor Dialog */}
-      <QuickAddDialog open={addLaborDialogOpen} onOpenChange={handleLaborDialogOpenChange} title="Add Labor" onSave={handleAddLabor} onCancel={() => handleLaborDialogOpenChange(false)}>
+      <AdaptiveDialog
+        open={addLaborDialogOpen}
+        onOpenChange={handleLaborDialogOpenChange}
+        title="Add Labor"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => handleLaborDialogOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddLabor}>Save</Button>
+          </div>
+        }
+      >
         <div className="space-y-4">
           <div>
             <Label>Description *</Label>
@@ -4460,7 +4777,7 @@ const jobReadinessValues = Object.values(jobReadinessById);
             <Input type="number" min="0.25" step="0.25" value={laborHours} onChange={(e) => setLaborHours(e.target.value)} />
           </div>
         </div>
-      </QuickAddDialog>
+      </AdaptiveDialog>
 
       {/* Invoice Confirmation Dialog */}
       <AlertDialog open={showInvoiceDialog} onOpenChange={setShowInvoiceDialog}>

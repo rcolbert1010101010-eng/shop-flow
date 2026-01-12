@@ -43,6 +43,8 @@ import { PMSection } from '@/components/pm/PMSection';
 import { UnitImagesSection } from '@/components/units/UnitImagesSection';
 import { useShopStore } from '@/stores/shopStore';
 import { SmartSearchSelect } from '@/components/common/SmartSearchSelect';
+import { useIsMobile } from '@/hooks/useIsMobile';
+import { MobileActionBar, MobileActionBarSpacer } from '@/components/common/MobileActionBar';
 
 const toNumber = (value: number | string | null | undefined) => {
   const numeric = typeof value === 'number' ? value : value != null ? Number(value) : NaN;
@@ -61,6 +63,7 @@ export default function UnitForm() {
   const { salesOrders, createSalesOrder } = repos.salesOrders;
   const schedulingRepo = repos.scheduling;
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const pmSchedules = useShopStore((s) => s.pmSchedules);
   const pmHistory = useShopStore((s) => s.pmHistory);
   const unknownValue = '—';
@@ -1160,6 +1163,26 @@ export default function UnitForm() {
             </Card>
           </div>
         </>
+      )}
+
+      {editing && isMobile && (
+        <div className="no-print">
+          <MobileActionBar
+            primary={
+              <Button onClick={handleSave} className="flex-1">
+                <Save className="w-4 h-4 mr-2" />
+                Save
+              </Button>
+            }
+            secondary={
+              <Button variant="outline" onClick={() => setEditing(false)} className="flex-1">
+                <X className="w-4 h-4 mr-2" />
+                Cancel
+              </Button>
+            }
+          />
+          <MobileActionBarSpacer />
+        </div>
       )}
 
       <Dialog open={isBrowseCustomersOpen} onOpenChange={setIsBrowseCustomersOpen}>

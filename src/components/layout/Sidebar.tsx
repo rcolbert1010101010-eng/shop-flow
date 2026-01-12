@@ -30,25 +30,22 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import type { LucideIcon } from 'lucide-react';
+import shopflowLogo from '@/assets/branding/shopflow-logo.svg';
 
-type NavLink = { type: 'link'; path: string; label: string; icon: LucideIcon };
-type NavGroup = {
+export type NavLink = { type: 'link'; path: string; label: string; icon: LucideIcon };
+export type NavGroup = {
   type: 'group';
   key: 'serviceOrders' | 'inventory' | 'returnsWarranty' | 'manufacturing';
   label: string;
   icon: LucideIcon;
   children: NavLink[];
 };
-type NavItem = NavLink | NavGroup;
+export type NavItem = NavLink | NavGroup;
 
-const navItems: NavItem[] = [
+export const navItems: NavItem[] = [
   { type: 'link', path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { type: 'link', path: '/customers', label: 'Customers', icon: Users },
-  { type: 'link', path: '/scheduling', label: 'Scheduling', icon: Calendar },
   { type: 'link', path: '/sales-orders', label: 'Sales Orders', icon: ShoppingCart },
-  { type: 'link', path: '/invoices', label: 'Invoices', icon: FileText },
-  { type: 'link', path: '/payments', label: 'Payments', icon: CreditCard },
-  { type: 'link', path: '/reports', label: 'Reports', icon: BarChart2 },
   {
     type: 'group',
     key: 'serviceOrders',
@@ -76,6 +73,8 @@ const navItems: NavItem[] = [
       { type: 'link', path: '/cycle-counts', label: 'Cycle Counts', icon: ListChecks },
     ],
   },
+  { type: 'link', path: '/purchase-orders', label: 'Purchase Orders', icon: ClipboardList },
+  { type: 'link', path: '/scheduling', label: 'Scheduling', icon: Calendar },
   {
     type: 'group',
     key: 'manufacturing',
@@ -86,7 +85,8 @@ const navItems: NavItem[] = [
       { type: 'link', path: '/manufacturing/builds', label: 'Builds', icon: Layers },
     ],
   },
-  { type: 'link', path: '/purchase-orders', label: 'Purchase Orders', icon: ClipboardList },
+  { type: 'link', path: '/invoices', label: 'Invoices', icon: FileText },
+  { type: 'link', path: '/payments', label: 'Payments', icon: CreditCard },
   {
     type: 'group',
     key: 'returnsWarranty',
@@ -98,10 +98,11 @@ const navItems: NavItem[] = [
       { type: 'link', path: '/reports/returns-warranty', label: 'Returns/Warranty Report', icon: BarChart2 },
     ],
   },
+  { type: 'link', path: '/reports', label: 'Reports', icon: BarChart2 },
   { type: 'link', path: '/settings', label: 'Settings', icon: Settings },
 ];
 
-export function Sidebar() {
+export function Sidebar({ className }: { className?: string } = {}) {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [darkSidebar, setDarkSidebar] = useState(true);
@@ -176,7 +177,7 @@ export function Sidebar() {
   };
 
   return (
-    <>
+    <div className={className}>
       {/* Floating toggle when collapsed */}
       {collapsed && (
         <Button
@@ -203,11 +204,13 @@ export function Sidebar() {
       >
         {/* Logo */}
         <div className={cn('h-16 flex items-center justify-between px-4 border-b', sidebarColors.border)}>
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <Wrench className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <span className={cn('font-semibold', sidebarColors.text)}>ShopPro</span>
+          <div className="flex items-center gap-3">
+            <img
+              src={shopflowLogo}
+              alt="ShopFlow"
+              className="h-8 w-8 rounded-md"
+            />
+            <span className={cn('font-semibold', sidebarColors.text)}>ShopFlow</span>
           </div>
           <button
             onClick={() => setCollapsed(true)}
@@ -253,6 +256,6 @@ export function Sidebar() {
           </div>
         </div>
       </aside>
-    </>
+    </div>
   );
 }

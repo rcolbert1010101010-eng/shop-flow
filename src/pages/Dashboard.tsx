@@ -32,6 +32,7 @@ import {
 import { Wrench, ShoppingCart, AlertTriangle, DollarSign, Shield, ClipboardList, Clock3, Search, LayoutDashboard, RotateCw, Command as CommandIcon } from 'lucide-react';
 import type { ScheduleItem, WorkOrder, Customer, Unit, Part } from '@/types';
 import { inventoryInsights } from '@/services/aiAssist/aiAssistPreview';
+import { useIsMobile } from '@/hooks/useIsMobile';
 
 const VIEW_STORAGE_KEY = 'dashboard-view';
 
@@ -107,6 +108,7 @@ const formatAgeLabel = (ageMs: number) => {
 export default function Dashboard() {
   const navigate = useNavigate();
   const aiAssistEnabled = (import.meta as any).env?.VITE_AI_ASSIST_PREVIEW === 'true';
+  const isMobile = useIsMobile();
   const {
     workOrders,
     salesOrders,
@@ -780,7 +782,7 @@ export default function Dashboard() {
           </span>
         }
         actions={
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-3 w-full">
             <div className="flex flex-wrap items-center gap-2">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -830,7 +832,7 @@ export default function Dashboard() {
               ))}
             </div>
             <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
               <Input
                 value={globalSearchQuery}
                 onChange={(event) => {
@@ -840,7 +842,7 @@ export default function Dashboard() {
                   if (e.key === 'Enter') handleGlobalSearchSubmit();
                 }}
                 placeholder="Global search"
-                className="min-w-[220px]"
+                className="w-full sm:min-w-[220px]"
                 aria-label="Global search"
                 ref={searchInputRef}
               />
@@ -1058,24 +1060,25 @@ export default function Dashboard() {
       )}
 
       {isHydrating ? (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <div className="flex gap-3 overflow-x-auto pb-1 sm:grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 sm:overflow-visible">
           {Array.from({ length: 5 }).map((_, idx) => (
-            <Skeleton key={idx} className="h-28 rounded-lg" />
+            <Skeleton key={idx} className="h-28 rounded-lg min-w-[220px] sm:min-w-0" />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <div className="flex gap-3 overflow-x-auto pb-1 sm:grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 sm:overflow-visible">
           {kpiCards.map((card) => (
-            <DashboardKpiCard
-              key={card.title}
-              title={card.title}
-              value={card.value}
-              meta={card.meta}
-              description={card.description}
-              icon={card.icon}
-              tone={card.tone}
-              onClick={card.onClick}
-            />
+            <div key={card.title} className="min-w-[220px] sm:min-w-0">
+              <DashboardKpiCard
+                title={card.title}
+                value={card.value}
+                meta={card.meta}
+                description={card.description}
+                icon={card.icon}
+                tone={card.tone}
+                onClick={card.onClick}
+              />
+            </div>
           ))}
         </div>
       )}
@@ -1101,7 +1104,7 @@ export default function Dashboard() {
       )}
 
       <Card>
-        <CardHeader className="flex items-center justify-between space-x-2">
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div>
             <CardTitle className="text-base font-semibold">Work Order Pipeline</CardTitle>
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Open only</p>
@@ -1110,7 +1113,7 @@ export default function Dashboard() {
             Kanban view
           </Badge>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-2 sm:p-6">
           <DashboardKanban columns={pipelineColumns} loading={isHydrating} emptyState={pipelineEmptyState} />
         </CardContent>
       </Card>

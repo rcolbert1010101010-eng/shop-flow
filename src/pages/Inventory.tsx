@@ -33,6 +33,8 @@ import {
 } from '@/components/ui/table';
 import { useShopStore } from '@/stores/shopStore';
 import { Label } from '@/components/ui/label';
+import { ResponsiveDataList } from '@/components/common/ResponsiveDataList';
+import { useIsMobile } from '@/hooks/useIsMobile';
 
 export default function Inventory() {
   const navigate = useNavigate();
@@ -69,6 +71,7 @@ export default function Inventory() {
   const countInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [searchInput, setSearchInput] = useState(() => searchParams.get('search') || '');
   const [bulkSelectMode, setBulkSelectMode] = useState(false);
+  const isMobile = useIsMobile();
   const toNumber = (value: number | string | null | undefined) => {
     const numeric = typeof value === 'number' ? value : value != null ? Number(value) : NaN;
     return Number.isFinite(numeric) ? numeric : 0;
@@ -124,8 +127,8 @@ export default function Inventory() {
       header: 'Part #',
       sortable: true,
       render: (item) => (
-        <div className="flex flex-col gap-1">
-          <span className="font-mono font-semibold">{item.part_number}</span>
+        <div className="flex flex-col gap-1 min-w-[180px]">
+          <span className="font-mono font-semibold whitespace-nowrap max-w-[180px] truncate">{item.part_number}</span>
           <div className="flex flex-wrap gap-2 text-[11px] text-muted-foreground">
             {(() => {
               const ms = movementSummary[item.id];
@@ -154,7 +157,7 @@ export default function Inventory() {
           </div>
         </div>
       ),
-      className: 'font-mono',
+      className: 'font-mono w-[180px] min-w-[180px]',
     },
     { key: 'description', header: 'Description', sortable: true },
     {
@@ -570,6 +573,117 @@ export default function Inventory() {
     });
     return { groups, skipped };
   }, [bulkSelectMode, selectedParts, vendors]);
+
+  const renderStockBadge = (part: any) => {
+    const status = part.__stock;
+    const badgeClass =
+      status === 'OUT'
+        ? 'bg-destructive/15 text-destructive'
+        : status === 'LOW'
+        ? 'bg-amber-100 text-amber-800 border border-amber-300'
+        : 'bg-emerald-100 text-emerald-800 border border-emerald-200';
+    return (
+      <span className={cn('inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold', badgeClass)}>
+        {status}
+      </span>
+    );
+  };
+
+  const renderPartCard = (item: any) => {
+    const selected = !!selectedIds[item.id];
+    const needsReorder = item.min_qty != null && item.quantity_on_hand < item.min_qty;
+    const onToggleSelect = () => {
+      if (cycleCountMode || bulkSelectMode) {
+        setSelectedIds((prev) => ({ ...prev, [item.id]: !selected }));
+      } else {
+        navigate(`/inventory/${item.id}`);
+      }
+    };
+    return (
+      <div className="border rounded-lg p-3 space-y-3 bg-card">
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-1 min-w-0">
+            <div className="flex items-center gap-2">
+              {(cycleCountMode || bulkSelectMode) && (
+                <Checkbox checked={selected} onCheckedChange={onToggleSelect} onClick={(e) => e.stopPropagation()} />
+              )}
+              <span className="font-mono font-semibold text-sm whitespace-nowrap truncate max-w-[200px]">
+                {item.part_number}
+              </span>
+              {renderStockBadge(item)}
+            </div>
+            <div className="text-sm text-muted-foreground break-words">{item.description || '—'}</div>
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" onClick={(e) => e.stopPropagation()}>
+                Actions
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+              <DropdownMenuItem onClick={() => navigate(`/inventory/${item.id}`)}>View</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate(`/receiving?search=${encodeURIComponent(item.part_number)}`)}>
+                Receive
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  setSelectedPart(item);
+                  setNewQoh(item.quantity_on_hand.toString());
+                  setAdjustReason('');
+                  setAdjustDialogOpen(true);
+                }}
+              >
+                Adjust QOH
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <p className="text-xs text-muted-foreground">QOH</p>
+            <p className={cn('font-semibold', item.quantity_on_hand < 0 && 'text-destructive')}>
+              {item.quantity_on_hand}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Price</p>
+            <p className="font-semibold">${toNumber(item.selling_price).toFixed(2)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Vendor</p>
+            <p className="font-medium">{(vendors.find((v) => v.id === item.vendor_id)?.vendor_name as string) || '—'}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Category</p>
+            <p className="font-medium">{(categories.find((c) => c.id === item.category_id)?.category_name as string) || '—'}</p>
+          </div>
+        </div>
+        {(cycleCountMode || bulkSelectMode) && (
+          <div className="flex items-center gap-2">
+            <Checkbox checked={selected} onCheckedChange={onToggleSelect} onClick={(e) => e.stopPropagation()} />
+            <span className="text-sm text-muted-foreground">Select</span>
+            {cycleCountMode && (
+              <Input
+                type="number"
+                placeholder="Counted"
+                value={countInputs[item.id] ?? ''}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => setCountInputs((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                onFocus={(e) => e.currentTarget.select()}
+                onKeyDown={(e) => handleCountKeyDown(item.id, e)}
+                className="h-8 w-24 ml-auto"
+                disabled={!selected}
+              />
+            )}
+          </div>
+        )}
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          {needsReorder ? <span className="text-amber-700">Needs reorder</span> : <span>Healthy</span>}
+          {item.bin_location && <span>Bin: {item.bin_location}</span>}
+        </div>
+      </div>
+    );
+  };
   const focusNextCountInput = (partId: string, direction: 'forward' | 'backward' = 'forward') => {
     const idx = filteredParts.findIndex((p) => p.id === partId);
     if (idx === -1) return;
@@ -725,71 +839,73 @@ export default function Inventory() {
       />
 
       <div className="sticky top-16 z-20 bg-background/95 backdrop-blur border-b mb-4 space-y-3 py-3">
-        <div className="flex items-center gap-2">
-          <Input
-            ref={scanInputRef}
-            placeholder="Scan barcode"
-            value={scanValue}
-            onChange={(e) => setScanValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                handleScan(scanValue);
-              }
-            }}
-            className="max-w-xs"
-          />
-          <Button variant="outline" size="sm" onClick={() => scanInputRef.current?.focus()}>
-            Focus Scan
-          </Button>
-          <Button
-            variant={cycleCountMode ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => {
-              setCycleCountMode((prev) => {
-                const next = !prev;
-                if (next) {
-                  setBulkSelectMode(false);
-                  setSelectedIds({});
-                  setCountInputs({});
-                  setBatchReason('');
-                  setBatchSummary(null);
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              ref={scanInputRef}
+              placeholder="Scan barcode"
+              value={scanValue}
+              onChange={(e) => setScanValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleScan(scanValue);
                 }
-                return next;
-              });
-              setSelectedIds({});
-              setCountInputs({});
-              setBatchReason('');
-              setBatchSummary(null);
-            }}
-          >
-            {cycleCountMode ? 'Exit Quick Cycle Count' : 'Quick Cycle Count'}
-          </Button>
-          <Button
-            variant={bulkSelectMode ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => {
-              setBulkSelectMode((prev) => {
-                const next = !prev;
-                if (next) {
-                  setCycleCountMode(false);
-                  setCountInputs({});
-                  setBatchReason('');
-                  setBatchSummary(null);
-                }
-                return next;
-              });
-              setSelectedIds({});
-            }}
-          >
-            {bulkSelectMode ? 'Exit Bulk Select' : 'Bulk Select'}
-          </Button>
-          <div className="flex items-center gap-2 ml-auto">
+              }}
+              className="w-full max-w-xs"
+            />
+            <Button variant="outline" size="sm" onClick={() => scanInputRef.current?.focus()}>
+              Focus Scan
+            </Button>
+            <Button
+              variant={cycleCountMode ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => {
+                setCycleCountMode((prev) => {
+                  const next = !prev;
+                  if (next) {
+                    setBulkSelectMode(false);
+                    setSelectedIds({});
+                    setCountInputs({});
+                    setBatchReason('');
+                    setBatchSummary(null);
+                  }
+                  return next;
+                });
+                setSelectedIds({});
+                setCountInputs({});
+                setBatchReason('');
+                setBatchSummary(null);
+              }}
+            >
+              {cycleCountMode ? 'Exit Quick Cycle Count' : 'Quick Cycle Count'}
+            </Button>
+            <Button
+              variant={bulkSelectMode ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => {
+                setBulkSelectMode((prev) => {
+                  const next = !prev;
+                  if (next) {
+                    setCycleCountMode(false);
+                    setCountInputs({});
+                    setBatchReason('');
+                    setBatchSummary(null);
+                  }
+                  return next;
+                });
+                setSelectedIds({});
+              }}
+            >
+              {bulkSelectMode ? 'Exit Bulk Select' : 'Bulk Select'}
+            </Button>
+          </div>
+          <div className="flex items-center gap-2 lg:ml-auto w-full lg:w-auto">
             <Input
               placeholder="Search parts"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              className="w-56"
+              className="w-full lg:w-56"
             />
             {searchInput && (
               <Button
@@ -854,21 +970,33 @@ export default function Inventory() {
         </div>
       </div>
 
-      <DataTable
-        data={filteredParts}
-        columns={columns}
-        searchKeys={['part_number', 'description']}
-        searchPlaceholder="Search parts..."
-        onRowClick={(part) => {
-          if (cycleCountMode || bulkSelectMode) {
-            setSelectedIds((prev) => ({ ...prev, [part.id]: !prev[part.id] }));
-            return;
-          }
-          navigate(`/inventory/${part.id}`);
-        }}
-        
-        emptyMessage="No parts found. Add your first part to get started."
-      />
+      {isMobile && filteredParts.length === 0 ? (
+        <div className="rounded-lg border bg-card text-muted-foreground p-4 text-center">
+          No parts found. Add your first part to get started.
+        </div>
+      ) : (
+        <ResponsiveDataList
+          items={filteredParts}
+          renderMobileCard={renderPartCard}
+          renderDesktop={(items) => (
+            <DataTable
+              data={items}
+              columns={columns}
+              searchKeys={['part_number', 'description']}
+              searchPlaceholder="Search parts..."
+              onRowClick={(part) => {
+                if (cycleCountMode || bulkSelectMode) {
+                  setSelectedIds((prev) => ({ ...prev, [part.id]: !prev[part.id] }));
+                  return;
+                }
+                navigate(`/inventory/${part.id}`);
+              }}
+              
+              emptyMessage="No parts found. Add your first part to get started."
+            />
+          )}
+        />
+      )}
 
       {(bulkSelectMode || cycleCountMode) && (
         <div className="mt-4 rounded-lg border bg-muted/40 p-4 space-y-3">

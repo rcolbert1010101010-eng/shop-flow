@@ -16,8 +16,8 @@ export function PageHeader({ title, subtitle, description, backTo, actions }: Pa
 
   return (
     <div className="flex flex-col gap-3 mb-6">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-start gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
+        <div className="flex items-start gap-3 sm:gap-4 min-w-0">
           {backTo && (
             <Button
               variant="ghost"
@@ -28,14 +28,12 @@ export function PageHeader({ title, subtitle, description, backTo, actions }: Pa
               <ArrowLeft className="w-5 h-5" />
             </Button>
           )}
-          <div className="space-y-1">
-            <h1 className="text-2xl font-semibold text-foreground leading-tight">{title}</h1>
-            {subtitle && (
-              <p className="text-sm text-muted-foreground">{subtitle}</p>
-            )}
+          <div className="space-y-1 min-w-0">
+            <h1 className="text-2xl font-semibold text-foreground leading-tight truncate">{title}</h1>
+            {subtitle && <p className="text-sm text-muted-foreground truncate">{subtitle}</p>}
           </div>
         </div>
-        {actions && <div className="flex items-center gap-2 no-print">{actions}</div>}
+        {actions && <div className="flex flex-wrap items-center gap-2 no-print">{actions}</div>}
       </div>
       {description && <div className="text-sm text-muted-foreground">{description}</div>}
     </div>

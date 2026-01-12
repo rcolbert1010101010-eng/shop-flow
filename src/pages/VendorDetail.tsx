@@ -28,6 +28,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { useIsMobile } from '@/hooks/useIsMobile';
+import { MobileActionBar, MobileActionBarSpacer } from '@/components/common/MobileActionBar';
 
 export default function VendorDetail() {
   const { id } = useParams<{ id: string }>();
@@ -37,6 +39,7 @@ export default function VendorDetail() {
   const { parts } = repos.parts;
   const { warrantyPolicies, getClaimsByVendor, upsertWarrantyPolicy, createWarrantyClaim } = repos.warranty;
   const { toast } = useToast();
+  const isMobile = useIsMobile();
 
   const vendor = vendors.find((v) => v.id === id);
   const vendorParts = parts.filter((p) => p.vendor_id === id);
@@ -382,6 +385,26 @@ export default function VendorDetail() {
           </div>
         )}
       </div>
+
+      {isEditing && isMobile && (
+        <div className="no-print">
+          <MobileActionBar
+            primary={
+              <Button onClick={handleSave} className="flex-1">
+                <Save className="w-4 h-4 mr-2" />
+                Save
+              </Button>
+            }
+            secondary={
+              <Button variant="outline" onClick={() => setIsEditing(false)} className="flex-1">
+                <X className="w-4 h-4 mr-2" />
+                Cancel
+              </Button>
+            }
+          />
+          <MobileActionBarSpacer />
+        </div>
+      )}
 
       <AlertDialog open={showDeactivateDialog} onOpenChange={setShowDeactivateDialog}>
         <AlertDialogContent>

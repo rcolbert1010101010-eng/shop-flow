@@ -1,13 +1,82 @@
 import { Outlet } from 'react-router-dom';
-import { Sidebar } from './Sidebar';
+import { Sidebar, navItems, type NavGroup, type NavLink } from './Sidebar';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Button } from '@/components/ui/button';
+import { Menu } from 'lucide-react';
+import { useIsMobile } from '@/hooks/useIsMobile';
+import { useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { cn } from '@/lib/utils';
 
 export function MainLayout() {
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const isMobile = useIsMobile();
+  const location = useLocation();
+
+  const renderLink = (item: NavLink, options?: { nested?: boolean }) => {
+    const isActive =
+      location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
+    return (
+      <Link
+        key={`${item.path}-${options?.nested ? 'nested' : 'root'}`}
+        to={item.path}
+        onClick={() => setMobileNavOpen(false)}
+        className={cn(
+          'flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-sm',
+          options?.nested ? 'pl-8' : 'pl-3',
+          isActive ? 'bg-accent text-accent-foreground font-semibold' : 'hover:bg-accent/60'
+        )}
+      >
+        <item.icon className="w-4 h-4" />
+        <span className="truncate">{item.label}</span>
+      </Link>
+    );
+  };
+
+  const renderGroup = (group: NavGroup) => (
+    <div key={group.key} className="space-y-1">
+      <div className="px-3 py-2 text-xs uppercase tracking-wide text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <group.icon className="w-4 h-4" />
+          <span>{group.label}</span>
+        </div>
+      </div>
+      <div className="space-y-1">{group.children.map((child) => renderLink(child, { nested: true }))}</div>
+    </div>
+  );
+
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar />
-      <main className="flex-1 overflow-y-auto">
-        <Outlet />
-      </main>
+    <div className="flex flex-col h-screen bg-background overflow-hidden">
+      <header className="flex items-center justify-between px-4 py-3 border-b md:hidden">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={() => setMobileNavOpen(true)}>
+            <Menu className="w-5 h-5" />
+          </Button>
+          <span className="font-semibold">ShopFlow</span>
+        </div>
+      </header>
+
+      <div className="flex flex-1 overflow-hidden min-w-0">
+        <Sidebar className="hidden md:flex" />
+        <main className="flex-1 overflow-y-auto min-w-0">
+          <Outlet />
+        </main>
+      </div>
+
+      {isMobile && (
+        <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+          <SheetContent side="left" className="w-72 p-0 flex flex-col">
+            <SheetHeader className="px-4 pt-4 pb-2 text-left">
+              <SheetTitle>Navigation</SheetTitle>
+            </SheetHeader>
+            <div className="px-2 pb-4 space-y-2 overflow-y-auto flex-1">
+              {navItems.map((item) =>
+                item.type === 'group' ? renderGroup(item) : renderLink(item)
+              )}
+            </div>
+          </SheetContent>
+        </Sheet>
+      )}
     </div>
   );
 }
