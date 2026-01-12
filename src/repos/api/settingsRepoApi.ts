@@ -30,9 +30,13 @@ export const settingsRepoApi: SettingsRepo = {
     });
   },
 
-  async listSettingHistory(args?: { key?: string; limit?: number }) {
+  async listSettingHistory(args?: { key?: string; limit?: number }): Promise<any[]> {
     try {
-      const res = await apiClient.get('/settings/history', { params: args });
+      const params = new URLSearchParams();
+      if (args?.key) params.set('key', args.key);
+      if (args?.limit) params.set('limit', String(args.limit));
+      const queryString = params.toString();
+      const res = await apiClient.get<any[]>(`/settings/history${queryString ? `?${queryString}` : ''}`);
       return res || [];
     } catch (err) {
       console.warn('Settings history fetch failed', err);

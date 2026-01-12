@@ -317,6 +317,7 @@ export default function WorkOrderDetail() {
   const [aiOriginalNote, setAiOriginalNote] = useState<string | null>(null);
   const [showInvoiceDialog, setShowInvoiceDialog] = useState(false);
   const [showCoreReturnDialog, setShowCoreReturnDialog] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
   const [coreReturnLineId, setCoreReturnLineId] = useState<string | null>(null);
   const [createClaimOpen, setCreateClaimOpen] = useState(false);
   const [selectedClaimVendor, setSelectedClaimVendor] = useState('');
@@ -752,7 +753,7 @@ const jobReadinessValues = Object.values(jobReadinessById);
   const unitPickerItems = useMemo(
     () =>
       customerUnits.map((u) => {
-        const label = u.unit_name || u.display_name || u.identifier || 'Unit';
+        const label = u.unit_name || (u as any).display_name || (u as any).identifier || 'Unit';
         const searchText = [
           u.unit_name,
           (u as any).display_name,
@@ -4495,7 +4496,7 @@ const jobReadinessValues = Object.values(jobReadinessById);
                       <span className="text-xs text-muted-foreground">
                         {item.meta?.vendor && `${item.meta.vendor} · `}
                         {item.meta?.category && `${item.meta.category} · `}
-                        QOH: {item.meta?.quantity_on_hand ?? 0}
+                        QOH: {String(item.meta?.quantity_on_hand ?? 0)}
                       </span>
                     </div>
                   )}

@@ -52,7 +52,7 @@ export function getAgingBucket(daysOpen: number): '0-2' | '3-7' | '8-14' | '15+'
 
 const pickNumeric = (order: WorkOrder, keys: string[]) => {
   for (const key of keys) {
-    const raw = (order as Record<string, unknown>)[key];
+    const raw = (order as unknown as Record<string, unknown>)[key];
     const value = toNumber(raw as number | string | null | undefined);
     if (Number.isFinite(value)) {
       return value;

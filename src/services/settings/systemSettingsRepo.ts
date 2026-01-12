@@ -34,7 +34,8 @@ const mapKeyToStoreField = (key: SystemSettingKey): keyof SystemSettings => {
 
 const coerceValue = (key: SystemSettingKey, raw: any) => {
   const def = SYSTEM_SETTINGS_REGISTRY[key];
-  const { valueType, constraints } = def;
+  const constraints = (def as any).constraints as { min?: number; max?: number; allowedValues?: string[] } | undefined;
+  const { valueType } = def;
   let val = raw;
   if (val === undefined || val === null) return def.defaultValue;
   try {
@@ -65,7 +66,9 @@ const coerceValue = (key: SystemSettingKey, raw: any) => {
 };
 
 const serializeValue = (key: SystemSettingKey, value: any) => {
-  const { valueType, constraints } = SYSTEM_SETTINGS_REGISTRY[key];
+  const def = SYSTEM_SETTINGS_REGISTRY[key];
+  const { valueType } = def;
+  const constraints = (def as any).constraints as { min?: number; max?: number; allowed?: readonly string[]; allowedValues?: string[] } | undefined;
   const base = {
     value_type: valueType,
     value_number: null as number | null,
@@ -86,7 +89,7 @@ const serializeValue = (key: SystemSettingKey, value: any) => {
   if (valueType === 'string') {
     const str = String(value);
     const allowed = constraints?.allowed ?? constraints?.allowedValues;
-    if (allowed && !allowed.includes(str)) throw new Error('Value not allowed');
+    if (allowed && !(allowed as string[]).includes(str)) throw new Error('Value not allowed');
     return { ...base, value_text: str };
   }
   return { ...base, value_json: value };
@@ -158,17 +161,14 @@ export const systemSettingsRepo = {
       actor_label: actorLabel,
     };
 
-    void useRepos()
-      .settings.updateSettings(payload)
-      .catch((err) => {
-        console.warn('Setting sync failed; keeping local version', err);
-      });
-
-    void useRepos()
-      .settings.logSettingHistory(historyPayload)
-      .catch((err) => {
-        console.warn('History sync failed; will keep local only', err);
-      });
+    // Fire-and-forget background sync
+    try {
+      const settings = useRepos().settings;
+      settings.updateSettings(payload);
+      settings.logSettingHistory?.(historyPayload);
+    } catch (err) {
+      console.warn('Settings sync failed; keeping local version', err);
+    }
   },
 
   async listSettingHistory(args?: { key?: SystemSettingKey; limit?: number }) {

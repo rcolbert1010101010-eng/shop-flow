@@ -136,7 +136,7 @@ export default function Settings() {
       if (newValue === undefined || newValue === null || (entry.valueType === 'number' && Number.isNaN(newValue))) continue;
       if (newValue === oldValue) continue;
 
-      changes.push({ key, oldValue, newValue, sensitivity: entry.sensitivity, requiresReason: entry.requiresReason });
+      changes.push({ key, oldValue, newValue, sensitivity: entry.sensitivity, requiresReason: (entry as any).requiresReason });
     }
 
     if (changes.length === 0) {
