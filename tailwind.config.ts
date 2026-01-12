@@ -15,19 +15,17 @@ export default {
   	extend: {
   		fontFamily: {
   			sans: [
-  				'Lato',
-  				'ui-sans-serif',
+  				'Inter',
+  				'Inter var',
   				'system-ui',
   				'-apple-system',
-  				'BlinkMacSystemFont',
   				'Segoe UI',
   				'Roboto',
-  				'Helvetica Neue',
   				'Arial',
-  				'Noto Sans',
   				'sans-serif'
   			],
   			mono: [
+  				'JetBrains Mono',
   				'Fira Code',
   				'ui-monospace',
   				'SFMono-Regular',
@@ -102,6 +100,7 @@ export default {
   			}
   		},
   		borderRadius: {
+  			DEFAULT: 'var(--radius)',
   			lg: 'var(--radius)',
   			md: 'calc(var(--radius) - 2px)',
   			sm: 'calc(var(--radius) - 4px)'
@@ -155,7 +154,9 @@ export default {
   			md: 'var(--shadow-md)',
   			lg: 'var(--shadow-lg)',
   			xl: 'var(--shadow-xl)',
-  			'2xl': 'var(--shadow-2xl)'
+  			'2xl': 'var(--shadow-2xl)',
+  			soft: 'var(--shadow-soft)',
+  			'soft-lg': 'var(--shadow-soft-lg)'
   		}
   	}
   },
