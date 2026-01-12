@@ -17,6 +17,11 @@ const normalizeOptionalField = (value?: string | null) => {
 };
 
 export async function fetchCustomers(): Promise<Customer[]> {
+  if (!supabase) {
+    // App can run in offline/mock mode without a configured backend
+    return [];
+  }
+
   const { data, error } = await supabase
     .from('customers')
     .select('*')
@@ -31,6 +36,10 @@ export async function fetchCustomers(): Promise<Customer[]> {
 }
 
 export async function createCustomer(input: CreateCustomerInput): Promise<Customer> {
+  if (!supabase) {
+    throw new Error('Backend not configured');
+  }
+
   const payload = {
     company_name: input.company_name.trim(),
     contact_name: normalizeOptionalField(input.contact_name),
@@ -49,3 +58,4 @@ export async function createCustomer(input: CreateCustomerInput): Promise<Custom
 
   return data as Customer;
 }
+

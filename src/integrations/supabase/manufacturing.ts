@@ -106,6 +106,13 @@ export type ManufacturingBuildWithRelations = ManufacturingBuild & {
   customer?: Pick<Customer, 'id' | 'company_name'>;
 };
 
+const requireBackend = () => {
+  if (!supabase) {
+    throw new Error('Backend not configured');
+  }
+  return supabase;
+};
+
 export async function fetchManufacturedProducts({
   includeInactive = false,
   productType,
@@ -113,6 +120,11 @@ export async function fetchManufacturedProducts({
   includeInactive?: boolean;
   productType?: ManufacturedProductType;
 } = {}) {
+  if (!supabase) {
+    // App can run in offline/mock mode without a configured backend
+    return [];
+  }
+
   let query = supabase.from('manufactured_products').select('*');
 
   if (!includeInactive) {
@@ -129,7 +141,8 @@ export async function fetchManufacturedProducts({
 }
 
 export async function fetchManufacturedProduct(id: string) {
-  const { data, error } = await supabase
+  const sb = requireBackend();
+  const { data, error } = await sb
     .from('manufactured_products')
     .select('*')
     .eq('id', id)
@@ -155,9 +168,10 @@ export async function createManufacturedProduct(input: {
   description?: string | null;
   is_active?: boolean;
 }) {
+  const sb = requireBackend();
   const estimatedLabor = input.estimated_labor_hours ?? input.estimatedLaborHours ?? 0;
   const estimatedOverhead = input.estimated_overhead ?? input.estimatedOverhead ?? 0;
-  const { data, error } = await supabase
+  const { data, error } = await sb
     .from('manufactured_products')
     .insert({
       name: input.name,
@@ -191,6 +205,7 @@ export async function updateManufacturedProduct(
     is_active: boolean;
   }>
 ) {
+  const sb = requireBackend();
   const {
     estimated_labor_hours,
     estimated_overhead,
@@ -206,7 +221,7 @@ export async function updateManufacturedProduct(
   };
   if (estimatedLabor !== undefined) payload.estimated_labor_hours = estimatedLabor;
   if (estimatedOverheadValue !== undefined) payload.estimated_overhead = estimatedOverheadValue;
-  const { data, error } = await supabase
+  const { data, error } = await sb
     .from('manufactured_products')
     .update(payload)
     .eq('id', id)
