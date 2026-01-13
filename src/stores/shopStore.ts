@@ -1290,7 +1290,7 @@ export const useShopStore = create<ShopState>()(
           serial_number: part.serial_number ?? null,
           barcode: part.barcode ?? null,
           is_kit: part.is_kit ?? false,
-          is_active: true,
+          is_active: part.is_active ?? true,
           created_at: now(),
           updated_at: now(),
         };
