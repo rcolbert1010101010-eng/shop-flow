@@ -130,6 +130,14 @@ export interface Part {
   max_qty: number | null;
   bin_location: string | null;
   location: string | null;
+  uom: 'EA' | 'FT' | 'SQFT';
+  allow_fractional_qty: boolean;
+  qty_precision: number;
+  material_kind?: 'STANDARD' | 'SHEET';
+  sheet_width_in?: number | null;
+  sheet_length_in?: number | null;
+  thickness_in?: number | null;
+  grade?: string | null;
   last_cost: number | null;
   avg_cost: number | null;
   model: string | null;

@@ -15,6 +15,14 @@ export type ImportablePartRow = {
   location: string | null;
   has_core: boolean | null;
   core_cost: number | null;
+  uom: 'EA' | 'FT' | 'SQFT' | null;
+  allow_fractional_qty: boolean | null;
+  qty_precision: number | null;
+  material_kind: 'STANDARD' | 'SHEET' | null;
+  sheet_width_in: number | null;
+  sheet_length_in: number | null;
+  thickness_in: number | null;
+  grade: string | null;
 };
 
 export type ImportPreviewRow = ImportablePartRow & {
@@ -69,6 +77,32 @@ const NORMALIZED_HEADERS: Record<string, keyof ImportablePartRow> = {
   'core cost': 'core_cost',
   core_charge: 'core_cost',
   'core charge': 'core_cost',
+  uom: 'uom',
+  'unit of measure': 'uom',
+  unit: 'uom',
+  allow_fractional_qty: 'allow_fractional_qty',
+  'allow fractional qty': 'allow_fractional_qty',
+  'allow fractional': 'allow_fractional_qty',
+  fractional: 'allow_fractional_qty',
+  qty_precision: 'qty_precision',
+  'qty precision': 'qty_precision',
+  precision: 'qty_precision',
+  material_kind: 'material_kind',
+  'material kind': 'material_kind',
+  'material type': 'material_kind',
+  material: 'material_kind',
+  sheet_width_in: 'sheet_width_in',
+  'sheet width': 'sheet_width_in',
+  'sheet width in': 'sheet_width_in',
+  width: 'sheet_width_in',
+  sheet_length_in: 'sheet_length_in',
+  'sheet length': 'sheet_length_in',
+  'sheet length in': 'sheet_length_in',
+  length: 'sheet_length_in',
+  thickness_in: 'thickness_in',
+  'thickness': 'thickness_in',
+  'thickness in': 'thickness_in',
+  grade: 'grade',
 };
 
 const normalizeHeader = (header: string) => {
@@ -173,6 +207,14 @@ export function parsePartsImport(
       location: null,
       has_core: null,
       core_cost: null,
+      uom: null,
+      allow_fractional_qty: null,
+      qty_precision: null,
+      material_kind: null,
+      sheet_width_in: null,
+      sheet_length_in: null,
+      thickness_in: null,
+      grade: null,
     };
     const errors: string[] = [];
 
@@ -258,6 +300,87 @@ export function parsePartsImport(
           } else {
             entry.core_cost = parsed;
           }
+          break;
+        }
+        case 'uom': {
+          const normalized = value.trim().toUpperCase();
+          if (value.trim() === '') {
+            entry.uom = null;
+          } else if (normalized === 'EA' || normalized === 'FT' || normalized === 'SQFT') {
+            entry.uom = normalized as 'EA' | 'FT' | 'SQFT';
+          } else {
+            errors.push('uom must be EA, FT, or SQFT');
+          }
+          break;
+        }
+        case 'allow_fractional_qty': {
+          const boolVal = parseBoolean(value);
+          if (value.trim() === '') {
+            entry.allow_fractional_qty = null;
+          } else if (boolVal == null) {
+            errors.push('allow_fractional_qty must be true/false/yes/no/1/0');
+          } else {
+            entry.allow_fractional_qty = boolVal;
+          }
+          break;
+        }
+        case 'qty_precision': {
+          const parsed = parseNumber(value);
+          if (value.trim() === '') {
+            entry.qty_precision = null;
+          } else if (parsed == null || parsed < 0 || !Number.isInteger(parsed)) {
+            errors.push('qty_precision must be an integer >= 0');
+          } else {
+            entry.qty_precision = parsed;
+          }
+          break;
+        }
+        case 'material_kind': {
+          const normalized = value.trim().toUpperCase();
+          if (value.trim() === '') {
+            entry.material_kind = null;
+          } else if (normalized === 'STANDARD' || normalized === 'SHEET') {
+            entry.material_kind = normalized as 'STANDARD' | 'SHEET';
+          } else {
+            errors.push('material_kind must be STANDARD or SHEET');
+          }
+          break;
+        }
+        case 'sheet_width_in': {
+          const parsed = parseNumber(value);
+          if (value.trim() === '') {
+            entry.sheet_width_in = null;
+          } else if (parsed == null || parsed <= 0) {
+            errors.push('sheet_width_in must be > 0');
+          } else {
+            entry.sheet_width_in = parsed;
+          }
+          break;
+        }
+        case 'sheet_length_in': {
+          const parsed = parseNumber(value);
+          if (value.trim() === '') {
+            entry.sheet_length_in = null;
+          } else if (parsed == null || parsed <= 0) {
+            errors.push('sheet_length_in must be > 0');
+          } else {
+            entry.sheet_length_in = parsed;
+          }
+          break;
+        }
+        case 'thickness_in': {
+          const parsed = parseNumber(value);
+          if (value.trim() === '') {
+            entry.thickness_in = null;
+          } else if (parsed == null || parsed <= 0) {
+            errors.push('thickness_in must be > 0 if provided');
+          } else {
+            entry.thickness_in = parsed;
+          }
+          break;
+        }
+        case 'grade': {
+          entry.grade = value.trim() || null;
           break;
         }
         default:

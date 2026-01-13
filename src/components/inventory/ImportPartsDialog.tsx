@@ -76,11 +76,20 @@ export function ImportPartsDialog({ open, onOpenChange, parts, vendors, categori
       'max_qty',
       'has_core',
       'core_cost',
+      'uom',
+      'allow_fractional_qty',
+      'qty_precision',
+      'material_kind',
+      'sheet_width_in',
+      'sheet_length_in',
+      'thickness_in',
+      'grade',
     ];
     const exampleRows = [
-      ['IMP-100', 'Hydraulic Hose', '22.39', '39.00', '6', 'Summit Brake & Axle', 'Hydraulics', 'true', 'A1', 'Warehouse A', '2', '10', 'false', '0'],
-      ['IMP-101', 'LED Marker Light Amber', '6.50', '12.99', '30', 'NAPA Truck & Trailer Parts', 'Electrical & Lighting', 'true', 'B2', 'Warehouse B', '5', '50', 'false', '0'],
-      ['IMP-102', 'Brake Pad Set', '45.00', '89.99', '12', 'Auto Parts Co', 'Brakes', 'true', 'C3', 'Warehouse C', '4', '20', 'true', '15.00'],
+      ['IMP-100', 'Hydraulic Hose', '22.39', '39.00', '6', 'Summit Brake & Axle', 'Hydraulics', 'true', 'A1', 'Warehouse A', '2', '10', 'false', '0', 'EA', 'false', '0', 'STANDARD', '', '', '', ''],
+      ['IMP-101', 'LED Marker Light Amber', '6.50', '12.99', '30', 'NAPA Truck & Trailer Parts', 'Electrical & Lighting', 'true', 'B2', 'Warehouse B', '5', '50', 'false', '0', 'EA', 'false', '0', 'STANDARD', '', '', '', ''],
+      ['IMP-102', 'Steel Cable', '45.00', '89.99', '12.5', 'Auto Parts Co', 'Brakes', 'true', 'C3', 'Warehouse C', '4', '20', 'false', '0', 'FT', 'true', '2', 'STANDARD', '', '', '', ''],
+      ['IMP-103', 'Steel Plate A36', '125.00', '250.00', '0', 'Metal Supply Co', 'Raw Materials', 'true', 'D4', 'Warehouse D', '10', '100', 'false', '0', 'SQFT', 'true', '2', 'SHEET', '48', '96', '0.25', 'A36'],
     ];
 
     const escapeCSVField = (field: string): string => {
@@ -163,6 +172,11 @@ let partsCreated = 0;
       validRows.forEach((row) => {
         const vendor = ensureVendor(row.vendor);
         const category = ensureCategory(row.category);
+        const uom = row.uom ?? 'EA';
+        const allow_fractional_qty = row.allow_fractional_qty ?? (uom === 'FT' || uom === 'SQFT' ? true : false);
+        const qty_precision = row.qty_precision ?? (uom === 'EA' ? 0 : 2);
+        const material_kind = row.material_kind ?? 'STANDARD';
+        
         repos.parts.addPart({
           part_number: row.part_number,
           description: row.description || row.part_number,
@@ -177,6 +191,14 @@ let partsCreated = 0;
           max_qty: row.max_qty ?? null,
           bin_location: row.bin_location ?? null,
           location: row.location ?? null,
+          uom,
+          allow_fractional_qty,
+          qty_precision,
+          material_kind,
+          sheet_width_in: row.sheet_width_in ?? null,
+          sheet_length_in: row.sheet_length_in ?? null,
+          thickness_in: row.thickness_in ?? null,
+          grade: row.grade ?? null,
           last_cost: row.cost,
           avg_cost: row.cost,
           model: null,
@@ -187,10 +209,10 @@ let partsCreated = 0;
         });
         partsCreated += 1;
       });
-
+      const totalRows = parseResult.rows.length;
+      const failedRows = parseResult.rows.filter((r) => r.errors.length > 0).length;
       const skippedRows = totalRows - validRows.length;
-
-      addPartsImportHistory({
+addPartsImportHistory({
         total_rows: totalRows,
         valid_rows: validRows.length,
         partsCreated,
@@ -436,5 +458,6 @@ Optional columns: bin_location, location, min_qty, max_qty, has_core, core_cost.
     </Dialog>
   );
 }
+
 
 

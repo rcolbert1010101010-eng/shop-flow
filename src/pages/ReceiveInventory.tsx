@@ -14,6 +14,8 @@ type Line = {
   id: string;
   partId: string;
   qty: string;
+  receiveMode?: 'SQFT' | 'SHEETS';
+  sheetsReceived?: string;
 };
 
 const newId = () => Math.random().toString(36).slice(2, 9);
@@ -49,11 +51,27 @@ export default function ReceiveInventory() {
     return lines.map((l) => {
       const errors: string[] = [];
       if (!l.partId) errors.push('Part required');
-      const qtyNum = Number(l.qty);
-      if (!Number.isFinite(qtyNum) || qtyNum <= 0) errors.push('Qty must be > 0');
+      const part = partsById.get(l.partId);
+      const isSheetMaterial = part?.uom === 'SQFT' && part?.sheet_width_in && part?.sheet_length_in;
+      const receiveMode = l.receiveMode || (isSheetMaterial ? 'SHEETS' : 'SQFT');
+      
+      if (isSheetMaterial && receiveMode === 'SHEETS') {
+        const sheets = Number(l.sheetsReceived || l.qty);
+        if (!Number.isFinite(sheets) || sheets <= 0) {
+          errors.push('Sheets must be > 0');
+        } else if (!Number.isInteger(sheets)) {
+          errors.push('Sheets must be whole number');
+        }
+      } else {
+        const qtyNum = Number(l.qty);
+        if (!Number.isFinite(qtyNum) || qtyNum <= 0) errors.push('Qty must be > 0');
+        if (part?.uom === 'EA' && !Number.isInteger(qtyNum)) {
+          errors.push('EA quantities must be whole numbers');
+        }
+      }
       return { id: l.id, errors };
     });
-  }, [lines]);
+  }, [lines, partsById]);
   const hasValidLines = useMemo(
     () => lines.length > 0 && lineErrors.every((l) => l.errors.length === 0),
     [lineErrors, lines.length]
@@ -64,6 +82,8 @@ export default function ReceiveInventory() {
       toast({ title: 'Select a part', variant: 'destructive' });
       return;
     }
+    const part = partsById.get(selectedPart);
+    const isSheetMaterial = part?.uom === 'SQFT' && part?.sheet_width_in && part?.sheet_length_in;
     const qtyNum = Number(selectedQty);
     if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
       toast({ title: 'Quantity must be greater than 0', variant: 'destructive' });
@@ -78,7 +98,14 @@ export default function ReceiveInventory() {
           l.partId === selectedPart ? { ...l, qty: String(qtyNum + Number(l.qty || 0)) } : l
         );
       }
-      return [...prev, { id: newId(), partId: selectedPart, qty: String(qtyNum) }];
+      const newLine: Line = {
+        id: newId(),
+        partId: selectedPart,
+        qty: isSheetMaterial ? String((qtyNum * (part.sheet_width_in! * part.sheet_length_in!) / 144).toFixed(2)) : String(qtyNum),
+        receiveMode: isSheetMaterial ? 'SHEETS' : undefined,
+        sheetsReceived: isSheetMaterial ? String(qtyNum) : undefined,
+      };
+      return [...prev, newLine];
     });
     setSelectedPart('');
     setSelectedQty('1');
@@ -119,13 +146,42 @@ export default function ReceiveInventory() {
       return;
     }
     const prepared = lines
-      .map((l) => ({ part_id: l.partId, quantity: Number(l.qty) }))
-      .filter((l) => l.part_id && Number.isFinite(l.quantity) && l.quantity > 0);
+      .map((l) => {
+        const part = partsById.get(l.partId);
+        if (!part) return null;
+        
+        let quantity = Number(l.qty);
+        let reasonSuffix = '';
+        
+        // Handle sheet material conversion
+        if (part.uom === 'SQFT' && part.sheet_width_in && part.sheet_length_in && l.receiveMode === 'SHEETS') {
+          const sheets = Number(l.sheetsReceived || l.qty);
+          if (!Number.isFinite(sheets) || sheets <= 0 || !Number.isInteger(sheets)) {
+            return null; // Will be filtered out
+          }
+          const sqftPerSheet = (part.sheet_width_in * part.sheet_length_in) / 144;
+          const precision = part.qty_precision ?? 2;
+          const multiplier = Math.pow(10, precision);
+          quantity = Math.round(sheets * sqftPerSheet * multiplier) / multiplier;
+          reasonSuffix = ` (Received ${sheets} sheet${sheets !== 1 ? 's' : ''}, ${part.sheet_width_in}"x${part.sheet_length_in}" = ${quantity.toFixed(precision)} SQFT)`;
+        }
+        
+        if (!Number.isFinite(quantity) || quantity <= 0) {
+          return null;
+        }
+        
+        return { part_id: l.partId, quantity, reasonSuffix };
+      })
+      .filter((l): l is { part_id: string; quantity: number; reasonSuffix: string } => l !== null);
+      
     if (prepared.length === 0) {
       return;
     }
+    
+    // Note: reasonSuffix would need to be passed through receiveInventory if we want it in movements
+    // For now, we'll just use the quantity conversion
     const result = receiveInventory({
-      lines: prepared,
+      lines: prepared.map(({ part_id, quantity }) => ({ part_id, quantity })),
       vendor_id: vendorId ? vendorId : null,
       reference: reference.trim() || null,
       received_at: receivedDate ? new Date(receivedDate).toISOString() : undefined,
@@ -257,41 +313,103 @@ export default function ReceiveInventory() {
                 lines.map((line) => {
                   const part = partsById.get(line.partId);
                   const errors = lineErrors.find((le) => le.id === line.id)?.errors ?? [];
+                  const isSheetMaterial = part?.uom === 'SQFT' && part?.sheet_width_in && part?.sheet_length_in;
+                  const receiveMode = line.receiveMode || (isSheetMaterial ? 'SHEETS' : 'SQFT');
+                  const showSheetsInput = isSheetMaterial && receiveMode === 'SHEETS';
+                  
                   return (
                     <tr key={line.id} className="border-t border-border/60">
                       <td className="py-2">
                         <div className="font-medium">{part?.part_number || 'Unknown part'}</div>
                         <div className="text-xs text-muted-foreground">{part?.description || '—'}</div>
+                        {isSheetMaterial && (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            {part.sheet_width_in}" × {part.sheet_length_in}"
+                          </div>
+                        )}
                       </td>
                       <td className="py-2 text-right">
-                        <Input
-                          type="number"
-                          min="0"
-                          step="1"
-                          className="w-24 ml-auto"
-                          value={line.qty}
-                          onChange={(e) => updateLineQty(line.id, e.target.value)}
-                          onFocus={(e) => e.currentTarget.select()}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === 'Tab') {
-                              e.preventDefault();
-                              focusNextQty(line.id, e.shiftKey ? 'backward' : 'forward');
-                              return;
-                            }
-                            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'enter') {
-                              e.preventDefault();
-                              if (hasValidLines) handlePost();
-                              return;
-                            }
-                            if (e.key === 'Escape') {
-                              e.currentTarget.blur();
-                              return;
-                            }
-                          }}
-                          ref={(el) => {
-                            qtyRefs.current[line.id] = el;
-                          }}
-                        />
+                        {isSheetMaterial && (
+                          <div className="flex items-center gap-2 justify-end mb-2">
+                            <Select
+                              value={receiveMode}
+                              onValueChange={(value: 'SQFT' | 'SHEETS') => {
+                                setLines((prev) =>
+                                  prev.map((l) =>
+                                    l.id === line.id
+                                      ? { ...l, receiveMode: value, sheetsReceived: value === 'SHEETS' ? l.qty : undefined }
+                                      : l
+                                  )
+                                );
+                              }}
+                            >
+                              <SelectTrigger className="w-24 h-8 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="SHEETS">Sheets</SelectItem>
+                                <SelectItem value="SQFT">SQFT</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                        {showSheetsInput ? (
+                          <div className="space-y-1">
+                            <Input
+                              type="number"
+                              min="1"
+                              step="1"
+                              className="w-24 ml-auto"
+                              value={line.sheetsReceived || line.qty}
+                              onChange={(e) => {
+                                const sheets = e.target.value;
+                                const sqftPerSheet = ((part?.sheet_width_in ?? 0) * (part?.sheet_length_in ?? 0)) / 144;
+                                const precision = part?.qty_precision ?? 2;
+                                const multiplier = Math.pow(10, precision);
+                                const sqft = Math.round(Number(sheets) * sqftPerSheet * multiplier) / multiplier;
+                                setLines((prev) =>
+                                  prev.map((l) =>
+                                    l.id === line.id ? { ...l, sheetsReceived: sheets, qty: sqft.toString() } : l
+                                  )
+                                );
+                              }}
+                              onFocus={(e) => e.currentTarget.select()}
+                              placeholder="Sheets"
+                            />
+                            <div className="text-xs text-muted-foreground text-right">
+                              = {line.qty} SQFT
+                            </div>
+                          </div>
+                        ) : (
+                          <Input
+                            type="number"
+                            min="0"
+                            step={part?.uom === 'EA' ? '1' : '0.01'}
+                            className="w-24 ml-auto"
+                            value={line.qty}
+                            onChange={(e) => updateLineQty(line.id, e.target.value)}
+                            onFocus={(e) => e.currentTarget.select()}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === 'Tab') {
+                                e.preventDefault();
+                                focusNextQty(line.id, e.shiftKey ? 'backward' : 'forward');
+                                return;
+                              }
+                              if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'enter') {
+                                e.preventDefault();
+                                if (hasValidLines) handlePost();
+                                return;
+                              }
+                              if (e.key === 'Escape') {
+                                e.currentTarget.blur();
+                                return;
+                              }
+                            }}
+                            ref={(el) => {
+                              qtyRefs.current[line.id] = el;
+                            }}
+                          />
+                        )}
                         {errors.length > 0 && (
                           <p className="text-xs text-destructive mt-1 text-right">{errors.join(' • ')}</p>
                         )}

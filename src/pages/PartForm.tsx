@@ -102,6 +102,13 @@ export default function PartForm() {
     bin_location: part?.bin_location ?? '',
     model: part?.model ?? '',
     serial_number: part?.serial_number ?? '',
+    uom: (part?.uom ?? 'EA') as 'EA' | 'FT' | 'SQFT',
+    initial_qoh: '',
+    material_kind: (part?.material_kind ?? 'STANDARD') as 'STANDARD' | 'SHEET',
+    sheet_width_in: part?.sheet_width_in?.toString() || '',
+    sheet_length_in: part?.sheet_length_in?.toString() || '',
+    thickness_in: part?.thickness_in?.toString() || '',
+    grade: part?.grade || '',
   });
 
   // Quick add dialogs
@@ -141,6 +148,10 @@ export default function PartForm() {
     min_qty: formData.min_qty === '' ? null : (Number.isFinite(parseInt(formData.min_qty)) ? parseInt(formData.min_qty) : null),
     max_qty: formData.max_qty === '' ? null : (Number.isFinite(parseInt(formData.max_qty)) ? parseInt(formData.max_qty) : null),
     bin_location: formData.bin_location.trim() || null,
+    location: part?.location ?? null,
+    uom: formData.uom,
+    allow_fractional_qty: formData.uom === 'FT' || formData.uom === 'SQFT',
+    qty_precision: formData.uom === 'EA' ? 0 : 2,
     last_cost: part?.last_cost ?? null,
     avg_cost: part?.avg_cost ?? null,
     model: part?.model ?? null,
@@ -256,6 +267,13 @@ export default function PartForm() {
       bin_location: part?.bin_location ?? '',
       model: part?.model ?? '',
       serial_number: part?.serial_number ?? '',
+      uom: (part?.uom ?? 'EA') as 'EA' | 'FT' | 'SQFT',
+      initial_qoh: '',
+      material_kind: (part?.material_kind ?? 'STANDARD') as 'STANDARD' | 'SHEET',
+      sheet_width_in: part?.sheet_width_in?.toString() || '',
+      sheet_length_in: part?.sheet_length_in?.toString() || '',
+      thickness_in: part?.thickness_in?.toString() || '',
+      grade: part?.grade || '',
     });
   };
 
@@ -349,6 +367,52 @@ export default function PartForm() {
       return;
     }
 
+    // Validate initial QOH if provided
+    let initialQohRounded: number | null = null;
+    if (isNew && formData.initial_qoh.trim()) {
+      const parsed = parseFloat(formData.initial_qoh);
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        toast({ title: 'Validation Error', description: 'Initial QOH must be >= 0', variant: 'destructive' });
+        return;
+      }
+      if (formData.uom === 'EA' && !Number.isInteger(parsed)) {
+        toast({ title: 'Validation Error', description: 'EA quantities must be whole numbers', variant: 'destructive' });
+        return;
+      }
+      if (formData.uom === 'FT' || formData.uom === 'SQFT') {
+        const precision = 2;
+        const multiplier = Math.pow(10, precision);
+        initialQohRounded = Math.round(parsed * multiplier) / multiplier;
+      } else {
+        initialQohRounded = parsed;
+      }
+    }
+
+    // Validate sheet fields when material_kind = SHEET and uom = SQFT
+    if (formData.material_kind === 'SHEET' && formData.uom === 'SQFT') {
+      const width = parseFloat(formData.sheet_width_in);
+      const length = parseFloat(formData.sheet_length_in);
+      if (!Number.isFinite(width) || width <= 0) {
+        toast({ title: 'Validation Error', description: 'Standard Sheet Width must be > 0', variant: 'destructive' });
+        return;
+      }
+      if (!Number.isFinite(length) || length <= 0) {
+        toast({ title: 'Validation Error', description: 'Standard Sheet Length must be > 0', variant: 'destructive' });
+        return;
+      }
+      if (formData.thickness_in.trim()) {
+        const thickness = parseFloat(formData.thickness_in);
+        if (!Number.isFinite(thickness) || thickness <= 0) {
+          toast({ title: 'Validation Error', description: 'Thickness must be > 0 if provided', variant: 'destructive' });
+          return;
+        }
+      }
+    }
+
+    const uom = formData.uom;
+    const allow_fractional_qty = uom === 'FT' || uom === 'SQFT';
+    const qty_precision = uom === 'EA' ? 0 : 2;
+
     const partData = {
       part_number: formData.part_number.trim().toUpperCase(),
       description: formData.description.trim() || null,
@@ -366,11 +430,31 @@ export default function PartForm() {
       bin_location: formData.bin_location.trim() || null,
       model: formData.model.trim() || null,
       serial_number: formData.serial_number.trim() || null,
+      uom,
+      allow_fractional_qty,
+      qty_precision,
+      material_kind: formData.material_kind,
+      sheet_width_in: formData.material_kind === 'SHEET' && formData.sheet_width_in.trim() ? parseFloat(formData.sheet_width_in) : null,
+      sheet_length_in: formData.material_kind === 'SHEET' && formData.sheet_length_in.trim() ? parseFloat(formData.sheet_length_in) : null,
+      thickness_in: formData.material_kind === 'SHEET' && formData.thickness_in.trim() ? parseFloat(formData.thickness_in) : null,
+      grade: formData.material_kind === 'SHEET' && formData.grade.trim() ? formData.grade.trim() : null,
     };
 
     if (isNew) {
       const newPart = addPart(partData);
-      toast({ title: 'Part Created', description: `${formData.part_number} has been added` });
+      if (initialQohRounded != null && initialQohRounded > 0) {
+        const result = updatePartWithQohAdjustment(newPart.id, { quantity_on_hand: initialQohRounded }, {
+          reason: 'Initial Stock',
+          adjusted_by: sessionUserName,
+        });
+        if (result?.error) {
+          toast({ title: 'Part Created', description: `${formData.part_number} has been added, but initial QOH adjustment failed: ${result.error}`, variant: 'destructive' });
+        } else {
+          toast({ title: 'Part Created', description: `${formData.part_number} has been added with initial QOH of ${initialQohRounded}` });
+        }
+      } else {
+        toast({ title: 'Part Created', description: `${formData.part_number} has been added` });
+      }
       navigate(`/inventory/${newPart.id}`);
     } else {
       updatePart(id!, partData);
@@ -838,6 +922,117 @@ export default function PartForm() {
                 />
               </div>
               <div>
+                <Label htmlFor="material_kind">Material Type</Label>
+                <Select
+                  value={formData.material_kind}
+                  onValueChange={(value: 'STANDARD' | 'SHEET') => {
+                    const newUom = value === 'SHEET' ? 'SQFT' : formData.uom === 'SQFT' ? 'EA' : formData.uom;
+                    setFormData({ ...formData, material_kind: value, uom: newUom as 'EA' | 'FT' | 'SQFT' });
+                  }}
+                  disabled={!editing}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="STANDARD">STANDARD</SelectItem>
+                    <SelectItem value="SHEET">SHEET MATERIAL</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="uom">Unit of Measure</Label>
+                <Select
+                  value={formData.uom}
+                  onValueChange={(value: 'EA' | 'FT' | 'SQFT') => setFormData({ ...formData, uom: value })}
+                  disabled={!editing || formData.material_kind === 'SHEET'}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="EA">EA (Each)</SelectItem>
+                    <SelectItem value="FT">FT (Feet)</SelectItem>
+                    <SelectItem value="SQFT">SQFT (Square Feet)</SelectItem>
+                  </SelectContent>
+                </Select>
+                {formData.uom === 'SQFT' && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Track QOH by area. Receiving can convert sheets to SQFT.
+                  </p>
+                )}
+              </div>
+              {formData.material_kind === 'SHEET' && formData.uom === 'SQFT' && (
+                <>
+                  <div>
+                    <Label htmlFor="sheet_width_in">Standard Sheet Width (in) *</Label>
+                    <Input
+                      id="sheet_width_in"
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      value={formData.sheet_width_in}
+                      onChange={(e) => setFormData({ ...formData, sheet_width_in: e.target.value })}
+                      disabled={!editing}
+                      placeholder="e.g., 48"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="sheet_length_in">Standard Sheet Length (in) *</Label>
+                    <Input
+                      id="sheet_length_in"
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      value={formData.sheet_length_in}
+                      onChange={(e) => setFormData({ ...formData, sheet_length_in: e.target.value })}
+                      disabled={!editing}
+                      placeholder="e.g., 96"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="thickness_in">Thickness (in)</Label>
+                    <Input
+                      id="thickness_in"
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      value={formData.thickness_in}
+                      onChange={(e) => setFormData({ ...formData, thickness_in: e.target.value })}
+                      disabled={!editing}
+                      placeholder="Optional"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="grade">Grade</Label>
+                    <Input
+                      id="grade"
+                      value={formData.grade}
+                      onChange={(e) => setFormData({ ...formData, grade: e.target.value })}
+                      disabled={!editing}
+                      placeholder="e.g., A36, 5052"
+                    />
+                  </div>
+                </>
+              )}
+              {isNew && (
+                <div>
+                  <Label htmlFor="initial_qoh">Initial QOH</Label>
+                  <Input
+                    id="initial_qoh"
+                    type="number"
+                    step={formData.uom === 'FT' ? '0.01' : '1'}
+                    value={formData.initial_qoh}
+                    onChange={(e) => setFormData({ ...formData, initial_qoh: e.target.value })}
+                    disabled={!editing}
+                    placeholder="0"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Creates an inventory adjustment for audit history.
+                  </p>
+                </div>
+              )}
+              <div>
                 <Label htmlFor="model">Model</Label>
                 <Input
                   id="model"
@@ -1102,7 +1297,16 @@ export default function PartForm() {
               <div className="space-y-2">
                 <div className="text-xs">QOH</div>
                 <div className="flex items-center gap-2">
-                  <div className="text-3xl font-semibold text-foreground">{part?.quantity_on_hand ?? 0}</div>
+                  <div className="text-3xl font-semibold text-foreground">
+                    {(() => {
+                      if (!part) return '0 EA';
+                      const uom = part.uom ?? 'EA';
+                      const qty = part.quantity_on_hand ?? 0;
+                      const precision = part.qty_precision ?? (uom === 'EA' ? 0 : 2);
+                      const formattedQty = uom === 'EA' ? qty.toString() : qty.toFixed(precision).replace(/\.?0+$/, '');
+                      return `${formattedQty} ${uom}`;
+                    })()}
+                  </div>
                   {!isNew && renderStatusChips()}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">To change QOH, use Adjust QOH.</p>

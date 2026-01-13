@@ -1307,12 +1307,25 @@ export const useShopStore = create<ShopState>()(
       kitComponents: [],
 
       addPart: (part) => {
+        const uom = part.uom ?? 'EA';
+        const allow_fractional_qty = part.allow_fractional_qty ?? (uom === 'FT' || uom === 'SQFT');
+        const qty_precision = part.qty_precision ?? (uom === 'EA' ? 0 : 2);
+        const material_kind = part.material_kind ?? 'STANDARD';
         const newPart: Part = {
           ...part,
           id: generateId(),
           min_qty: part.min_qty ?? null,
           max_qty: part.max_qty ?? null,
           bin_location: part.bin_location ?? null,
+          location: part.location ?? null,
+          uom,
+          allow_fractional_qty,
+          qty_precision,
+          material_kind,
+          sheet_width_in: part.sheet_width_in ?? null,
+          sheet_length_in: part.sheet_length_in ?? null,
+          thickness_in: part.thickness_in ?? null,
+          grade: part.grade ?? null,
           last_cost: part.last_cost ?? null,
           avg_cost: part.avg_cost ?? null,
           model: part.model ?? null,
@@ -1342,8 +1355,20 @@ export const useShopStore = create<ShopState>()(
         if (!existing) return { success: false, error: 'Part not found' };
 
         const old_qty = existing.quantity_on_hand;
-        const new_qty = part.quantity_on_hand ?? old_qty;
+        let new_qty = part.quantity_on_hand ?? old_qty;
         const qtyProvided = part.quantity_on_hand !== undefined;
+        
+        // UOM validation: EA must be integer
+        if (qtyProvided && existing.uom === 'EA' && !Number.isInteger(new_qty)) {
+          return { success: false, error: 'EA quantities must be whole numbers' };
+        }
+        
+        // UOM validation: FT/SQFT - round to precision
+        if (qtyProvided && (existing.uom === 'FT' || existing.uom === 'SQFT') && existing.qty_precision != null) {
+          const multiplier = Math.pow(10, existing.qty_precision);
+          new_qty = Math.round(new_qty * multiplier) / multiplier;
+        }
+        
         const deltaQty = new_qty - old_qty;
         const candidate = meta.adjusted_by?.trim();
         const performer = candidate && candidate !== 'system' ? candidate : get().getSessionUserName();
@@ -1352,10 +1377,13 @@ export const useShopStore = create<ShopState>()(
         if (qtyProvided && new_qty < 0 && policy === 'BLOCK') {
           return { success: false, error: 'Negative inventory is blocked by policy' };
         }
+        
+        // Update part with rounded qty if needed
+        const partUpdate = qtyProvided ? { ...part, quantity_on_hand: new_qty } : part;
 
         set((state) => ({
           parts: state.parts.map((p) =>
-            p.id === id ? { ...p, ...part, updated_at: timestamp } : p
+            p.id === id ? { ...p, ...partUpdate, updated_at: timestamp } : p
           ),
           inventoryAdjustments: [
             ...state.inventoryAdjustments,
@@ -1423,9 +1451,20 @@ export const useShopStore = create<ShopState>()(
         }
 
         const state = get();
-        for (const [partId] of totals) {
+        for (const [partId, entry] of totals) {
           const part = state.parts.find((p) => p.id === partId);
           if (!part) return { success: false, error: `Part not found: ${partId}` };
+          
+          // UOM validation: EA must be integer
+          if (part.uom === 'EA' && !Number.isInteger(entry.qty)) {
+            return { success: false, error: `Part ${part.part_number}: EA quantities must be whole numbers` };
+          }
+          
+          // UOM validation: FT/SQFT - round to precision
+          if ((part.uom === 'FT' || part.uom === 'SQFT') && part.qty_precision != null) {
+            const multiplier = Math.pow(10, part.qty_precision);
+            entry.qty = Math.round(entry.qty * multiplier) / multiplier;
+          }
         }
 
         // Update parts with quantities and cost

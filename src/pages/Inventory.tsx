@@ -256,7 +256,12 @@ export default function Inventory() {
       key: 'quantity_on_hand',
       header: 'QOH',
       sortable: true,
-      render: (item) => (
+      render: (item) => {
+        const uom = item.uom ?? 'EA';
+        const qty = item.quantity_on_hand ?? 0;
+        const precision = item.qty_precision ?? (uom === 'EA' ? 0 : 2);
+        const formattedQty = uom === 'EA' ? qty.toString() : qty.toFixed(precision).replace(/\.?0+$/, '');
+        return (
         <div className="flex items-center gap-2 justify-end">
           <span
             className={cn(
@@ -265,7 +270,7 @@ export default function Inventory() {
               item.quantity_on_hand === 0 && 'text-warning'
             )}
           >
-            {item.quantity_on_hand}
+            {formattedQty} {uom}
           </span>
           {cycleCountMode && (
             <Input
@@ -284,7 +289,8 @@ export default function Inventory() {
             />
           )}
         </div>
-      ),
+        );
+      },
       className: 'text-right',
     },
     {
@@ -746,7 +752,13 @@ export default function Inventory() {
           <div>
             <p className="text-xs text-muted-foreground">QOH</p>
             <p className={cn('font-semibold', item.quantity_on_hand < 0 && 'text-destructive')}>
-              {item.quantity_on_hand}
+              {(() => {
+                const uom = item.uom ?? 'EA';
+                const qty = item.quantity_on_hand ?? 0;
+                const precision = item.qty_precision ?? (uom === 'EA' ? 0 : 2);
+                const formattedQty = uom === 'EA' ? qty.toString() : qty.toFixed(precision).replace(/\.?0+$/, '');
+                return `${formattedQty} ${uom}`;
+              })()}
             </p>
           </div>
           <div>
