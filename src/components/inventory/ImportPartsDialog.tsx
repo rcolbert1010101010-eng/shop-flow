@@ -125,6 +125,9 @@ export function ImportPartsDialog({ open, onOpenChange, parts, vendors, categori
         throw new Error('No valid rows to import');
       }
 
+      const totalRows = parseResult.rows.length;
+      const failedRows = parseResult.rows.filter((r) => r.errors.length > 0).length;
+
       const vendorLookup = new Map<string, Vendor>();
       vendors.forEach((v) => vendorLookup.set(v.vendor_name.trim().toLowerCase(), v));
       const categoryLookup = new Map<string, PartCategory>();
@@ -242,7 +245,7 @@ export function ImportPartsDialog({ open, onOpenChange, parts, vendors, categori
           <DialogDescription className="space-y-1">
             <p>Paste CSV/tab data with headers: part_number, description, cost, selling_price, quantity_on_hand, vendor, category, is_active.</p>
             <p className="text-xs text-muted-foreground">
-              Optional columns: bin_location, location, min_qty, max_qty, has_core, core_cost. Vendor/category labels are auto-created if new. Part numbers must be unique across existing and pasted rows.
+Optional columns: bin_location, location, min_qty, max_qty, has_core, core_cost. Vendor/category labels are auto-created if new. Part numbers must be unique across existing and pasted rows.
             </p>
           </DialogDescription>
         </DialogHeader>
@@ -441,3 +444,4 @@ export function ImportPartsDialog({ open, onOpenChange, parts, vendors, categori
     </Dialog>
   );
 }
+

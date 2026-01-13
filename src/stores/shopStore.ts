@@ -99,6 +99,18 @@ const getKitComponentDeltas = (
   }, {});
 };
 
+export type PartsImportHistoryEntry = {
+  id: string;
+  performed_at: string;
+  total_rows: number;
+  valid_rows: number;
+  partsCreated: number;
+  vendorsCreated: number;
+  categoriesCreated: number;
+  skipped_rows: number;
+  failed_rows: number;
+};
+
 interface ShopState {
   // System Settings
   settings: SystemSettings;

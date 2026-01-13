@@ -9,10 +9,10 @@ export type ImportablePartRow = {
   vendor: string;
   category: string;
   is_active: boolean;
-  bin_location: string | null;
-  location: string | null;
   min_qty: number | null;
   max_qty: number | null;
+  bin_location: string | null;
+  location: string | null;
   has_core: boolean | null;
   core_cost: number | null;
 };
@@ -25,7 +25,7 @@ export type ImportPreviewRow = ImportablePartRow & {
 
 export type ImportParseResult = {
   delimiter: ',' | '\t';
-  headers: string[];
+  headers: (keyof ImportablePartRow)[];
   rows: ImportPreviewRow[];
   hasErrors: boolean;
 };
@@ -167,10 +167,10 @@ export function parsePartsImport(
       vendor: '',
       category: '',
       is_active: true,
-      bin_location: null,
-      location: null,
       min_qty: null,
       max_qty: null,
+      bin_location: null,
+      location: null,
       has_core: null,
       core_cost: null,
     };
@@ -217,54 +217,46 @@ export function parsePartsImport(
           entry.location = value.trim() || null;
           break;
         case 'min_qty': {
+          const parsed = parseNumber(value);
           if (value.trim() === '') {
             entry.min_qty = null;
+          } else if (parsed == null || parsed < 0) {
+            errors.push('min_qty must be zero or positive');
           } else {
-            const parsed = parseNumber(value);
-            if (parsed == null || parsed < 0 || !Number.isInteger(parsed)) {
-              errors.push('min_qty must be an integer >= 0');
-            } else {
-              entry.min_qty = parsed;
-            }
+            entry.min_qty = parsed;
           }
           break;
         }
         case 'max_qty': {
+          const parsed = parseNumber(value);
           if (value.trim() === '') {
             entry.max_qty = null;
+          } else if (parsed == null || parsed < 0) {
+            errors.push('max_qty must be zero or positive');
           } else {
-            const parsed = parseNumber(value);
-            if (parsed == null || parsed < 0 || !Number.isInteger(parsed)) {
-              errors.push('max_qty must be an integer >= 0');
-            } else {
-              entry.max_qty = parsed;
-            }
+            entry.max_qty = parsed;
           }
           break;
         }
         case 'has_core': {
+          const boolVal = parseBoolean(value);
           if (value.trim() === '') {
             entry.has_core = null;
+          } else if (boolVal == null) {
+            errors.push('has_core must be true/false/yes/no/1/0');
           } else {
-            const boolVal = parseBoolean(value);
-            if (boolVal == null) {
-              errors.push('has_core must be true/false/yes/no/1/0');
-            } else {
-              entry.has_core = boolVal;
-            }
+            entry.has_core = boolVal;
           }
           break;
         }
         case 'core_cost': {
+          const parsed = parseNumber(value);
           if (value.trim() === '') {
             entry.core_cost = null;
+          } else if (parsed == null || parsed < 0) {
+            errors.push('core_cost must be zero or positive');
           } else {
-            const parsed = parseNumber(value);
-            if (parsed == null || parsed < 0) {
-              errors.push('core_cost must be >= 0');
-            } else {
-              entry.core_cost = parsed;
-            }
+            entry.core_cost = parsed;
           }
           break;
         }
@@ -296,11 +288,7 @@ export function parsePartsImport(
       entry.max_qty != null &&
       entry.max_qty < entry.min_qty
     ) {
-      errors.push('max_qty must be >= min_qty');
-    }
-    if (entry.core_cost != null && entry.has_core !== true) {
-      // Warning: core_cost provided but has_core is not true
-      // We'll allow it but it's not meaningful
+      errors.push('max_qty must be greater than or equal to min_qty');
     }
 
     rows.push({
@@ -316,12 +304,15 @@ export function parsePartsImport(
 }
 
 const runParserSelfTest = () => {
-  const sample = `part_number,description,cost,selling_price,quantity_on_hand,vendor,category,is_active
-ABC-1,Test Part,10.5,15,5,Vendor A,Category X,yes
-ABC-2,Another,7.25,12,0,Vendor A,Category X,true`;
+  const sample = `part_number\tdescription\tcost\tselling_price\tquantity_on_hand\tvendor\tcategory\tis_active\tbin_location\tmin_qty\tmax_qty
+ABC-1\tTest Part\t10.5\t15\t5\tVendor A\tCategory X\tyes\tA1\t1\t5
+ABC-2\tAnother\t7.25\t12\t0\tVendor A\tCategory X\ttrue\tB2\t\t10`;
   const result = parsePartsImport(sample, { existingPartNumbers: ['zzz'] });
   if (result.rows.length !== 2) throw new Error('Expected two rows');
   if (result.rows.some((r) => r.errors.length > 0)) throw new Error('Self-test rows should be valid');
+  if (result.delimiter !== '\t') throw new Error('Delimiter detection failed for tabs');
+  if (result.rows[0].bin_location !== 'A1') throw new Error('Bin parsing failed');
+  if (result.rows[1].max_qty !== 10) throw new Error('Max qty parsing failed');
   const dup = parsePartsImport(`${sample}\nABC-1,Duplicate,5,10,1,Vendor A,Category X,true`, {
     existingPartNumbers: ['abc-1'],
   });
