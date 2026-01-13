@@ -138,6 +138,10 @@ export interface Part {
   sheet_length_in?: number | null;
   thickness_in?: number | null;
   grade?: string | null;
+  is_remnant?: boolean;
+  parent_part_id?: string | null;
+  remnant_width_in?: number | null;
+  remnant_length_in?: number | null;
   last_cost: number | null;
   avg_cost: number | null;
   model: string | null;

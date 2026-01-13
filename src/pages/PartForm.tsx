@@ -122,6 +122,10 @@ export default function PartForm() {
   const [adjustDialogOpen, setAdjustDialogOpen] = useState(false);
   const [newQoh, setNewQoh] = useState('');
   const [qtyError, setQtyError] = useState<string | null>(null);
+  const [remnantDialogOpen, setRemnantDialogOpen] = useState(false);
+  const [remnantWidth, setRemnantWidth] = useState('');
+  const [remnantLength, setRemnantLength] = useState('');
+  const [remnantBinLocation, setRemnantBinLocation] = useState('');
   const [newComponentId, setNewComponentId] = useState('');
   const [newComponentQty, setNewComponentQty] = useState('1');
   const [copying, setCopying] = useState(false);
@@ -626,6 +630,81 @@ export default function PartForm() {
     setEditing(false);
   };
 
+  const handleCreateRemnant = () => {
+    if (!part) return;
+    
+    const width = parseFloat(remnantWidth);
+    const length = parseFloat(remnantLength);
+    
+    if (!Number.isFinite(width) || width <= 0) {
+      toast({ title: 'Validation Error', description: 'Remnant width must be > 0', variant: 'destructive' });
+      return;
+    }
+    if (!Number.isFinite(length) || length <= 0) {
+      toast({ title: 'Validation Error', description: 'Remnant length must be > 0', variant: 'destructive' });
+      return;
+    }
+    
+    const remnantAreaSqft = Math.round((width * length) / 144 * 100) / 100;
+    if (remnantAreaSqft <= 0) {
+      toast({ title: 'Validation Error', description: 'Remnant area must be > 0', variant: 'destructive' });
+      return;
+    }
+    
+    // Generate part number and description
+    const partNumber = `${part.part_number}-REM-${width}x${length}`;
+    const description = `Remnant: ${part.grade || ''} ${part.thickness_in ? `${part.thickness_in}"` : ''} ${width}"x${length}"`.trim();
+    
+    // Create remnant part
+    const remnantPart = addPart({
+      part_number: partNumber,
+      description: description || partNumber,
+      vendor_id: part.vendor_id,
+      category_id: part.category_id,
+      cost: part.cost,
+      selling_price: part.selling_price,
+      quantity_on_hand: 0,
+      core_required: false,
+      core_charge: 0,
+      min_qty: null,
+      max_qty: null,
+      bin_location: remnantBinLocation.trim() || null,
+      location: part.location,
+      uom: 'SQFT',
+      allow_fractional_qty: true,
+      qty_precision: 2,
+      material_kind: 'SHEET',
+      sheet_width_in: null,
+      sheet_length_in: null,
+      thickness_in: part.thickness_in,
+      grade: part.grade,
+      is_remnant: true,
+      parent_part_id: part.id,
+      remnant_width_in: width,
+      remnant_length_in: length,
+      is_kit: false,
+    });
+    
+    // Apply initial stock
+    const sessionUser = useShopStore.getState().getSessionUserName();
+    const adjustResult = updatePartWithQohAdjustment(remnantPart.id, { quantity_on_hand: remnantAreaSqft }, {
+      reason: 'Initial Stock',
+      adjusted_by: sessionUser,
+    });
+    
+    if (adjustResult?.error) {
+      toast({ title: 'Error', description: adjustResult.error, variant: 'destructive' });
+      return;
+    }
+    
+    toast({ title: 'Remnant Created', description: `Remnant part ${partNumber} created with ${remnantAreaSqft} SQFT` });
+    setRemnantDialogOpen(false);
+    setRemnantWidth('');
+    setRemnantLength('');
+    setRemnantBinLocation('');
+    navigate(`/inventory/${remnantPart.id}`);
+  };
+
   return (
     <div className="page-container space-y-4">
       <PageHeader
@@ -658,6 +737,19 @@ export default function PartForm() {
                   }}
                 >
                   Adjust QOH
+                </Button>
+              )}
+              {!isNew && part?.material_kind === 'SHEET' && part?.uom === 'SQFT' && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setRemnantDialogOpen(true);
+                    setRemnantWidth('');
+                    setRemnantLength('');
+                    setRemnantBinLocation('');
+                  }}
+                >
+                  Create Remnant
                 </Button>
               )}
               {!isNew && (
@@ -1302,6 +1394,63 @@ export default function PartForm() {
         </div>
 
         <div className="space-y-4">
+          {/* Remnant Info */}
+          {part?.is_remnant && part?.parent_part_id && (
+            <div className="rounded-lg border bg-card p-4">
+              <div className="text-sm">
+                <span className="text-muted-foreground">Remnant of: </span>
+                <button
+                  onClick={() => navigate(`/inventory/${part.parent_part_id}`)}
+                  className="font-medium text-primary hover:underline"
+                >
+                  {parts.find((p) => p.id === part.parent_part_id)?.part_number || part.parent_part_id}
+                </button>
+                {part.remnant_width_in && part.remnant_length_in && (
+                  <span className="text-muted-foreground ml-2">
+                    ({part.remnant_width_in}" × {part.remnant_length_in}")
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+          
+          {/* Parent Remnants List */}
+          {!isNew && part && part.material_kind === 'SHEET' && part.uom === 'SQFT' && !part.is_remnant && (
+            <div className="rounded-lg border bg-card p-4 space-y-3">
+              <h3 className="font-semibold">Remnants</h3>
+              {(() => {
+                const remnants = parts.filter((p) => p.parent_part_id === part.id && p.is_remnant).slice(0, 10);
+                if (remnants.length === 0) {
+                  return <p className="text-sm text-muted-foreground">No remnants created yet.</p>;
+                }
+                return (
+                  <div className="space-y-2">
+                    {remnants.map((remnant) => (
+                      <div
+                        key={remnant.id}
+                        className="flex items-center justify-between rounded-md border border-border px-3 py-2 cursor-pointer hover:bg-secondary/50"
+                        onClick={() => navigate(`/inventory/${remnant.id}`)}
+                      >
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium">{remnant.part_number}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {remnant.description || 'No description'}
+                            {remnant.remnant_width_in && remnant.remnant_length_in && (
+                              <span> • {remnant.remnant_width_in}" × {remnant.remnant_length_in}"</span>
+                            )}
+                          </span>
+                        </div>
+                        <div className="text-sm font-medium">
+                          {formatQtyWithUom(remnant.quantity_on_hand ?? 0, remnant)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
           <div className="rounded-lg border bg-card p-4 space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold">Inventory Snapshot</h3>
@@ -1663,6 +1812,73 @@ export default function PartForm() {
               placeholder="Enter reason"
             />
           )}
+        </div>
+      </QuickAddDialog>
+
+      {/* Create Remnant Dialog */}
+      <QuickAddDialog
+        open={remnantDialogOpen}
+        onOpenChange={(open) => {
+          setRemnantDialogOpen(open);
+          if (!open) {
+            setRemnantWidth('');
+            setRemnantLength('');
+            setRemnantBinLocation('');
+          }
+        }}
+        title="Create Remnant"
+        onSave={handleCreateRemnant}
+        onCancel={() => {
+          setRemnantDialogOpen(false);
+          setRemnantWidth('');
+          setRemnantLength('');
+          setRemnantBinLocation('');
+        }}
+      >
+        {part && (
+          <div className="text-sm text-muted-foreground mb-2">
+            Parent: <span className="font-medium text-foreground">{part.part_number}</span>
+            {part.grade && <span> ({part.grade})</span>}
+            {part.thickness_in && <span> - {part.thickness_in}"</span>}
+          </div>
+        )}
+        <div>
+          <Label htmlFor="remnant_width">Remnant Width (in) *</Label>
+          <Input
+            id="remnant_width"
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={remnantWidth}
+            onChange={(e) => setRemnantWidth(e.target.value)}
+            placeholder="e.g., 24"
+          />
+        </div>
+        <div>
+          <Label htmlFor="remnant_length">Remnant Length (in) *</Label>
+          <Input
+            id="remnant_length"
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={remnantLength}
+            onChange={(e) => setRemnantLength(e.target.value)}
+            placeholder="e.g., 36"
+          />
+        </div>
+        {remnantWidth && remnantLength && Number.isFinite(Number(remnantWidth)) && Number.isFinite(Number(remnantLength)) && (
+          <div className="text-xs text-muted-foreground">
+            Area: {Math.round((Number(remnantWidth) * Number(remnantLength)) / 144 * 100) / 100} SQFT
+          </div>
+        )}
+        <div>
+          <Label htmlFor="remnant_bin_location">Bin Location (optional)</Label>
+          <Input
+            id="remnant_bin_location"
+            value={remnantBinLocation}
+            onChange={(e) => setRemnantBinLocation(e.target.value)}
+            placeholder="e.g., Aisle 3 - Bin 12"
+          />
         </div>
       </QuickAddDialog>
 
