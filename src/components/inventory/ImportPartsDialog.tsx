@@ -124,11 +124,7 @@ export function ImportPartsDialog({ open, onOpenChange, parts, vendors, categori
       if (validRows.length === 0) {
         throw new Error('No valid rows to import');
       }
-
-      const totalRows = parseResult.rows.length;
-      const failedRows = parseResult.rows.filter((r) => r.errors.length > 0).length;
-
-      const vendorLookup = new Map<string, Vendor>();
+const vendorLookup = new Map<string, Vendor>();
       vendors.forEach((v) => vendorLookup.set(v.vendor_name.trim().toLowerCase(), v));
       const categoryLookup = new Map<string, PartCategory>();
       categories.forEach((c) => categoryLookup.set(c.category_name.trim().toLowerCase(), c));
@@ -163,11 +159,7 @@ export function ImportPartsDialog({ open, onOpenChange, parts, vendors, categori
         categoriesCreated += 1;
         return created;
       };
-
-      const totalRows = parseResult.rows.length;
-      const failedRows = parseResult.rows.filter((r) => r.errors.length > 0).length;
-
-      let partsCreated = 0;
+let partsCreated = 0;
       validRows.forEach((row) => {
         const vendor = ensureVendor(row.vendor);
         const category = ensureCategory(row.category);
@@ -444,4 +436,5 @@ Optional columns: bin_location, location, min_qty, max_qty, has_core, core_cost.
     </Dialog>
   );
 }
+
 
