@@ -1538,7 +1538,7 @@ const jobReadinessValues = Object.values(jobReadinessById);
     return (
       <div className="page-container">
         <style>{PRINT_STYLES}</style>
-        <PageHeader title="New Work Order" backTo="/work-orders" />
+        <PageHeader title="Work Order" subtitle="Create a new work order" backTo="/work-orders" />
         <div className="form-section max-w-xl">
           <h2 className="text-lg font-semibold mb-4">Order Details</h2>
           <div className="space-y-4">
@@ -1740,19 +1740,23 @@ const jobReadinessValues = Object.values(jobReadinessById);
   }
 
   // Existing order view
+  const statusLabel =
+    currentOrder?.status === 'ESTIMATE'
+      ? 'Estimate'
+      : currentOrder?.status === 'INVOICED'
+        ? 'Invoiced'
+        : currentOrder?.status === 'IN_PROGRESS'
+          ? 'In Progress'
+          : 'Open';
   return (
     <div className="page-container">
       <style>{PRINT_STYLES}</style>
       <PageHeader
-        title={currentOrder?.order_number || 'Work Order'}
+        title="Work Order"
         subtitle={
-          currentOrder?.status === 'ESTIMATE'
-            ? 'Estimate'
-            : currentOrder?.status === 'INVOICED'
-            ? 'Invoiced'
-            : currentOrder?.status === 'IN_PROGRESS'
-            ? 'In Progress'
-            : 'Open'
+          currentOrder
+            ? `${statusLabel} - Order ${currentOrder.order_number}`
+            : 'Manage job, labor, parts, and status'
         }
         backTo="/work-orders"
         actions={

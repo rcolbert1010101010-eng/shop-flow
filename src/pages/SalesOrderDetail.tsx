@@ -752,7 +752,7 @@ export default function SalesOrderDetail() {
   if (isNew && !order) {
     return (
       <div className="page-container">
-        <PageHeader title="New Sales Order" backTo="/sales-orders" />
+        <PageHeader title="Sales Order" subtitle="Create a new sales order" backTo="/sales-orders" />
         <div className="form-section max-w-xl">
           <h2 className="text-lg font-semibold mb-4">Order Details</h2>
           <div className="space-y-4">
@@ -943,8 +943,10 @@ export default function SalesOrderDetail() {
   return (
     <div className="page-container">
       <PageHeader
-        title={currentOrder?.order_number || 'Sales Order'}
-        subtitle={statusLabel}
+        title="Sales Order"
+        subtitle={
+          currentOrder ? `${statusLabel} - Order ${currentOrder.order_number}` : 'Manage order details'
+        }
         backTo="/sales-orders"
         description={
           unit ? (
