@@ -126,6 +126,8 @@ export default function PartForm() {
   const [remnantWidth, setRemnantWidth] = useState('');
   const [remnantLength, setRemnantLength] = useState('');
   const [remnantBinLocation, setRemnantBinLocation] = useState('');
+  const [subtractFromParent, setSubtractFromParent] = useState(true);
+  const [usedSqft, setUsedSqft] = useState('');
   const [newComponentId, setNewComponentId] = useState('');
   const [newComponentQty, setNewComponentQty] = useState('1');
   const [copying, setCopying] = useState(false);
@@ -350,6 +352,14 @@ export default function PartForm() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [editing, isNew, navigate, part, toast]);
+
+  // Auto-fill used SQFT when dialog opens and dimensions are set
+  useEffect(() => {
+    if (remnantDialogOpen && subtractFromParent && remnantWidth && remnantLength && !usedSqft) {
+      const area = Math.round((Number(remnantWidth) * Number(remnantLength)) / 144 * 100) / 100;
+      setUsedSqft(area.toString());
+    }
+  }, [remnantDialogOpen, subtractFromParent, remnantWidth, remnantLength, usedSqft]);
 
   const handleSave = () => {
     if (!formData.part_number.trim()) {
@@ -651,6 +661,30 @@ export default function PartForm() {
       return;
     }
     
+    // Validate used SQFT if subtraction is enabled
+    let usedSqftRounded = remnantAreaSqft;
+    if (subtractFromParent) {
+      const usedSqftValue = usedSqft.trim() ? parseFloat(usedSqft) : remnantAreaSqft;
+      if (!Number.isFinite(usedSqftValue) || usedSqftValue <= 0) {
+        toast({ title: 'Validation Error', description: 'Used SQFT must be > 0', variant: 'destructive' });
+        return;
+      }
+      const precision = part.qty_precision ?? 2;
+      const multiplier = Math.pow(10, precision);
+      usedSqftRounded = Math.round(usedSqftValue * multiplier) / multiplier;
+      
+      // Check if parent has sufficient QOH
+      const currentParentQoh = part.quantity_on_hand ?? 0;
+      if (currentParentQoh - usedSqftRounded < 0) {
+        toast({ 
+          title: 'Insufficient Stock', 
+          description: `Insufficient stock on parent sheet. Adjust parent first or disable subtraction. (Current: ${formatQtyWithUom(currentParentQoh, part)}, Required: ${usedSqftRounded} SQFT)`, 
+          variant: 'destructive' 
+        });
+        return;
+      }
+    }
+    
     // Generate part number and description
     const partNumber = `${part.part_number}-REM-${width}x${length}`;
     const description = `Remnant: ${part.grade || ''} ${part.thickness_in ? `${part.thickness_in}"` : ''} ${width}"x${length}"`.trim();
@@ -685,23 +719,48 @@ export default function PartForm() {
       is_kit: false,
     });
     
-    // Apply initial stock
+    // Apply initial stock to remnant
     const sessionUser = useShopStore.getState().getSessionUserName();
-    const adjustResult = updatePartWithQohAdjustment(remnantPart.id, { quantity_on_hand: remnantAreaSqft }, {
+    const remnantAdjustResult = updatePartWithQohAdjustment(remnantPart.id, { quantity_on_hand: remnantAreaSqft }, {
       reason: 'Initial Stock',
       adjusted_by: sessionUser,
     });
     
-    if (adjustResult?.error) {
-      toast({ title: 'Error', description: adjustResult.error, variant: 'destructive' });
+    if (remnantAdjustResult?.error) {
+      toast({ title: 'Error', description: remnantAdjustResult.error, variant: 'destructive' });
       return;
     }
     
-    toast({ title: 'Remnant Created', description: `Remnant part ${partNumber} created with ${remnantAreaSqft} SQFT` });
+    // Subtract from parent if enabled
+    let parentSubtractSuccess = true;
+    if (subtractFromParent) {
+      const newParentQoh = (part.quantity_on_hand ?? 0) - usedSqftRounded;
+      const parentAdjustResult = updatePartWithQohAdjustment(part.id, { quantity_on_hand: newParentQoh }, {
+        reason: 'Cut Usage',
+        adjusted_by: sessionUser,
+      });
+      
+      if (parentAdjustResult?.error) {
+        parentSubtractSuccess = false;
+        toast({ 
+          title: 'Remnant Created', 
+          description: `Remnant part ${partNumber} created with ${remnantAreaSqft} SQFT, but parent subtraction failed: ${parentAdjustResult.error}`, 
+          variant: 'default' 
+        });
+      }
+    }
+    
+    if (parentSubtractSuccess) {
+      const subtractMsg = subtractFromParent ? ` (${usedSqftRounded} SQFT subtracted from parent)` : '';
+      toast({ title: 'Remnant Created', description: `Remnant part ${partNumber} created with ${remnantAreaSqft} SQFT${subtractMsg}` });
+    }
+    
     setRemnantDialogOpen(false);
     setRemnantWidth('');
     setRemnantLength('');
     setRemnantBinLocation('');
+    setSubtractFromParent(true);
+    setUsedSqft('');
     navigate(`/inventory/${remnantPart.id}`);
   };
 
@@ -1824,6 +1883,14 @@ export default function PartForm() {
             setRemnantWidth('');
             setRemnantLength('');
             setRemnantBinLocation('');
+            setSubtractFromParent(true);
+            setUsedSqft('');
+          } else {
+            // Auto-fill used SQFT when dialog opens if dimensions are already set
+            if (subtractFromParent && remnantWidth && remnantLength && !usedSqft) {
+              const area = Math.round((Number(remnantWidth) * Number(remnantLength)) / 144 * 100) / 100;
+              setUsedSqft(area.toString());
+            }
           }
         }}
         title="Create Remnant"
@@ -1833,6 +1900,15 @@ export default function PartForm() {
           setRemnantWidth('');
           setRemnantLength('');
           setRemnantBinLocation('');
+          setSubtractFromParent(true);
+          setUsedSqft('');
+        }}
+        onOpen={() => {
+          // Auto-fill used SQFT when dialog opens if dimensions are already set
+          if (subtractFromParent && remnantWidth && remnantLength && !usedSqft) {
+            const area = Math.round((Number(remnantWidth) * Number(remnantLength)) / 144 * 100) / 100;
+            setUsedSqft(area.toString());
+          }
         }}
       >
         {part && (
@@ -1879,6 +1955,55 @@ export default function PartForm() {
             onChange={(e) => setRemnantBinLocation(e.target.value)}
             placeholder="e.g., Aisle 3 - Bin 12"
           />
+        </div>
+        <div className="space-y-2 pt-2 border-t">
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id="subtract_from_parent"
+              checked={subtractFromParent}
+              onChange={(e) => {
+                setSubtractFromParent(e.target.checked);
+                if (e.target.checked && !usedSqft && remnantWidth && remnantLength) {
+                  const area = Math.round((Number(remnantWidth) * Number(remnantLength)) / 144 * 100) / 100;
+                  setUsedSqft(area.toString());
+                }
+              }}
+              className="h-4 w-4 rounded border-input"
+            />
+            <Label htmlFor="subtract_from_parent" className="font-medium">
+              Subtract used material from parent
+            </Label>
+          </div>
+          {subtractFromParent && (
+            <>
+              <div>
+                <Label htmlFor="used_sqft">Used SQFT *</Label>
+                <Input
+                  id="used_sqft"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={usedSqft}
+                  onChange={(e) => setUsedSqft(e.target.value)}
+                  placeholder="e.g., 6.00"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Amount consumed from the parent sheet inventory.
+                </p>
+              </div>
+              {part && usedSqft && Number.isFinite(Number(usedSqft)) && Number(usedSqft) > 0 && (
+                <div className="text-xs text-muted-foreground">
+                  Parent will be adjusted by -{(() => {
+                    const precision = part.qty_precision ?? 2;
+                    const multiplier = Math.pow(10, precision);
+                    const rounded = Math.round(Number(usedSqft) * multiplier) / multiplier;
+                    return rounded.toFixed(precision);
+                  })()} SQFT (Cut Usage)
+                </div>
+              )}
+            </>
+          )}
         </div>
       </QuickAddDialog>
 
