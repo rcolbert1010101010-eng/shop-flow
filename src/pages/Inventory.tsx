@@ -35,6 +35,7 @@ import { useShopStore } from '@/stores/shopStore';
 import { Label } from '@/components/ui/label';
 import { ResponsiveDataList } from '@/components/common/ResponsiveDataList';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { TableDensitySelect } from '@/components/ui/TableDensitySelect';
 
 export default function Inventory() {
   const navigate = useNavigate();
@@ -828,8 +829,8 @@ export default function Inventory() {
   return (
     <div className="page-container">
       <PageHeader
-        title="Inventory"
-        subtitle="Manage parts and stock levels"
+        title="Parts"
+        subtitle="Manage parts, stock levels, and procurement"
         actions={
           <Button onClick={() => navigate('/inventory/new')}>
             <Plus className="w-4 h-4 mr-2" />
@@ -900,7 +901,7 @@ export default function Inventory() {
               {bulkSelectMode ? 'Exit Bulk Select' : 'Bulk Select'}
             </Button>
           </div>
-          <div className="flex items-center gap-2 lg:ml-auto w-full lg:w-auto">
+          <div className="flex flex-wrap items-center gap-2 lg:ml-auto w-full lg:w-auto justify-end">
             <Input
               placeholder="Search parts"
               value={searchInput}
@@ -917,6 +918,7 @@ export default function Inventory() {
                 <XIcon className="w-4 h-4" />
               </Button>
             )}
+            <TableDensitySelect />
           </div>
         </div>
 

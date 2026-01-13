@@ -1,5 +1,5 @@
 import { Outlet } from 'react-router-dom';
-import { Sidebar, navItems, type NavGroup, type NavLink } from './Sidebar';
+import { Sidebar, navSections, type NavGroup, type NavLink } from './Sidebar';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Menu } from 'lucide-react';
@@ -70,9 +70,18 @@ export function MainLayout() {
               <SheetTitle>Navigation</SheetTitle>
             </SheetHeader>
             <div className="px-2 pb-4 space-y-2 overflow-y-auto flex-1">
-              {navItems.map((item) =>
-                item.type === 'group' ? renderGroup(item) : renderLink(item)
-              )}
+              {navSections.map((section) => (
+                <div key={section.label} className="space-y-1">
+                  <div className="px-3 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {section.label}
+                  </div>
+                  <div className="space-y-1">
+                    {section.items.map((item) =>
+                      item.type === 'group' ? renderGroup(item) : renderLink(item)
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           </SheetContent>
         </Sheet>

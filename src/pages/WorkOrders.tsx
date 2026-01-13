@@ -8,6 +8,7 @@ import type { WorkOrder } from '@/types';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { TableDensitySelect } from '@/components/ui/TableDensitySelect';
 
 type WorkOrderRow = WorkOrder & { customer_name: string; unit_label: string; is_active?: boolean };
 
@@ -178,7 +179,7 @@ export default function WorkOrders() {
     <div className="page-container">
       <PageHeader
         title="Work Orders"
-        subtitle="Manage repair and service work orders"
+        subtitle="Manage job, labor, parts, and status"
         actions={
           <Button onClick={() => navigate('/work-orders/new')}>
             <Plus className="w-4 h-4 mr-2" />
@@ -188,27 +189,30 @@ export default function WorkOrders() {
       />
 
       <div className="mb-4 overflow-x-auto">
-        <div className="flex justify-end gap-2 min-w-max pr-2 whitespace-nowrap">
-          {(['open', 'estimate', 'invoiced', 'deleted'] as const).map((filter) => (
+        <div className="flex flex-wrap items-center justify-between gap-3 min-w-max pr-2 whitespace-nowrap">
+          <div className="flex flex-wrap gap-2">
+            {(['open', 'estimate', 'invoiced', 'deleted'] as const).map((filter) => (
+              <Button
+                key={filter}
+                variant={statusFilter === filter ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setStatusFilter(filter)}
+              >
+                {filter === 'open' && 'Open'}
+                {filter === 'estimate' && 'Estimates'}
+                {filter === 'invoiced' && 'Invoiced'}
+                {filter === 'deleted' && 'Deleted'}
+              </Button>
+            ))}
             <Button
-              key={filter}
-              variant={statusFilter === filter ? 'default' : 'outline'}
+              variant={showUnscheduledOnly ? 'default' : 'outline'}
               size="sm"
-              onClick={() => setStatusFilter(filter)}
+              onClick={() => setShowUnscheduledOnly((prev) => !prev)}
             >
-              {filter === 'open' && 'Open'}
-              {filter === 'estimate' && 'Estimates'}
-              {filter === 'invoiced' && 'Invoiced'}
-              {filter === 'deleted' && 'Deleted'}
+              {showUnscheduledOnly ? 'All' : 'Unscheduled only'}
             </Button>
-          ))}
-          <Button
-            variant={showUnscheduledOnly ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setShowUnscheduledOnly((prev) => !prev)}
-          >
-            {showUnscheduledOnly ? 'All' : 'Unscheduled only'}
-          </Button>
+          </div>
+          <TableDensitySelect />
         </div>
       </div>
 

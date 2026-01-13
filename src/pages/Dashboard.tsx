@@ -775,13 +775,9 @@ export default function Dashboard() {
   return (
     <div className="page-container space-y-6">
       <PageHeader
-        title="Command Center"
-        subtitle={settings?.shop_name}
-        description={
-          <span className="text-xs text-muted-foreground">
-            Updated {secondsSinceUpdate}s ago · {new Date(lastUpdatedAt).toLocaleTimeString()}
-          </span>
-        }
+        title="Dashboard"
+        subtitle={settings?.shop_name || "Overview & activity"}
+        description={`Updated ${secondsSinceUpdate}s ago at ${new Date(lastUpdatedAt).toLocaleTimeString()}`}
         actions={
           <div className="flex flex-col gap-3 w-full">
             <div className="flex flex-wrap items-center gap-2">
@@ -834,36 +830,36 @@ export default function Dashboard() {
             </div>
             <div className="flex flex-col gap-2">
               <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-              <Input
-                value={globalSearchQuery}
-                onChange={(event) => {
-                  setGlobalSearchQuery(event.target.value);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleGlobalSearchSubmit();
-                }}
-                placeholder="Global search"
-                className="w-full sm:min-w-[220px]"
-                aria-label="Global search"
-                ref={searchInputRef}
-              />
-              <Button size="sm" variant="outline" onClick={handleGlobalSearchSubmit}>
-                <Search className="w-4 h-4" />
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setIsCommandPaletteOpen(true)}
-                className="flex items-center gap-1"
-              >
-                <CommandIcon className="w-4 h-4" />
-                <span className="text-[11px]">{quickButtonLabel}</span>
-              </Button>
+                <Input
+                  value={globalSearchQuery}
+                  onChange={(event) => {
+                    setGlobalSearchQuery(event.target.value);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleGlobalSearchSubmit();
+                  }}
+                  placeholder="Global search"
+                  className="w-full sm:min-w-[220px]"
+                  aria-label="Global search"
+                  ref={searchInputRef}
+                />
+                <Button size="sm" variant="outline" onClick={handleGlobalSearchSubmit}>
+                  <Search className="w-4 h-4" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setIsCommandPaletteOpen(true)}
+                  className="flex items-center gap-1"
+                >
+                  <CommandIcon className="w-4 h-4" />
+                  <span className="text-[11px]">{quickButtonLabel}</span>
+                </Button>
               </div>
               {globalSearchQuery && globalSearchResults && (
                 <Card className="max-h-80 overflow-auto border border-muted/70">
                   {isGlobalSearching ? (
-                    <div className="p-3 text-sm text-muted-foreground">Searching…</div>
+                    <div className="p-3 text-sm text-muted-foreground">Searching...</div>
                   ) : (
                     <div className="divide-y divide-border/70 text-sm">
                       {(['customers', 'units', 'workOrders', 'parts'] as const).map((section) => {
@@ -908,7 +904,7 @@ export default function Dashboard() {
                         globalSearchResults.workOrders.length === 0 &&
                         globalSearchResults.parts.length === 0 && (
                           <div className="p-3 text-sm text-muted-foreground">
-                            No results found for “{globalSearchQuery}”.
+                            No results found for "{globalSearchQuery}".
                           </div>
                         )}
                     </div>

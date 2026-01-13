@@ -1,13 +1,29 @@
 import * as React from "react";
 
 import { cn } from "@/lib/utils";
+import { useUiPrefsStore } from "@/stores/uiPrefsStore";
+
+const densityHeadMap = {
+  compact: "h-10 px-3 text-xs",
+  comfortable: "h-12 px-4 text-sm",
+  spacious: "h-14 px-5 text-sm",
+} as const;
+
+const densityCellMap = {
+  compact: "px-3 py-2 text-sm",
+  comfortable: "p-4 text-sm",
+  spacious: "px-5 py-4 text-base",
+} as const;
 
 const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
-  ({ className, ...props }, ref) => (
-    <div className="relative w-full overflow-auto">
-      <table ref={ref} className={cn("w-full caption-bottom text-sm", className)} {...props} />
-    </div>
-  ),
+  ({ className, ...props }, ref) => {
+    const density = useUiPrefsStore((state) => state.tableDensity);
+    return (
+      <div className="relative w-full overflow-auto" data-density={density}>
+        <table ref={ref} className={cn("w-full caption-bottom text-sm", className)} {...props} />
+      </div>
+    );
+  },
 );
 Table.displayName = "Table";
 
@@ -42,23 +58,34 @@ const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTML
 TableRow.displayName = "TableRow";
 
 const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<HTMLTableCellElement>>(
-  ({ className, ...props }, ref) => (
-    <th
-      ref={ref}
-      className={cn(
-        "h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0",
-        className,
-      )}
-      {...props}
-    />
-  ),
+  ({ className, ...props }, ref) => {
+    const density = useUiPrefsStore((state) => state.tableDensity);
+    return (
+      <th
+        ref={ref}
+        className={cn(
+          "text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0",
+          densityHeadMap[density],
+          className,
+        )}
+        {...props}
+      />
+    );
+  },
 );
 TableHead.displayName = "TableHead";
 
 const TableCell = React.forwardRef<HTMLTableCellElement, React.TdHTMLAttributes<HTMLTableCellElement>>(
-  ({ className, ...props }, ref) => (
-    <td ref={ref} className={cn("p-4 align-middle [&:has([role=checkbox])]:pr-0", className)} {...props} />
-  ),
+  ({ className, ...props }, ref) => {
+    const density = useUiPrefsStore((state) => state.tableDensity);
+    return (
+      <td
+        ref={ref}
+        className={cn("align-middle [&:has([role=checkbox])]:pr-0", densityCellMap[density], className)}
+        {...props}
+      />
+    );
+  },
 );
 TableCell.displayName = "TableCell";
 

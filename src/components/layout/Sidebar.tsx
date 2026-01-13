@@ -41,66 +41,81 @@ export type NavGroup = {
   children: NavLink[];
 };
 export type NavItem = NavLink | NavGroup;
+export type NavSection = { label: string; items: NavItem[] };
 
-export const navItems: NavItem[] = [
-  { type: 'link', path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { type: 'link', path: '/customers', label: 'Customers', icon: Users },
-  { type: 'link', path: '/sales-orders', label: 'Sales Orders', icon: ShoppingCart },
-  {
-    type: 'group',
-    key: 'serviceOrders',
-    label: 'Service',
-    icon: ClipboardList,
-    children: [
-      { type: 'link', path: '/work-orders', label: 'Work Orders', icon: Wrench },
-      { type: 'link', path: '/units', label: 'Units', icon: Truck },
-      { type: 'link', path: '/technicians', label: 'Technicians', icon: HardHat },
-      { type: 'link', path: '/plasma', label: 'Plasma Projects', icon: Flame },
-      { type: 'link', path: '/plasma/templates', label: 'Plasma Templates', icon: Flame },
-    ],
-  },
-  {
-    type: 'group',
-    key: 'inventory',
-    label: 'Inventory',
-    icon: Package,
-    children: [
-      { type: 'link', path: '/inventory', label: 'Parts', icon: Package },
-      { type: 'link', path: '/receiving', label: 'Receiving', icon: ClipboardList },
-      { type: 'link', path: '/receiving-history', label: 'Receiving History', icon: ClipboardList },
-      { type: 'link', path: '/vendors', label: 'Vendors', icon: Building2 },
-      { type: 'link', path: '/categories', label: 'Categories', icon: Tags },
-      { type: 'link', path: '/cycle-counts', label: 'Cycle Counts', icon: ListChecks },
-    ],
-  },
-  { type: 'link', path: '/purchase-orders', label: 'Purchase Orders', icon: ClipboardList },
-  { type: 'link', path: '/scheduling', label: 'Scheduling', icon: Calendar },
-  {
-    type: 'group',
-    key: 'manufacturing',
-    label: 'Manufacturing',
-    icon: Factory,
-    children: [
-      { type: 'link', path: '/manufacturing/products', label: 'Products', icon: Package },
-      { type: 'link', path: '/manufacturing/builds', label: 'Builds', icon: Layers },
-    ],
-  },
-  { type: 'link', path: '/invoices', label: 'Invoices', icon: FileText },
-  { type: 'link', path: '/payments', label: 'Payments', icon: CreditCard },
-  {
-    type: 'group',
-    key: 'returnsWarranty',
-    label: 'Returns & Warranty',
-    icon: BarChart2,
-    children: [
-      { type: 'link', path: '/returns', label: 'Returns', icon: BarChart2 },
-      { type: 'link', path: '/warranty', label: 'Warranty Claims', icon: BarChart2 },
-      { type: 'link', path: '/reports/returns-warranty', label: 'Returns/Warranty Report', icon: BarChart2 },
-    ],
-  },
-  { type: 'link', path: '/reports', label: 'Reports', icon: BarChart2 },
-  { type: 'link', path: '/settings', label: 'Settings', icon: Settings },
+const dashboardLink: NavLink = { type: 'link', path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard };
+const customersLink: NavLink = { type: 'link', path: '/customers', label: 'Customers', icon: Users };
+const salesOrdersLink: NavLink = { type: 'link', path: '/sales-orders', label: 'Sales Orders', icon: ShoppingCart };
+const serviceGroup: NavGroup = {
+  type: 'group',
+  key: 'serviceOrders',
+  label: 'Service',
+  icon: ClipboardList,
+  children: [
+    { type: 'link', path: '/work-orders', label: 'Work Orders', icon: Wrench },
+    { type: 'link', path: '/units', label: 'Units', icon: Truck },
+    { type: 'link', path: '/technicians', label: 'Technicians', icon: HardHat },
+    { type: 'link', path: '/plasma', label: 'Plasma Projects', icon: Flame },
+    { type: 'link', path: '/plasma/templates', label: 'Plasma Templates', icon: Flame },
+  ],
+};
+const inventoryGroup: NavGroup = {
+  type: 'group',
+  key: 'inventory',
+  label: 'Inventory',
+  icon: Package,
+  children: [
+    { type: 'link', path: '/inventory', label: 'Parts', icon: Package },
+    { type: 'link', path: '/receiving', label: 'Receiving', icon: ClipboardList },
+    { type: 'link', path: '/receiving-history', label: 'Receiving History', icon: ClipboardList },
+    { type: 'link', path: '/vendors', label: 'Vendors', icon: Building2 },
+    { type: 'link', path: '/categories', label: 'Categories', icon: Tags },
+    { type: 'link', path: '/cycle-counts', label: 'Cycle Counts', icon: ListChecks },
+  ],
+};
+const purchaseOrdersLink: NavLink = { type: 'link', path: '/purchase-orders', label: 'Purchase Orders', icon: ClipboardList };
+const schedulingLink: NavLink = { type: 'link', path: '/scheduling', label: 'Scheduling', icon: Calendar };
+const manufacturingGroup: NavGroup = {
+  type: 'group',
+  key: 'manufacturing',
+  label: 'Manufacturing',
+  icon: Factory,
+  children: [
+    { type: 'link', path: '/manufacturing/products', label: 'Products', icon: Package },
+    { type: 'link', path: '/manufacturing/builds', label: 'Builds', icon: Layers },
+  ],
+};
+const invoicesLink: NavLink = { type: 'link', path: '/invoices', label: 'Invoices', icon: FileText };
+const paymentsLink: NavLink = { type: 'link', path: '/payments', label: 'Payments', icon: CreditCard };
+const returnsWarrantyGroup: NavGroup = {
+  type: 'group',
+  key: 'returnsWarranty',
+  label: 'Returns & Warranty',
+  icon: BarChart2,
+  children: [
+    { type: 'link', path: '/returns', label: 'Returns', icon: BarChart2 },
+    { type: 'link', path: '/warranty', label: 'Warranty Claims', icon: BarChart2 },
+    { type: 'link', path: '/reports/returns-warranty', label: 'Returns/Warranty Report', icon: BarChart2 },
+  ],
+};
+const reportsLink: NavLink = { type: 'link', path: '/reports', label: 'Reports', icon: BarChart2 };
+const settingsLink: NavLink = { type: 'link', path: '/settings', label: 'Settings', icon: Settings };
+
+export const navSections: NavSection[] = [
+  { label: 'Dashboard', items: [dashboardLink] },
+  { label: 'Customers', items: [customersLink] },
+  { label: 'Sales', items: [salesOrdersLink] },
+  { label: 'Service', items: [serviceGroup] },
+  { label: 'Inventory', items: [inventoryGroup] },
+  { label: 'Purchasing', items: [purchaseOrdersLink] },
+  { label: 'Scheduling', items: [schedulingLink] },
+  { label: 'Manufacturing', items: [manufacturingGroup] },
+  { label: 'Accounting', items: [invoicesLink, paymentsLink, returnsWarrantyGroup] },
+  { label: 'Reports', items: [reportsLink] },
+  { label: 'Settings', items: [settingsLink] },
 ];
+
+export const navItems: NavItem[] = navSections.flatMap((section) => section.items);
 
 export function Sidebar({ className }: { className?: string } = {}) {
   const location = useLocation();
@@ -108,23 +123,15 @@ export function Sidebar({ className }: { className?: string } = {}) {
   const [darkSidebar, setDarkSidebar] = useState(true);
   const [openSection, setOpenSection] = useState<NavGroup['key'] | null>(null);
 
-  const sidebarColors = darkSidebar
-    ? {
-        bg: 'bg-[hsl(222,22%,8%)]',
-        border: 'border-[hsl(222,15%,20%)]',
-        text: 'text-[hsl(0,0%,85%)]',
-        textMuted: 'text-[hsl(0,0%,60%)]',
-        hover: 'hover:bg-[hsl(222,20%,18%)] hover:text-[hsl(0,0%,95%)]',
-        active: 'bg-primary text-primary-foreground',
-      }
-    : {
-        bg: 'bg-card',
-        border: 'border-border',
-        text: 'text-foreground',
-        textMuted: 'text-muted-foreground',
-        hover: 'hover:bg-accent hover:text-accent-foreground',
-        active: 'bg-primary text-primary-foreground',
-      };
+  const sidebarColors = {
+    bg: 'bg-[hsl(var(--sidebar-background, var(--card)))]',
+    border: 'border-[hsl(var(--sidebar-border, var(--border)))]',
+    text: darkSidebar ? 'text-[hsl(var(--sidebar-foreground, var(--foreground)))]' : 'text-foreground',
+    textMuted: darkSidebar
+      ? 'text-[hsl(var(--sidebar-foreground, var(--foreground)))/80]'
+      : 'text-muted-foreground',
+    hover: 'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+  };
 
   const isPathActive = (path: string) => {
     if (path === '/dashboard') {
@@ -142,9 +149,12 @@ export function Sidebar({ className }: { className?: string } = {}) {
         key={options?.nested ? `${item.path}-nested` : item.path}
         to={item.path}
         className={cn(
-          'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200',
+          'relative flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors duration-200',
+          'before:absolute before:left-0 before:top-1 before:bottom-1 before:w-[3px] before:rounded-full',
           options?.nested ? 'pl-10 text-sm' : '',
-          isActive ? sidebarColors.active : cn(sidebarColors.text, sidebarColors.hover)
+          isActive
+            ? 'bg-accent text-foreground shadow-sm before:bg-primary'
+            : cn(sidebarColors.text, sidebarColors.hover, 'before:bg-transparent')
         )}
       >
         <item.icon className={cn('flex-shrink-0', options?.nested ? 'w-4 h-4' : 'w-5 h-5')} />
@@ -160,8 +170,11 @@ export function Sidebar({ className }: { className?: string } = {}) {
       <AccordionItem key={group.key} value={group.key} className="border-none">
         <AccordionTrigger
           className={cn(
-            'px-3 py-2.5 rounded-lg flex items-center gap-3 hover:no-underline transition-all duration-200',
-            isGroupActive ? sidebarColors.active : cn(sidebarColors.text, sidebarColors.hover)
+            'relative px-3 py-2.5 rounded-lg flex items-center gap-3 hover:no-underline transition-colors duration-200',
+            'before:absolute before:left-0 before:top-1 before:bottom-1 before:w-[3px] before:rounded-full',
+            isGroupActive
+              ? 'bg-accent text-foreground shadow-sm before:bg-primary'
+              : cn(sidebarColors.text, sidebarColors.hover, 'before:bg-transparent')
           )}
         >
           <div className="flex items-center gap-3">
@@ -227,11 +240,20 @@ export function Sidebar({ className }: { className?: string } = {}) {
             collapsible
             value={openSection ?? ''}
             onValueChange={(value) => setOpenSection((value as NavGroup['key']) || null)}
-            className="space-y-1"
+            className="space-y-2"
           >
-            {navItems.map((item) =>
-              item.type === 'group' ? renderGroup(item) : renderLink(item)
-            )}
+            {navSections.map((section) => (
+              <div key={section.label} className="space-y-1">
+                <div className="px-3 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {section.label}
+                </div>
+                <div className="space-y-1">
+                  {section.items.map((item) =>
+                    item.type === 'group' ? renderGroup(item) : renderLink(item)
+                  )}
+                </div>
+              </div>
+            ))}
           </Accordion>
         </nav>
 
