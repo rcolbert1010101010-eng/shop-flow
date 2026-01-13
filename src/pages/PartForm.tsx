@@ -45,6 +45,7 @@ import {
 } from '@/components/ui/popover';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { MobileActionBar, MobileActionBarSpacer } from '@/components/common/MobileActionBar';
+import { normalizeQty, formatQtyWithUom } from '@/lib/utils';
 
 const toNumber = (value: number | string | null | undefined) => {
   const numeric = typeof value === 'number' ? value : value != null ? Number(value) : NaN;
@@ -116,9 +117,11 @@ export default function PartForm() {
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [newVendorName, setNewVendorName] = useState('');
   const [newCategoryName, setNewCategoryName] = useState('');
-  const [adjustReason, setAdjustReason] = useState('');
+  const [adjustReason, setAdjustReason] = useState('Cycle Count');
+  const [adjustReasonOther, setAdjustReasonOther] = useState('');
   const [adjustDialogOpen, setAdjustDialogOpen] = useState(false);
   const [newQoh, setNewQoh] = useState('');
+  const [qtyError, setQtyError] = useState<string | null>(null);
   const [newComponentId, setNewComponentId] = useState('');
   const [newComponentQty, setNewComponentQty] = useState('1');
   const [copying, setCopying] = useState(false);
@@ -569,15 +572,22 @@ export default function PartForm() {
 
   const handleConfirmAdjustment = () => {
     if (!part) return;
-    if (!adjustReason.trim()) {
+    
+    // Validate quantity with UOM rules
+    const qtyResult = normalizeQty(part, newQoh);
+    if (!qtyResult.ok) {
+      setQtyError(qtyResult.error);
+      toast({ title: 'Validation Error', description: qtyResult.error, variant: 'destructive' });
+      return;
+    }
+    
+    // Validate reason
+    const finalReason = adjustReason === 'Other' ? adjustReasonOther.trim() : adjustReason;
+    if (!finalReason) {
       toast({ title: 'Validation Error', description: 'Reason is required', variant: 'destructive' });
       return;
     }
-    const parsedQoh = parseFloat(newQoh);
-    if (!Number.isFinite(parsedQoh)) {
-      toast({ title: 'Validation Error', description: 'Enter a valid quantity', variant: 'destructive' });
-      return;
-    }
+    
     const partData = {
       part_number: part.part_number.trim().toUpperCase(),
       description: part.description?.trim() || null,
@@ -585,7 +595,7 @@ export default function PartForm() {
       category_id: part.category_id,
       cost: part.cost || 0,
       selling_price: part.selling_price || 0,
-      quantity_on_hand: parsedQoh,
+      quantity_on_hand: qtyResult.qty,
       core_required: part.core_required,
       core_charge: part.core_charge || 0,
       barcode: part.barcode?.trim() ? part.barcode.trim() : null,
@@ -595,7 +605,7 @@ export default function PartForm() {
       bin_location: part.bin_location?.trim() || null,
     };
     const result = updatePartWithQohAdjustment(id!, partData, {
-      reason: adjustReason.trim(),
+      reason: finalReason,
       adjusted_by: '',
     });
     if (result?.error) {
@@ -605,11 +615,14 @@ export default function PartForm() {
     if (result?.warning) {
       toast({ title: 'Inventory adjusted', description: result.warning, variant: 'default' });
     } else {
-      toast({ title: 'Part Updated', description: 'Changes have been saved' });
+      const currentQoh = part.quantity_on_hand ?? 0;
+      toast({ title: 'QOH adjusted', description: `Set QOH from ${formatQtyWithUom(currentQoh, part)} to ${formatQtyWithUom(qtyResult.qty, part)}` });
     }
     setAdjustDialogOpen(false);
-    setAdjustReason('');
+    setAdjustReason('Cycle Count');
+    setAdjustReasonOther('');
     setNewQoh('');
+    setQtyError(null);
     setEditing(false);
   };
 
@@ -1558,37 +1571,98 @@ export default function PartForm() {
         onOpenChange={(open) => {
           setAdjustDialogOpen(open);
           if (!open) {
-            setAdjustReason('');
+            setAdjustReason('Cycle Count');
+            setAdjustReasonOther('');
             setNewQoh('');
+            setQtyError(null);
           }
         }}
         title="Inventory Adjustment"
         onSave={handleConfirmAdjustment}
         onCancel={() => {
           setAdjustDialogOpen(false);
-          setAdjustReason('');
+          setAdjustReason('Cycle Count');
+          setAdjustReasonOther('');
           setNewQoh('');
+          setQtyError(null);
         }}
       >
+        <div className="text-sm text-muted-foreground mb-2">
+          Current QOH: <span className="font-medium text-foreground">
+            {part ? formatQtyWithUom(part.quantity_on_hand ?? 0, part) : '—'}
+          </span>
+        </div>
         <div>
-          <Label htmlFor="new_qoh">New QOH</Label>
+          <Label htmlFor="new_qoh">
+            New QOH {part && <span className="text-muted-foreground">({part.uom ?? 'EA'})</span>}
+          </Label>
           <Input
             id="new_qoh"
             type="number"
+            min="0"
+            step={part?.uom === 'EA' ? '1' : '0.01'}
             value={newQoh}
-            onChange={(e) => setNewQoh(e.target.value)}
+            onChange={(e) => {
+              const value = e.target.value;
+              setNewQoh(value);
+              setQtyError(null);
+              // Immediate validation for EA
+              if (part?.uom === 'EA' && value && !Number.isInteger(Number(value))) {
+                setQtyError('EA quantities must be whole numbers');
+              } else {
+                setQtyError(null);
+              }
+            }}
+            onBlur={() => {
+              if (newQoh && part) {
+                const qtyResult = normalizeQty(part, newQoh);
+                if (!qtyResult.ok) {
+                  setQtyError(qtyResult.error);
+                } else if (qtyResult.qty.toString() !== newQoh) {
+                  // Auto-correct to normalized value
+                  setNewQoh(qtyResult.qty.toString());
+                }
+              }
+            }}
             placeholder={part?.quantity_on_hand?.toString() || '0'}
           />
+          {qtyError && (
+            <p className="text-xs text-destructive mt-1">{qtyError}</p>
+          )}
+          {part && newQoh && !qtyError && Number.isFinite(Number(newQoh)) && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Set QOH from {formatQtyWithUom(part.quantity_on_hand ?? 0, part)} to {formatQtyWithUom(Number(newQoh), part)}
+            </p>
+          )}
         </div>
         <div>
           <Label htmlFor="adjust_reason">Reason *</Label>
-          <Textarea
-            id="adjust_reason"
-            value={adjustReason}
-            onChange={(e) => setAdjustReason(e.target.value)}
-            placeholder="Provide a reason for the quantity change"
-            rows={3}
-          />
+          <Select value={adjustReason} onValueChange={(value) => {
+            setAdjustReason(value);
+            setAdjustReasonOther('');
+          }}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Cycle Count">Cycle Count</SelectItem>
+              <SelectItem value="Initial Stock">Initial Stock</SelectItem>
+              <SelectItem value="Scrap">Scrap</SelectItem>
+              <SelectItem value="Cut Usage">Cut Usage</SelectItem>
+              <SelectItem value="Return">Return</SelectItem>
+              <SelectItem value="Receive Correction">Receive Correction</SelectItem>
+              <SelectItem value="Other">Other</SelectItem>
+            </SelectContent>
+          </Select>
+          {adjustReason === 'Other' && (
+            <Input
+              id="adjust_reason_other"
+              className="mt-2"
+              value={adjustReasonOther}
+              onChange={(e) => setAdjustReasonOther(e.target.value)}
+              placeholder="Enter reason"
+            />
+          )}
         </div>
       </QuickAddDialog>
 

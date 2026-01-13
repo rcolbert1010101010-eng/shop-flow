@@ -44,6 +44,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { ResponsiveDataList } from '@/components/common/ResponsiveDataList';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { normalizeQty, formatQtyWithUom } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ImportPartsDialog } from '@/components/inventory/ImportPartsDialog';
 
@@ -63,12 +64,16 @@ export default function Inventory() {
   const [adjustDialogOpen, setAdjustDialogOpen] = useState(false);
   const [selectedPart, setSelectedPart] = useState<Part | null>(null);
   const [newQoh, setNewQoh] = useState('');
-  const [adjustReason, setAdjustReason] = useState('');
+  const [adjustReason, setAdjustReason] = useState('Cycle Count');
+  const [adjustReasonOther, setAdjustReasonOther] = useState('');
+  const [qtyError, setQtyError] = useState<string | null>(null);
   const closeAdjustDialog = () => {
     setAdjustDialogOpen(false);
     setSelectedPart(null);
     setNewQoh('');
-    setAdjustReason('');
+    setAdjustReason('Cycle Count');
+    setAdjustReasonOther('');
+    setQtyError(null);
   };
   const [stockFilter, setStockFilter] = useState<'ALL' | 'LOW' | 'OUT'>('ALL');
   const [needsReorderOnly, setNeedsReorderOnly] = useState(false);
@@ -597,10 +602,15 @@ export default function Inventory() {
   const adjustIssues = useMemo(() => {
     const issues: string[] = [];
     if (!selectedPart) issues.push('Select a part to adjust.');
-    if (!adjustReason.trim()) issues.push('Reason required.');
+    const finalReason = adjustReason === 'Other' ? adjustReasonOther.trim() : adjustReason;
+    if (!finalReason) issues.push('Reason required.');
     if (!Number.isFinite(Number(newQoh))) issues.push('Enter a valid quantity.');
+    if (selectedPart) {
+      const qtyResult = normalizeQty(selectedPart, newQoh);
+      if (!qtyResult.ok) issues.push(qtyResult.error);
+    }
     return issues;
-  }, [adjustReason, newQoh, selectedPart]);
+  }, [adjustReason, adjustReasonOther, newQoh, selectedPart]);
 
   const handleCreateDraftPO = () => {
     if (!bulkSelectMode || selectedParts.length === 0) return;
@@ -916,13 +926,28 @@ export default function Inventory() {
 
   const handleSaveAdjustment = () => {
     if (!selectedPart) return;
-    const parsed = Number(newQoh);
-    if (!Number.isFinite(parsed)) return;
-    if (!adjustReason.trim()) return;
+    
+    // Validate quantity with UOM rules
+    const qtyResult = normalizeQty(selectedPart, newQoh);
+    if (!qtyResult.ok) {
+      setQtyError(qtyResult.error);
+      setAdjustError(qtyResult.error);
+      toast({ title: 'Validation Error', description: qtyResult.error, variant: 'destructive' });
+      return;
+    }
+    
+    // Validate reason
+    const finalReason = adjustReason === 'Other' ? adjustReasonOther.trim() : adjustReason;
+    if (!finalReason) {
+      setAdjustError('Reason is required');
+      toast({ title: 'Validation Error', description: 'Reason is required', variant: 'destructive' });
+      return;
+    }
+    
     const result = repos.parts.updatePartWithQohAdjustment(
       selectedPart.id,
-      { quantity_on_hand: parsed },
-      { reason: adjustReason.trim(), adjusted_by: '' }
+      { quantity_on_hand: qtyResult.qty },
+      { reason: finalReason, adjusted_by: '' }
     );
     if (result?.error) {
       setAdjustError(result.error);
@@ -934,7 +959,8 @@ export default function Inventory() {
       toast({ title: 'Inventory adjusted', description: result.warning });
     }
     if (!result?.warning) {
-      toast({ title: 'Inventory adjusted' });
+      const currentQoh = selectedPart.quantity_on_hand ?? 0;
+      toast({ title: 'QOH adjusted', description: `Set QOH from ${formatQtyWithUom(currentQoh, selectedPart)} to ${formatQtyWithUom(qtyResult.qty, selectedPart)}` });
     }
     setAdjustWarning(null);
     setAdjustError(null);
@@ -1417,25 +1443,84 @@ export default function Inventory() {
               </div>
             )}
             <div className="text-sm text-muted-foreground">
-              Current QOH: <span className="font-medium text-foreground">{selectedPart?.quantity_on_hand ?? '—'}</span>
+              Current QOH: <span className="font-medium text-foreground">
+                {selectedPart ? formatQtyWithUom(selectedPart.quantity_on_hand ?? 0, selectedPart) : '—'}
+              </span>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="new_qoh">New QOH</Label>
+              <Label htmlFor="new_qoh">
+                New QOH {selectedPart && <span className="text-muted-foreground">({selectedPart.uom ?? 'EA'})</span>}
+              </Label>
               <Input
                 id="new_qoh"
                 type="number"
+                min="0"
+                step={selectedPart?.uom === 'EA' ? '1' : '0.01'}
                 value={newQoh}
-                onChange={(e) => setNewQoh(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setNewQoh(value);
+                  setQtyError(null);
+                  setAdjustError(null);
+                  // Immediate validation for EA
+                  if (selectedPart?.uom === 'EA' && value && !Number.isInteger(Number(value))) {
+                    setQtyError('EA quantities must be whole numbers');
+                  } else {
+                    setQtyError(null);
+                  }
+                }}
+                onBlur={() => {
+                  if (newQoh && selectedPart) {
+                    const qtyResult = normalizeQty(selectedPart, newQoh);
+                    if (!qtyResult.ok) {
+                      setQtyError(qtyResult.error);
+                    } else if (qtyResult.qty.toString() !== newQoh) {
+                      // Auto-correct to normalized value
+                      setNewQoh(qtyResult.qty.toString());
+                    }
+                  }
+                }}
               />
+              {qtyError && (
+                <p className="text-xs text-destructive">{qtyError}</p>
+              )}
+              {selectedPart && newQoh && !qtyError && Number.isFinite(Number(newQoh)) && (
+                <p className="text-xs text-muted-foreground">
+                  Set QOH from {formatQtyWithUom(selectedPart.quantity_on_hand ?? 0, selectedPart)} to {formatQtyWithUom(Number(newQoh), selectedPart)}
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="adjust_reason">Reason *</Label>
-              <Input
-                id="adjust_reason"
-                value={adjustReason}
-                onChange={(e) => setAdjustReason(e.target.value)}
-                placeholder="Why are you adjusting this quantity?"
-              />
+              <Select value={adjustReason} onValueChange={(value) => {
+                setAdjustReason(value);
+                setAdjustReasonOther('');
+                setAdjustError(null);
+              }}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Cycle Count">Cycle Count</SelectItem>
+                  <SelectItem value="Initial Stock">Initial Stock</SelectItem>
+                  <SelectItem value="Scrap">Scrap</SelectItem>
+                  <SelectItem value="Cut Usage">Cut Usage</SelectItem>
+                  <SelectItem value="Return">Return</SelectItem>
+                  <SelectItem value="Receive Correction">Receive Correction</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+              {adjustReason === 'Other' && (
+                <Input
+                  id="adjust_reason_other"
+                  value={adjustReasonOther}
+                  onChange={(e) => {
+                    setAdjustReasonOther(e.target.value);
+                    setAdjustError(null);
+                  }}
+                  placeholder="Enter reason"
+                />
+              )}
             </div>
             <div className="space-y-2">
               <p className="text-sm font-semibold">Recent History</p>
