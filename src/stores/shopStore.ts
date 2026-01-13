@@ -433,7 +433,24 @@ interface ShopState {
   updateCycleCountLine: (id: string, updates: Partial<Pick<CycleCountLine, 'counted_qty' | 'reason'>>) => { success: boolean; error?: string };
   postCycleCountSession: (id: string, posted_by?: string) => { success: boolean; error?: string };
   getCycleCountLines: (sessionId: string) => CycleCountLine[];
+
+  // Parts Import History
+  partsImportHistory: PartsImportHistoryEntry[];
+  addPartsImportHistory: (entry: Omit<PartsImportHistoryEntry, 'id' | 'performed_at'>) => PartsImportHistoryEntry;
+  getPartsImportHistory: () => PartsImportHistoryEntry[];
 }
+
+export type PartsImportHistoryEntry = {
+  id: string;
+  performed_at: string;
+  total_rows: number;
+  valid_rows: number;
+  partsCreated: number;
+  vendorsCreated: number;
+  categoriesCreated: number;
+  skipped_rows: number;
+  failed_rows: number;
+};
 
 const now = () => new Date().toISOString();
 const staticDate = '2024-01-01T00:00:00.000Z';
@@ -4633,6 +4650,24 @@ export const useShopStore = create<ShopState>()(
 
         return { success: true };
       },
+
+      // Parts Import History
+      partsImportHistory: [],
+
+      addPartsImportHistory: (entry) => {
+        const newEntry: PartsImportHistoryEntry = {
+          id: generateId(),
+          performed_at: now(),
+          ...entry,
+        };
+        set((state) => {
+          const updated = [newEntry, ...state.partsImportHistory].slice(0, 10);
+          return { partsImportHistory: updated };
+        });
+        return newEntry;
+      },
+
+      getPartsImportHistory: () => get().partsImportHistory,
       };
     },
     {

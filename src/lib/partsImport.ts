@@ -9,6 +9,12 @@ export type ImportablePartRow = {
   vendor: string;
   category: string;
   is_active: boolean;
+  bin_location: string | null;
+  location: string | null;
+  min_qty: number | null;
+  max_qty: number | null;
+  has_core: boolean | null;
+  core_cost: number | null;
 };
 
 export type ImportPreviewRow = ImportablePartRow & {
@@ -42,6 +48,27 @@ const NORMALIZED_HEADERS: Record<string, keyof ImportablePartRow> = {
   category_name: 'category',
   is_active: 'is_active',
   active: 'is_active',
+  bin_location: 'bin_location',
+  bin: 'bin_location',
+  'bin location': 'bin_location',
+  location: 'location',
+  loc: 'location',
+  min_qty: 'min_qty',
+  minqty: 'min_qty',
+  min: 'min_qty',
+  'min qty': 'min_qty',
+  max_qty: 'max_qty',
+  maxqty: 'max_qty',
+  max: 'max_qty',
+  'max qty': 'max_qty',
+  has_core: 'has_core',
+  'has core': 'has_core',
+  core_required: 'has_core',
+  'core required': 'has_core',
+  core_cost: 'core_cost',
+  'core cost': 'core_cost',
+  core_charge: 'core_cost',
+  'core charge': 'core_cost',
 };
 
 const normalizeHeader = (header: string) => {
@@ -103,12 +130,13 @@ export function parsePartsImport(
     existingPartNumbers?: Part[] | string[];
   } = {}
 ): ImportParseResult {
-  const trimmed = text.trim();
+  const normalizedText = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const trimmed = normalizedText.trim();
   if (!trimmed) {
     return { delimiter: ',', headers: [], rows: [], hasErrors: false };
   }
 
-  const lines = trimmed.split(/\r?\n/).filter((line) => line.trim().length > 0);
+  const lines = trimmed.split(/\n/).filter((line) => line.trim().length > 0);
   const headerLine = lines[0] ?? '';
   const delimiter = pickDelimiter(headerLine);
   const headerTokens = smartSplit(headerLine, delimiter);
@@ -139,6 +167,12 @@ export function parsePartsImport(
       vendor: '',
       category: '',
       is_active: true,
+      bin_location: null,
+      location: null,
+      min_qty: null,
+      max_qty: null,
+      has_core: null,
+      core_cost: null,
     };
     const errors: string[] = [];
 
@@ -176,6 +210,64 @@ export function parsePartsImport(
           }
           break;
         }
+        case 'bin_location':
+          entry.bin_location = value.trim() || null;
+          break;
+        case 'location':
+          entry.location = value.trim() || null;
+          break;
+        case 'min_qty': {
+          if (value.trim() === '') {
+            entry.min_qty = null;
+          } else {
+            const parsed = parseNumber(value);
+            if (parsed == null || parsed < 0 || !Number.isInteger(parsed)) {
+              errors.push('min_qty must be an integer >= 0');
+            } else {
+              entry.min_qty = parsed;
+            }
+          }
+          break;
+        }
+        case 'max_qty': {
+          if (value.trim() === '') {
+            entry.max_qty = null;
+          } else {
+            const parsed = parseNumber(value);
+            if (parsed == null || parsed < 0 || !Number.isInteger(parsed)) {
+              errors.push('max_qty must be an integer >= 0');
+            } else {
+              entry.max_qty = parsed;
+            }
+          }
+          break;
+        }
+        case 'has_core': {
+          if (value.trim() === '') {
+            entry.has_core = null;
+          } else {
+            const boolVal = parseBoolean(value);
+            if (boolVal == null) {
+              errors.push('has_core must be true/false/yes/no/1/0');
+            } else {
+              entry.has_core = boolVal;
+            }
+          }
+          break;
+        }
+        case 'core_cost': {
+          if (value.trim() === '') {
+            entry.core_cost = null;
+          } else {
+            const parsed = parseNumber(value);
+            if (parsed == null || parsed < 0) {
+              errors.push('core_cost must be >= 0');
+            } else {
+              entry.core_cost = parsed;
+            }
+          }
+          break;
+        }
         default:
           break;
       }
@@ -198,6 +290,17 @@ export function parsePartsImport(
     if (!Number.isFinite(entry.selling_price)) errors.push('selling_price must be numeric');
     if (!Number.isFinite(entry.quantity_on_hand) || entry.quantity_on_hand < 0) {
       errors.push('quantity_on_hand must be zero or positive');
+    }
+    if (
+      entry.min_qty != null &&
+      entry.max_qty != null &&
+      entry.max_qty < entry.min_qty
+    ) {
+      errors.push('max_qty must be >= min_qty');
+    }
+    if (entry.core_cost != null && entry.has_core !== true) {
+      // Warning: core_cost provided but has_core is not true
+      // We'll allow it but it's not meaningful
     }
 
     rows.push({

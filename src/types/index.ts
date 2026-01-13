@@ -129,6 +129,7 @@ export interface Part {
   min_qty: number | null;
   max_qty: number | null;
   bin_location: string | null;
+  location: string | null;
   last_cost: number | null;
   avg_cost: number | null;
   model: string | null;

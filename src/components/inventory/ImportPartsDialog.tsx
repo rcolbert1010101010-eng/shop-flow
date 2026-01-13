@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { Upload, FileSpreadsheet, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, Download } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -28,6 +28,8 @@ import { useRepos } from '@/repos';
 import type { Part, PartCategory, Vendor } from '@/types';
 import { parsePartsImport, type ImportParseResult } from '@/lib/partsImport';
 import { cn } from '@/lib/utils';
+import { useShopStore } from '@/stores/shopStore';
+import { ChevronDown, ChevronUp, History } from 'lucide-react';
 
 type ImportPartsDialogProps = {
   open: boolean;
@@ -46,14 +48,64 @@ type ImportSummary = {
 export function ImportPartsDialog({ open, onOpenChange, parts, vendors, categories }: ImportPartsDialogProps) {
   const repos = useRepos();
   const { toast } = useToast();
+  const addPartsImportHistory = useShopStore((s) => s.addPartsImportHistory);
+  const partsImportHistory = useShopStore((s) => s.getPartsImportHistory());
   const [input, setInput] = useState('');
   const [summary, setSummary] = useState<ImportSummary | null>(null);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const sampleText = [
     'part_number,description,cost,selling_price,quantity_on_hand,vendor,category,is_active',
     'IMP-100,Hydraulic Hose,22.39,39.00,6,Summit Brake & Axle,Hydraulics,true',
     'IMP-101,LED Marker Light Amber,6.50,12.99,30,NAPA Truck & Trailer Parts,Electrical & Lighting,true',
   ].join('\n');
+
+  const handleDownloadTemplate = () => {
+    const headers = [
+      'part_number',
+      'description',
+      'cost',
+      'selling_price',
+      'quantity_on_hand',
+      'vendor',
+      'category',
+      'is_active',
+      'bin_location',
+      'location',
+      'min_qty',
+      'max_qty',
+      'has_core',
+      'core_cost',
+    ];
+    const exampleRows = [
+      ['IMP-100', 'Hydraulic Hose', '22.39', '39.00', '6', 'Summit Brake & Axle', 'Hydraulics', 'true', 'A1', 'Warehouse A', '2', '10', 'false', '0'],
+      ['IMP-101', 'LED Marker Light Amber', '6.50', '12.99', '30', 'NAPA Truck & Trailer Parts', 'Electrical & Lighting', 'true', 'B2', 'Warehouse B', '5', '50', 'false', '0'],
+      ['IMP-102', 'Brake Pad Set', '45.00', '89.99', '12', 'Auto Parts Co', 'Brakes', 'true', 'C3', 'Warehouse C', '4', '20', 'true', '15.00'],
+    ];
+
+    const escapeCSVField = (field: string): string => {
+      if (field.includes(',') || field.includes('"') || field.includes('\n') || field.includes('\r')) {
+        return `"${field.replace(/"/g, '""')}"`;
+      }
+      return field;
+    };
+
+    const csvRows = [headers.map(escapeCSVField).join(',')];
+    exampleRows.forEach((row) => {
+      csvRows.push(row.map(escapeCSVField).join(','));
+    });
+
+    const csvContent = csvRows.join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'shopflow-parts-import-template.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   const existingPartNumbers = useMemo(
     () => new Set(parts.map((p) => p.part_number.trim().toLowerCase())),
@@ -109,6 +161,9 @@ export function ImportPartsDialog({ open, onOpenChange, parts, vendors, categori
         return created;
       };
 
+      const totalRows = parseResult.rows.length;
+      const failedRows = parseResult.rows.filter((r) => r.errors.length > 0).length;
+
       let partsCreated = 0;
       validRows.forEach((row) => {
         const vendor = ensureVendor(row.vendor);
@@ -121,11 +176,12 @@ export function ImportPartsDialog({ open, onOpenChange, parts, vendors, categori
           cost: row.cost,
           selling_price: row.selling_price,
           quantity_on_hand: row.quantity_on_hand,
-          core_required: false,
-          core_charge: 0,
-          min_qty: null,
-          max_qty: null,
-          bin_location: null,
+          core_required: row.has_core ?? false,
+          core_charge: row.core_cost ?? 0,
+          min_qty: row.min_qty ?? null,
+          max_qty: row.max_qty ?? null,
+          bin_location: row.bin_location ?? null,
+          location: row.location ?? null,
           last_cost: row.cost,
           avg_cost: row.cost,
           model: null,
@@ -135,6 +191,18 @@ export function ImportPartsDialog({ open, onOpenChange, parts, vendors, categori
           is_active: row.is_active,
         });
         partsCreated += 1;
+      });
+
+      const skippedRows = totalRows - validRows.length;
+
+      addPartsImportHistory({
+        total_rows: totalRows,
+        valid_rows: validRows.length,
+        partsCreated,
+        vendorsCreated,
+        categoriesCreated,
+        skipped_rows: skippedRows,
+        failed_rows: failedRows,
       });
 
       return { partsCreated, vendorsCreated, categoriesCreated };
@@ -174,14 +242,20 @@ export function ImportPartsDialog({ open, onOpenChange, parts, vendors, categori
           <DialogDescription className="space-y-1">
             <p>Paste CSV/tab data with headers: part_number, description, cost, selling_price, quantity_on_hand, vendor, category, is_active.</p>
             <p className="text-xs text-muted-foreground">
-              Vendor/category labels are auto-created if new. Part numbers must be unique across existing and pasted rows.
+              Optional columns: bin_location, location, min_qty, max_qty, has_core, core_cost. Vendor/category labels are auto-created if new. Part numbers must be unique across existing and pasted rows.
             </p>
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex-1 overflow-auto space-y-4 pr-1">
           <div className="space-y-2">
-            <Label htmlFor="parts-import-text">Paste rows</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="parts-import-text">Paste rows</Label>
+              <Button variant="outline" size="sm" onClick={handleDownloadTemplate}>
+                <Download className="w-4 h-4 mr-2" />
+                Download Excel Template
+              </Button>
+            </div>
             <Textarea
               id="parts-import-text"
               placeholder="Paste CSV or tab-separated rows including headers…"
@@ -239,13 +313,15 @@ export function ImportPartsDialog({ open, onOpenChange, parts, vendors, categori
                     <TableHead className="text-right">Cost</TableHead>
                     <TableHead className="text-right">Price</TableHead>
                     <TableHead className="text-right">QOH</TableHead>
+                    <TableHead>Bin</TableHead>
+                    <TableHead>Min/Max</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {parseResult.rows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center text-muted-foreground">
+                      <TableCell colSpan={10} className="text-center text-muted-foreground">
                         Paste data to preview.
                       </TableCell>
                     </TableRow>
@@ -259,6 +335,12 @@ export function ImportPartsDialog({ open, onOpenChange, parts, vendors, categori
                         <TableCell className="text-right text-xs">${Number.isFinite(row.cost) ? row.cost.toFixed(2) : '—'}</TableCell>
                         <TableCell className="text-right text-xs">${Number.isFinite(row.selling_price) ? row.selling_price.toFixed(2) : '—'}</TableCell>
                         <TableCell className="text-right text-xs">{row.quantity_on_hand}</TableCell>
+                        <TableCell className="text-xs">{row.bin_location || '—'}</TableCell>
+                        <TableCell className="text-xs">
+                          {row.min_qty != null || row.max_qty != null
+                            ? `${row.min_qty ?? '—'}/${row.max_qty ?? '—'}`
+                            : '—'}
+                        </TableCell>
                         <TableCell>
                           {row.errors.length === 0 ? (
                             <Badge variant="secondary" className="text-xs">
@@ -282,6 +364,58 @@ export function ImportPartsDialog({ open, onOpenChange, parts, vendors, categori
               </Table>
             </ScrollArea>
           </div>
+
+          {partsImportHistory.length > 0 && (
+            <div className="rounded-lg border">
+              <button
+                type="button"
+                onClick={() => setHistoryExpanded(!historyExpanded)}
+                className="w-full flex items-center justify-between p-3 hover:bg-muted/50 transition-colors"
+              >
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <History className="w-4 h-4" />
+                  Import History ({partsImportHistory.length})
+                </div>
+                {historyExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
+              {historyExpanded && (
+                <div className="border-t">
+                  <ScrollArea className="h-64">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead className="text-right">Total</TableHead>
+                          <TableHead className="text-right">Valid</TableHead>
+                          <TableHead className="text-right">Created</TableHead>
+                          <TableHead className="text-right">Vendors</TableHead>
+                          <TableHead className="text-right">Categories</TableHead>
+                          <TableHead className="text-right">Skipped</TableHead>
+                          <TableHead className="text-right">Failed</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {partsImportHistory.map((entry) => (
+                          <TableRow key={entry.id}>
+                            <TableCell className="text-xs whitespace-nowrap">
+                              {new Date(entry.performed_at).toLocaleString()}
+                            </TableCell>
+                            <TableCell className="text-right text-xs">{entry.total_rows}</TableCell>
+                            <TableCell className="text-right text-xs">{entry.valid_rows}</TableCell>
+                            <TableCell className="text-right text-xs">{entry.partsCreated}</TableCell>
+                            <TableCell className="text-right text-xs">{entry.vendorsCreated}</TableCell>
+                            <TableCell className="text-right text-xs">{entry.categoriesCreated}</TableCell>
+                            <TableCell className="text-right text-xs">{entry.skipped_rows}</TableCell>
+                            <TableCell className="text-right text-xs">{entry.failed_rows}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </ScrollArea>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
