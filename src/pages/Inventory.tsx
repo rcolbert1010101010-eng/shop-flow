@@ -1,13 +1,21 @@
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { DataTable, Column } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
-import { Plus, X as XIcon } from 'lucide-react';
+import { FileSpreadsheet, Plus, Settings2, X as XIcon } from 'lucide-react';
 import { useRepos } from '@/repos';
 import type { Part } from '@/types';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import {
   DropdownMenu,
@@ -33,9 +41,11 @@ import {
 } from '@/components/ui/table';
 import { useShopStore } from '@/stores/shopStore';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import { ResponsiveDataList } from '@/components/common/ResponsiveDataList';
 import { useIsMobile } from '@/hooks/useIsMobile';
-import { TableDensitySelect } from '@/components/ui/TableDensitySelect';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { ImportPartsDialog } from '@/components/inventory/ImportPartsDialog';
 
 export default function Inventory() {
   const navigate = useNavigate();
@@ -72,12 +82,41 @@ export default function Inventory() {
   const countInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [searchInput, setSearchInput] = useState(() => searchParams.get('search') || '');
   const [bulkSelectMode, setBulkSelectMode] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [bulkAction, setBulkAction] = useState<'none' | 'vendor' | 'category' | 'active' | 'price'>('none');
+  const [bulkVendorId, setBulkVendorId] = useState<string | null>(null);
+  const [bulkCategoryId, setBulkCategoryId] = useState<string | null>(null);
+  const [bulkActiveState, setBulkActiveState] = useState<'active' | 'inactive' | ''>('');
+  const [priceAdjustType, setPriceAdjustType] = useState<'percent' | 'flat'>('percent');
+  const [priceAdjustValue, setPriceAdjustValue] = useState('');
+  const [bulkSummary, setBulkSummary] = useState<string | null>(null);
   const isMobile = useIsMobile();
   const toNumber = (value: number | string | null | undefined) => {
     const numeric = typeof value === 'number' ? value : value != null ? Number(value) : NaN;
     return Number.isFinite(numeric) ? numeric : 0;
   };
   const formatMoney = (value: number | string | null | undefined) => `$${toNumber(value).toFixed(2)}`;
+  const bulkActionLabels: Record<'vendor' | 'category' | 'active' | 'price', string> = {
+    vendor: 'Set Vendor',
+    category: 'Set Category',
+    active: 'Set Active/Inactive',
+    price: 'Apply Price Adjustment',
+  };
+  const computeAdjustedPrice = useCallback(
+    (part: Part) => {
+      const base = toNumber(part.selling_price);
+      const delta = Number(priceAdjustValue);
+      if (!Number.isFinite(delta)) {
+        throw new Error('Enter a valid price adjustment value');
+      }
+      const next =
+        priceAdjustType === 'percent'
+          ? base * (1 + delta / 100)
+          : base + delta;
+      return Math.max(0, Math.round(next * 100) / 100);
+    },
+    [priceAdjustType, priceAdjustValue]
+  );
   const movementSummary = useMemo(() => {
     const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
     const summary: Record<string, { lastCountedAt: string | null; delta30d: number }> = {};
@@ -379,7 +418,6 @@ export default function Inventory() {
     }, 300);
     return () => clearTimeout(handler);
   }, [searchInput, searchParams, setSearchParams]);
-
   const recentMovements = useMemo(() => {
     if (!selectedPart) return [];
     return inventoryMovements
@@ -437,6 +475,9 @@ export default function Inventory() {
     () => filteredParts.filter((p) => selectedIds[p.id]),
     [filteredParts, selectedIds]
   );
+  useEffect(() => {
+    setBulkSummary(null);
+  }, [bulkAction, selectedParts.length]);
   const invalidCount = useMemo(
     () =>
       selectedParts.filter((p) => {
@@ -485,6 +526,68 @@ export default function Inventory() {
     }
     return issues;
   }, [bulkSelectMode, selectedParts]);
+  const bulkActionReady = useMemo(() => {
+    switch (bulkAction) {
+      case 'vendor':
+        return Boolean(bulkVendorId);
+      case 'category':
+        return Boolean(bulkCategoryId);
+      case 'active':
+        return Boolean(bulkActiveState);
+      case 'price': {
+        const parsed = Number(priceAdjustValue);
+        return priceAdjustValue.trim() !== '' && Number.isFinite(parsed);
+      }
+      default:
+        return false;
+    }
+  }, [bulkAction, bulkActiveState, bulkCategoryId, bulkVendorId, priceAdjustValue]);
+  const bulkEditMutation = useMutation({
+    mutationFn: async () => {
+      if (!bulkSelectMode) throw new Error('Enable bulk select to run bulk actions.');
+      if (selectedParts.length === 0) throw new Error('Select at least one part.');
+      if (bulkAction === 'none') throw new Error('Choose a bulk action from the menu.');
+
+      const attempted = selectedParts.length;
+      let updated = 0;
+      const updates: Promise<unknown>[] = [];
+
+      selectedParts.forEach((part) => {
+        const patch: Partial<Part> = {};
+        if (bulkAction === 'vendor') {
+          if (!bulkVendorId) throw new Error('Select a vendor to apply.');
+          patch.vendor_id = bulkVendorId;
+        } else if (bulkAction === 'category') {
+          if (!bulkCategoryId) throw new Error('Select a category to apply.');
+          patch.category_id = bulkCategoryId;
+        } else if (bulkAction === 'active') {
+          if (!bulkActiveState) throw new Error('Choose Active or Inactive.');
+          patch.is_active = bulkActiveState === 'active';
+        } else if (bulkAction === 'price') {
+          patch.selling_price = computeAdjustedPrice(part);
+        }
+        if (Object.keys(patch).length > 0) {
+          updates.push(Promise.resolve(repos.parts.updatePart(part.id, patch)));
+          updated += 1;
+        }
+      });
+
+      if (updated === 0) throw new Error('No changes to apply.');
+      await Promise.all(updates);
+      return { attempted, updated, skipped: attempted - updated };
+    },
+    onSuccess: (result) => {
+      const label = bulkAction !== 'none' ? bulkActionLabels[bulkAction] : 'Bulk action';
+      const message = `${result.updated} updated • ${result.skipped} skipped`;
+      setBulkSummary(`${label}: ${message}`);
+      setSelectedIds({});
+      toast({ title: 'Bulk update applied', description: message });
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : 'Bulk action failed';
+      toast({ title: 'Bulk action failed', description: message, variant: 'destructive' });
+    },
+  });
   const adjustIssues = useMemo(() => {
     const issues: string[] = [];
     if (!selectedPart) issues.push('Select a part to adjust.');
@@ -827,15 +930,22 @@ export default function Inventory() {
   };
 
   return (
-    <div className="page-container">
+    <TooltipProvider>
+      <div className="page-container">
       <PageHeader
-        title="Parts"
-        subtitle="Manage parts, stock levels, and procurement"
+        title="Inventory"
+        subtitle="Manage parts and stock levels"
         actions={
-          <Button onClick={() => navigate('/inventory/new')}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Part
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
+              <FileSpreadsheet className="w-4 h-4 mr-2" />
+              Import Parts
+            </Button>
+            <Button onClick={() => navigate('/inventory/new')}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Part
+            </Button>
+          </div>
         }
       />
 
@@ -866,6 +976,12 @@ export default function Inventory() {
                   const next = !prev;
                   if (next) {
                     setBulkSelectMode(false);
+                    setBulkAction('none');
+                    setBulkVendorId(null);
+                    setBulkCategoryId(null);
+                    setBulkActiveState('');
+                    setPriceAdjustValue('');
+                    setBulkSummary(null);
                     setSelectedIds({});
                     setCountInputs({});
                     setBatchReason('');
@@ -892,6 +1008,12 @@ export default function Inventory() {
                     setCountInputs({});
                     setBatchReason('');
                     setBatchSummary(null);
+                    setBulkAction('none');
+                    setBulkVendorId(null);
+                    setBulkCategoryId(null);
+                    setBulkActiveState('');
+                    setPriceAdjustValue('');
+                    setBulkSummary(null);
                   }
                   return next;
                 });
@@ -901,7 +1023,7 @@ export default function Inventory() {
               {bulkSelectMode ? 'Exit Bulk Select' : 'Bulk Select'}
             </Button>
           </div>
-          <div className="flex flex-wrap items-center gap-2 lg:ml-auto w-full lg:w-auto justify-end">
+          <div className="flex items-center gap-2 lg:ml-auto w-full lg:w-auto">
             <Input
               placeholder="Search parts"
               value={searchInput}
@@ -918,7 +1040,6 @@ export default function Inventory() {
                 <XIcon className="w-4 h-4" />
               </Button>
             )}
-            <TableDensitySelect />
           </div>
         </div>
 
@@ -1007,54 +1128,199 @@ export default function Inventory() {
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 <span className="font-semibold">Bulk actions:</span>
                 <span className="text-muted-foreground">Selected {selectedParts.length} part(s)</span>
+                {bulkSummary && <Badge variant="outline">{bulkSummary}</Badge>}
               </div>
-              {selectedParts.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Select parts from the table to create draft purchase orders.
-                </p>
-              ) : (
-                <>
-                  {poPreview.groups.length > 0 && (
-                    <div className="space-y-1 text-sm">
-                      {poPreview.groups.map((g) => (
-                        <div key={g.vendorId} className="flex justify-between">
-                          <span>{g.name}</span>
-                          <span className="text-muted-foreground">
-                            {g.parts} part(s) • Suggested {g.total}
-                          </span>
-                        </div>
-                      ))}
-                      {poPreview.skipped > 0 && (
-                        <div className="text-[11px] text-muted-foreground">
-                          Skipped {poPreview.skipped} without vendor/qty
+              <div className="grid gap-3 lg:grid-cols-2">
+                <div className="space-y-2 rounded-md border bg-background p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold">Draft Purchase Orders</span>
+                    <Badge variant="secondary">{poPreview.groups.length} vendor group(s)</Badge>
+                  </div>
+                  {selectedParts.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      Select parts from the table to create draft purchase orders.
+                    </p>
+                  ) : (
+                    <>
+                      {poPreview.groups.length > 0 && (
+                        <div className="space-y-1 text-sm">
+                          {poPreview.groups.map((g) => (
+                            <div key={g.vendorId} className="flex justify-between">
+                              <span>{g.name}</span>
+                              <span className="text-muted-foreground">
+                                {g.parts} part(s) • Suggested {g.total}
+                              </span>
+                            </div>
+                          ))}
+                          {poPreview.skipped > 0 && (
+                            <div className="text-[11px] text-muted-foreground">
+                              Skipped {poPreview.skipped} without vendor/qty
+                            </div>
+                          )}
                         </div>
                       )}
+                    </>
+                  )}
+                  {poIssues.length > 0 ? (
+                    <ul className="list-disc list-inside text-destructive text-sm">
+                      {poIssues.map((issue) => (
+                        <li key={issue}>{issue}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Ready to create draft purchase order(s) from selection.</p>
+                  )}
+                  <div className="flex gap-2">
+                    <Button onClick={handleCreateDraftPO} disabled={poIssues.length > 0 || selectedParts.length === 0}>
+                      Create Draft PO
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setSelectedIds({});
+                        setBulkSelectMode(false);
+                      }}
+                    >
+                      Clear Selection
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-3 rounded-md border bg-background p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-semibold">Bulk Edit</span>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm">
+                          <Settings2 className="w-4 h-4 mr-2" />
+                          Bulk Actions
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start">
+                        <DropdownMenuItem onClick={() => setBulkAction('vendor')}>Set Vendor</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setBulkAction('category')}>Set Category</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setBulkAction('active')}>Set Active/Inactive</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setBulkAction('price')}>Apply Price Adjustment</DropdownMenuItem>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <DropdownMenuItem disabled className="opacity-60">
+                              Adjust QOH (blocked)
+                            </DropdownMenuItem>
+                          </TooltipTrigger>
+                          <TooltipContent side="right">
+                            Quantity on hand requires inventory adjustments or receiving.
+                          </TooltipContent>
+                        </Tooltip>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    {bulkAction !== 'none' && (
+                      <Badge variant="secondary">{bulkActionLabels[bulkAction]}</Badge>
+                    )}
+                    <Badge variant="outline">Non-destructive: no deletes</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Bulk edits update metadata and pricing only. QOH edits are blocked; use Receive Inventory or Adjust QOH for quantities.
+                  </p>
+
+                  {bulkAction === 'vendor' && (
+                    <div className="space-y-2">
+                      <Label>Vendor</Label>
+                      <Select value={bulkVendorId ?? undefined} onValueChange={(val) => setBulkVendorId(val)}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Choose vendor" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {vendors.map((v) => (
+                            <SelectItem key={v.id} value={v.id}>
+                              {v.vendor_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   )}
-                </>
-              )}
-              {poIssues.length > 0 ? (
-                <ul className="list-disc list-inside text-destructive text-sm">
-                  {poIssues.map((issue) => (
-                    <li key={issue}>{issue}</li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-muted-foreground">Ready to create draft purchase order(s) from selection.</p>
-              )}
-              <div className="flex gap-2">
-                <Button onClick={handleCreateDraftPO} disabled={poIssues.length > 0}>
-                  Create Draft PO
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setSelectedIds({});
-                    setBulkSelectMode(false);
-                  }}
-                >
-                  Clear Selection
-                </Button>
+
+                  {bulkAction === 'category' && (
+                    <div className="space-y-2">
+                      <Label>Category</Label>
+                      <Select value={bulkCategoryId ?? undefined} onValueChange={(val) => setBulkCategoryId(val)}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Choose category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {categories.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.category_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  {bulkAction === 'active' && (
+                    <div className="space-y-2">
+                      <Label>Status</Label>
+                      <Select value={bulkActiveState || undefined} onValueChange={(val: 'active' | 'inactive') => setBulkActiveState(val)}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Set active or inactive" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="active">Set Active</SelectItem>
+                          <SelectItem value="inactive">Set Inactive</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  {bulkAction === 'price' && (
+                    <div className="space-y-2">
+                      <Label>Price Adjustment</Label>
+                      <div className="grid grid-cols-[1fr,auto] gap-2 items-center">
+                        <Input
+                          type="number"
+                          value={priceAdjustValue}
+                          onChange={(e) => setPriceAdjustValue(e.target.value)}
+                          placeholder="Amount or percent"
+                        />
+                        <Select value={priceAdjustType} onValueChange={(val: 'percent' | 'flat') => setPriceAdjustType(val)}>
+                          <SelectTrigger className="w-36">
+                            <SelectValue placeholder="Mode" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="percent">Percent</SelectItem>
+                            <SelectItem value="flat">Flat $</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Applies to selling price only. Negative values are allowed but prices are floored at $0.00.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      onClick={() => bulkEditMutation.mutate()}
+                      disabled={!bulkActionReady || selectedParts.length === 0 || bulkEditMutation.isPending}
+                    >
+                      {bulkEditMutation.isPending ? 'Applying…' : `Apply to ${selectedParts.length || 0} part(s)`}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setBulkAction('none');
+                        setBulkVendorId(null);
+                        setBulkCategoryId(null);
+                        setBulkActiveState('');
+                        setPriceAdjustValue('');
+                        setBulkSummary(null);
+                      }}
+                    >
+                      Reset
+                    </Button>
+                  </div>
+                </div>
               </div>
             </>
           )}
@@ -1255,6 +1521,15 @@ export default function Inventory() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ImportPartsDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
+        parts={parts}
+        vendors={vendors}
+        categories={categories}
+      />
     </div>
+    </TooltipProvider>
   );
 }
