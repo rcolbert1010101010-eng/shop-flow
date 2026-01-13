@@ -64,6 +64,7 @@ import { ResponsiveDataList } from '@/components/common/ResponsiveDataList';
 import { AdaptiveDialog } from '@/components/common/AdaptiveDialog';
 import { MobileActionBar, MobileActionBarSpacer } from '@/components/common/MobileActionBar';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { normalizeQty, formatQtyWithUom } from '@/lib/utils';
 
 const BROWSE_PARTS_PAGE_SIZE = 25;
 
@@ -423,8 +424,13 @@ export default function SalesOrderDetail() {
       toast({ title: 'Locked', description: 'Order is locked and cannot be edited.', variant: 'destructive' });
       return;
     }
-    const qty = parseInt(partQty) || 1;
-    const result = soAddPartLine(currentOrder.id, selectedPartId, qty);
+    const part = repos.parts.parts.find((p) => p.id === selectedPartId);
+    const qtyResult = normalizeQty(part, partQty);
+    if (!qtyResult.ok) {
+      toast({ title: 'Validation Error', description: qtyResult.error, variant: 'destructive' });
+      return;
+    }
+    const result = soAddPartLine(currentOrder.id, selectedPartId, qtyResult.qty);
     if (result.success) {
       toast({ title: 'Part Added' });
       setAddPartDialogOpen(false);
@@ -436,16 +442,24 @@ export default function SalesOrderDetail() {
     }
   };
 
-  const handleUpdateQty = (lineId: string, newQty: number) => {
+  const handleUpdateQty = (lineId: string, newQty: number | string) => {
     if (isLocked) {
       toast({ title: 'Locked', description: 'Order is locked and cannot be edited.', variant: 'destructive' });
       return;
     }
-    if (newQty <= 0) {
+    const line = lines.find((l) => l.id === lineId);
+    if (!line) return;
+    const part = repos.parts.parts.find((p) => p.id === line.part_id);
+    const qtyResult = normalizeQty(part, newQty);
+    if (!qtyResult.ok) {
+      toast({ title: 'Validation Error', description: qtyResult.error, variant: 'destructive' });
+      return;
+    }
+    if (qtyResult.qty <= 0) {
       handleRemoveLine(lineId);
       return;
     }
-    const result = soUpdatePartQty(lineId, newQty);
+    const result = soUpdatePartQty(lineId, qtyResult.qty);
     if (!result.success) {
       toast({ title: 'Error', description: result.error, variant: 'destructive' });
     } else {
@@ -1233,13 +1247,14 @@ export default function SalesOrderDetail() {
                       <div className="space-y-1">
                         <div className="text-xs text-muted-foreground">Qty</div>
                         {isLocked ? (
-                          <div className="font-medium">{line.quantity}</div>
+                          <div className="font-medium">{formatQtyWithUom(line.quantity, part)}</div>
                         ) : (
                           <Input
                             type="number"
-                            min="1"
+                            min="0"
+                            step={part?.uom === 'EA' ? '1' : '0.01'}
                             value={line.quantity}
-                            onChange={(e) => handleUpdateQty(line.id, parseInt(e.target.value) || 0)}
+                            onChange={(e) => handleUpdateQty(line.id, e.target.value)}
                             className="w-full"
                           />
                         )}
@@ -1413,8 +1428,17 @@ export default function SalesOrderDetail() {
                                 )}
                               </TableCell>
                               <TableCell className="text-right">
-                                {isLocked ? line.quantity : (
-                                  <Input type="number" min="1" value={line.quantity} onChange={(e) => handleUpdateQty(line.id, parseInt(e.target.value) || 0)} className="w-16 text-right" />
+                                {isLocked ? (
+                                  <span>{formatQtyWithUom(line.quantity, part)}</span>
+                                ) : (
+                                  <Input 
+                                    type="number" 
+                                    min="0" 
+                                    step={part?.uom === 'EA' ? '1' : '0.01'}
+                                    value={line.quantity} 
+                                    onChange={(e) => handleUpdateQty(line.id, e.target.value)} 
+                                    className="w-16 text-right" 
+                                  />
                                 )}
                               </TableCell>
                               <TableCell className="text-right">

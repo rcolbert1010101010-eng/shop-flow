@@ -67,6 +67,7 @@ import { AdaptiveDialog } from '@/components/common/AdaptiveDialog';
 import { ResponsiveDataList } from '@/components/common/ResponsiveDataList';
 import { MobileActionBar, MobileActionBarSpacer } from '@/components/common/MobileActionBar';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { normalizeQty, formatQtyWithUom } from '@/lib/utils';
 import type {
   FabJobLine,
   PlasmaJobLine,
@@ -987,8 +988,13 @@ const jobReadinessValues = Object.values(jobReadinessById);
 
   const handleAddPart = () => {
     if (!selectedPartId || !currentOrder) return;
-    const qty = parseInt(partQty) || 1;
-    const result = woAddPartLine(currentOrder.id, selectedPartId, qty, partDialogJobLineId ?? null);
+    const part = repos.parts.parts.find((p) => p.id === selectedPartId);
+    const qtyResult = normalizeQty(part, partQty);
+    if (!qtyResult.ok) {
+      toast({ title: 'Validation Error', description: qtyResult.error, variant: 'destructive' });
+      return;
+    }
+    const result = woAddPartLine(currentOrder.id, selectedPartId, qtyResult.qty, partDialogJobLineId ?? null);
     if (result.success) {
       toast({ title: 'Part Added' });
       handlePartDialogOpenChange(false);
@@ -1073,12 +1079,20 @@ const jobReadinessValues = Object.values(jobReadinessById);
     setSelectedPartId(newPart.id);
   };
 
-  const handleUpdateQty = (lineId: string, newQty: number) => {
-    if (newQty <= 0) {
+  const handleUpdateQty = (lineId: string, newQty: number | string) => {
+    const line = partLines.find((l) => l.id === lineId);
+    if (!line) return;
+    const part = repos.parts.parts.find((p) => p.id === line.part_id);
+    const qtyResult = normalizeQty(part, newQty);
+    if (!qtyResult.ok) {
+      toast({ title: 'Validation Error', description: qtyResult.error, variant: 'destructive' });
+      return;
+    }
+    if (qtyResult.qty <= 0) {
       handleRemovePartLine(lineId);
       return;
     }
-    const result = woUpdatePartQty(lineId, newQty);
+    const result = woUpdatePartQty(lineId, qtyResult.qty);
     if (!result.success) {
       toast({ title: 'Error', description: result.error, variant: 'destructive' });
     }
@@ -2140,7 +2154,7 @@ const jobReadinessValues = Object.values(jobReadinessById);
                               <TableRow key={line.id}>
                                 <TableCell className="font-mono">{part?.part_number || '-'}</TableCell>
                                 <TableCell>{part?.description || line.description || '-'}</TableCell>
-                                <TableCell className="text-right">{line.quantity}</TableCell>
+                                <TableCell className="text-right">{formatQtyWithUom(line.quantity, part)}</TableCell>
                                 <TableCell className="text-right">
                                   <div className="flex flex-col items-end gap-1">
                                     <span>${formatNumber(line.unit_price)}</span>
@@ -2597,7 +2611,7 @@ const jobReadinessValues = Object.values(jobReadinessById);
                                           <TableRow key={line.id}>
                                             <TableCell className="font-mono">{part?.part_number || '-'}</TableCell>
                                             <TableCell>{part?.description || line.description || '-'}</TableCell>
-                                            <TableCell className="text-right">{line.quantity}</TableCell>
+                                            <TableCell className="text-right">{formatQtyWithUom(line.quantity, part)}</TableCell>
                                             <TableCell className="text-right font-medium">
                                               {line.is_warranty ? (
                                                 <span className="text-muted-foreground">$0.00</span>
@@ -2762,13 +2776,14 @@ const jobReadinessValues = Object.values(jobReadinessById);
                         <div className="space-y-1">
                           <div className="text-xs text-muted-foreground">Qty</div>
                           {isInvoiced ? (
-                            <div className="font-medium">{line.quantity}</div>
+                            <div className="font-medium">{formatQtyWithUom(line.quantity, part)}</div>
                           ) : (
                             <Input
                               type="number"
-                              min="1"
+                              min="0"
+                              step={part?.uom === 'EA' ? '1' : '0.01'}
                               value={line.quantity}
-                              onChange={(e) => handleUpdateQty(line.id, parseInt(e.target.value) || 0)}
+                              onChange={(e) => handleUpdateQty(line.id, e.target.value)}
                               className="w-full"
                             />
                           )}
@@ -2915,8 +2930,17 @@ const jobReadinessValues = Object.values(jobReadinessById);
                                   )}
                                 </TableCell>
                                 <TableCell className="text-right">
-                                  {isInvoiced ? line.quantity : (
-                                    <Input type="number" min="1" value={line.quantity} onChange={(e) => handleUpdateQty(line.id, parseInt(e.target.value) || 0)} className="w-16 text-right" />
+                                  {isInvoiced ? (
+                                    <span>{formatQtyWithUom(line.quantity, part)}</span>
+                                  ) : (
+                                    <Input 
+                                      type="number" 
+                                      min="0" 
+                                      step={part?.uom === 'EA' ? '1' : '0.01'}
+                                      value={line.quantity} 
+                                      onChange={(e) => handleUpdateQty(line.id, e.target.value)} 
+                                      className="w-16 text-right" 
+                                    />
                                   )}
                                 </TableCell>
                                 <TableCell className="text-right">

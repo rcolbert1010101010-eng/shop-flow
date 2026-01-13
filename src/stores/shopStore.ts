@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { calcPartPriceForLevel } from '@/domain/pricing/partPricing';
-import { normalizePhone } from '@/lib/utils';
+import { normalizePhone, normalizeQty } from '@/lib/utils';
 import type {
   SystemSettings,
   Customer,
@@ -1846,6 +1846,13 @@ export const useShopStore = create<ShopState>()(
         const part = state.parts.find((p) => p.id === partId);
         if (!part) return { success: false, error: 'Part not found' };
 
+        // Normalize quantity based on UOM rules
+        const qtyResult = normalizeQty(part, qty);
+        if (!qtyResult.ok) {
+          return { success: false, error: qtyResult.error };
+        }
+        const normalizedQty = qtyResult.qty;
+
         const customer = state.customers.find((c) => c.id === order.customer_id);
         const level = customer?.price_level ?? 'RETAIL';
         const suggested = calcPartPriceForLevel(part, state.settings, level);
@@ -1856,7 +1863,7 @@ export const useShopStore = create<ShopState>()(
         );
 
         if (existingLine) {
-          const newQty = existingLine.quantity + qty;
+          const newQty = existingLine.quantity + normalizedQty;
           const lineTotal = newQty * existingLine.unit_price;
           
           set((state) => ({
@@ -1871,9 +1878,9 @@ export const useShopStore = create<ShopState>()(
             id: generateId(),
             sales_order_id: orderId,
             part_id: partId,
-            quantity: qty,
+            quantity: normalizedQty,
             unit_price: unitPrice,
-            line_total: qty * unitPrice,
+            line_total: normalizedQty * unitPrice,
             is_warranty: false,
             core_charge: part.core_required ? part.core_charge : 0,
             core_returned: false,
@@ -1905,13 +1912,23 @@ export const useShopStore = create<ShopState>()(
         if (!order) return { success: false, error: 'Order not found' };
         if (order.status === 'INVOICED' || order.status === 'CANCELLED') return { success: false, error: 'Cannot modify locked order' };
 
-        const delta = line.quantity - newQty;
-        const lineTotal = newQty * line.unit_price;
+        const part = state.parts.find((p) => p.id === line.part_id);
+        if (!part) return { success: false, error: 'Part not found' };
+
+        // Normalize quantity based on UOM rules
+        const qtyResult = normalizeQty(part, newQty);
+        if (!qtyResult.ok) {
+          return { success: false, error: qtyResult.error };
+        }
+        const normalizedQty = qtyResult.qty;
+
+        const delta = line.quantity - normalizedQty;
+        const lineTotal = normalizedQty * line.unit_price;
 
         set((state) => ({
           salesOrderLines: state.salesOrderLines.map((l) =>
             l.id === lineId
-              ? { ...l, quantity: newQty, line_total: lineTotal, updated_at: now() }
+              ? { ...l, quantity: normalizedQty, line_total: lineTotal, updated_at: now() }
               : l
           ),
         }));
@@ -2552,7 +2569,15 @@ export const useShopStore = create<ShopState>()(
         
         const part = state.parts.find((p) => p.id === partId);
         if (!part) return { success: false, error: 'Part not found' };
-        const componentDeltas = part.is_kit ? getKitComponentDeltas(part.id, qty, state.kitComponents) : null;
+
+        // Normalize quantity based on UOM rules
+        const qtyResult = normalizeQty(part, qty);
+        if (!qtyResult.ok) {
+          return { success: false, error: qtyResult.error };
+        }
+        const normalizedQty = qtyResult.qty;
+
+        const componentDeltas = part.is_kit ? getKitComponentDeltas(part.id, normalizedQty, state.kitComponents) : null;
         const customer = state.customers.find((c) => c.id === order.customer_id);
         const level = customer?.price_level ?? 'RETAIL';
         const suggested = calcPartPriceForLevel(part, state.settings, level);
@@ -2566,7 +2591,7 @@ export const useShopStore = create<ShopState>()(
         );
 
         if (existingLine) {
-          const newQty = existingLine.quantity + qty;
+          const newQty = existingLine.quantity + normalizedQty;
           const lineTotal = newQty * existingLine.unit_price;
           const timestamp = now();
           set((state) => ({
@@ -2580,7 +2605,7 @@ export const useShopStore = create<ShopState>()(
                 return { ...p, quantity_on_hand: p.quantity_on_hand - componentDeltas[p.id], updated_at: timestamp };
               }
               if (!part.is_kit && p.id === partId) {
-                return { ...p, quantity_on_hand: p.quantity_on_hand - qty, updated_at: timestamp };
+                return { ...p, quantity_on_hand: p.quantity_on_hand - normalizedQty, updated_at: timestamp };
               }
               return p;
             }),
@@ -2601,7 +2626,7 @@ export const useShopStore = create<ShopState>()(
             get().recordInventoryMovement({
               part_id: partId,
               movement_type: 'ISSUE',
-              qty_delta: -qty,
+              qty_delta: -normalizedQty,
               reason: `WO ${order.order_number || order.id} part issue`,
               ref_type: 'WORK_ORDER',
               ref_id: orderId,
@@ -2638,7 +2663,7 @@ export const useShopStore = create<ShopState>()(
                 return { ...p, quantity_on_hand: p.quantity_on_hand - componentDeltas[p.id], updated_at: timestamp };
               }
               if (!part.is_kit && p.id === partId) {
-                return { ...p, quantity_on_hand: p.quantity_on_hand - qty, updated_at: timestamp };
+                return { ...p, quantity_on_hand: p.quantity_on_hand - normalizedQty, updated_at: timestamp };
               }
               return p;
             }),
@@ -2659,7 +2684,7 @@ export const useShopStore = create<ShopState>()(
             get().recordInventoryMovement({
               part_id: partId,
               movement_type: 'ISSUE',
-              qty_delta: -qty,
+              qty_delta: -normalizedQty,
               reason: `WO ${order.order_number || order.id} part issue`,
               ref_type: 'WORK_ORDER',
               ref_id: orderId,
@@ -2694,7 +2719,7 @@ export const useShopStore = create<ShopState>()(
         set((state) => ({
           workOrderPartLines: state.workOrderPartLines.map((l) =>
             l.id === lineId
-              ? { ...l, quantity: newQty, line_total: lineTotal, updated_at: timestamp }
+              ? { ...l, quantity: normalizedQty, line_total: lineTotal, updated_at: timestamp }
               : l
           ),
           parts: state.parts.map((p) => {
