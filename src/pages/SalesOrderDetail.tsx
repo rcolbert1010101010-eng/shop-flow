@@ -65,6 +65,7 @@ import { AdaptiveDialog } from '@/components/common/AdaptiveDialog';
 import { MobileActionBar, MobileActionBarSpacer } from '@/components/common/MobileActionBar';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { normalizeQty, formatQtyWithUom } from '@/lib/utils';
+import { HelpTooltip } from '@/components/help/HelpTooltip';
 
 const BROWSE_PARTS_PAGE_SIZE = 25;
 
@@ -771,7 +772,10 @@ export default function SalesOrderDetail() {
           <h2 className="text-lg font-semibold mb-4">Order Details</h2>
           <div className="space-y-4">
             <div>
-              <Label>Customer *</Label>
+              <Label className="flex items-center gap-1">
+                Customer *
+                <HelpTooltip content="Customer drives billing and history. Pick it first." />
+              </Label>
               <div className="flex items-center gap-2">
                 <SmartSearchSelect
                   label={undefined}
@@ -806,7 +810,10 @@ export default function SalesOrderDetail() {
 
             {selectedCustomerId && selectedCustomerId !== 'walkin' && customerUnits.length > 0 && (
               <div>
-                <Label>Unit (optional)</Label>
+                <Label className="flex items-center gap-1">
+                  Unit (optional)
+                  <HelpTooltip content="Attach a unit when the sale is tied to an asset for clean service history." />
+                </Label>
                 <SmartSearchSelect
                   label={undefined}
                   items={[{ id: NONE_UNIT, label: 'No unit', searchText: 'none' }, ...unitItems]}
@@ -828,7 +835,7 @@ export default function SalesOrderDetail() {
               <p className="text-sm text-muted-foreground">Walk-in customers cannot have units assigned.</p>
             )}
 
-            <Button onClick={handleCreateOrder} className="w-full">
+            <Button onClick={handleCreateOrder} className="w-full" title={isNew ? 'Create Order' : 'Saves changes without changing status.'}>
               <Save className="w-4 h-4 mr-2" />
               {isNew ? 'Create Order' : 'Save'}
             </Button>
@@ -837,7 +844,10 @@ export default function SalesOrderDetail() {
 
         <QuickAddDialog open={quickAddCustomerOpen} onOpenChange={setQuickAddCustomerOpen} title="Quick Add Customer" onSave={handleQuickAddCustomer} onCancel={() => setQuickAddCustomerOpen(false)}>
           <div>
-            <Label>Company Name *</Label>
+            <Label className="flex items-center gap-1">
+              Company Name *
+              <HelpTooltip content="Customer drives billing and history. Pick it first." />
+            </Label>
             <Input value={newCustomerName} onChange={(e) => setNewCustomerName(e.target.value)} placeholder="Enter company name" />
           </div>
         </QuickAddDialog>
@@ -1000,7 +1010,7 @@ export default function SalesOrderDetail() {
             {!isLocked && (
               <>
                 {isEstimate ? (
-                  <Button onClick={handleConvertToOpen}>
+                  <Button onClick={handleConvertToOpen} title="Moves from proposal to committed sale.">
                     <Save className="w-4 h-4 mr-2" />
                     Convert to Sales Order
                   </Button>
@@ -1014,7 +1024,7 @@ export default function SalesOrderDetail() {
                     </Button>
                     <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
                       <AlertDialogTrigger asChild>
-                        <Button variant="destructive">
+                        <Button variant="destructive" title="Stops the sale while preserving history. Use when the order won't be fulfilled.">
                           <Save className="w-4 h-4 mr-2" />
                           Cancel Order
                         </Button>
@@ -1045,7 +1055,7 @@ export default function SalesOrderDetail() {
                     <Button
                       onClick={() => setShowInvoiceDialog(true)}
                       disabled={isCustomerOnHold}
-                      title={isCustomerOnHold ? 'Customer is on credit hold' : undefined}
+                      title={isCustomerOnHold ? 'Customer is on credit hold' : 'Moves the sale into billing. Treat it like a lock mindset once invoiced.'}
                     >
                       <FileCheck className="w-4 h-4 mr-2" />
                       Invoice
@@ -1096,10 +1106,13 @@ export default function SalesOrderDetail() {
               <p className="font-medium">{new Date(currentOrder?.created_at || '').toLocaleString()}</p>
             </div>
             {currentOrder?.invoiced_at && (
-              <div>
-                <span className="text-muted-foreground">Invoiced:</span>
-                <p className="font-medium">{new Date(currentOrder.invoiced_at).toLocaleString()}</p>
-              </div>
+            <div>
+              <span className="text-muted-foreground flex items-center gap-1">
+                Invoiced:
+                <HelpTooltip content="When this order was invoiced." />
+              </span>
+              <p className="font-medium">{new Date(currentOrder.invoiced_at).toLocaleString()}</p>
+            </div>
             )}
             <div className="pt-2 border-t border-border space-y-2">
               <p className="text-sm font-medium">Purchase Orders</p>
@@ -1131,7 +1144,10 @@ export default function SalesOrderDetail() {
           {/* Notes Section */}
           <div className="mt-4 pt-4 border-t border-border">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-muted-foreground text-sm">Notes:</span>
+              <span className="text-muted-foreground text-sm flex items-center gap-1">
+                Notes:
+                <HelpTooltip content="Internal-only. Use for substitutions, approvals, special instructions." />
+              </span>
               {!isLocked && !isEditingNotes && (
                 <Button variant="ghost" size="sm" onClick={handleEditNotes}>
                   <Edit className="w-3 h-3" />
@@ -1166,7 +1182,7 @@ export default function SalesOrderDetail() {
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold">Parts</h2>
             {!isLocked && (
-              <Button size="sm" onClick={() => setAddPartDialogOpen(true)}>
+              <Button size="sm" onClick={() => setAddPartDialogOpen(true)} title="Add items to the sale. Use the real quantities and units.">
                 <Plus className="w-4 h-4 mr-2" />
                 Add Part
               </Button>
@@ -1374,13 +1390,38 @@ export default function SalesOrderDetail() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Part #</TableHead>
-                        <TableHead>Description</TableHead>
+                        <TableHead>
+                          <span className="flex items-center gap-1">
+                            Part #
+                            <HelpTooltip content="Pick the exact part number. This keeps pricing and inventory consistent." />
+                          </span>
+                        </TableHead>
+                        <TableHead>
+                          <span className="flex items-center gap-1">
+                            Description
+                            <HelpTooltip content="Confirm the item and clarify details if needed (size, brand, spec)." />
+                          </span>
+                        </TableHead>
                         <TableHead className="text-center">Warranty</TableHead>
                         <TableHead className="text-center">Core</TableHead>
-                        <TableHead className="text-right">Qty</TableHead>
-                        <TableHead className="text-right">Price</TableHead>
-                        <TableHead className="text-right">Total</TableHead>
+                        <TableHead className="text-right">
+                          <span className="flex items-center justify-end gap-1">
+                            Qty
+                            <HelpTooltip content="Quantity sold in the selected unit." />
+                          </span>
+                        </TableHead>
+                        <TableHead className="text-right">
+                          <span className="flex items-center justify-end gap-1">
+                            Price
+                            <HelpTooltip content="Sell price per unit. Adjust only when you have a reason." />
+                          </span>
+                        </TableHead>
+                        <TableHead className="text-right">
+                          <span className="flex items-center justify-end gap-1">
+                            Total
+                            <HelpTooltip content="Auto-calculated. This is what the customer pays for this line." />
+                          </span>
+                        </TableHead>
                         {!isLocked && <TableHead className="w-10"></TableHead>}
                       </TableRow>
                     </TableHeader>
@@ -1559,7 +1600,10 @@ export default function SalesOrderDetail() {
                 <span>${formatMoney(currentOrder?.tax_amount)}</span>
               </div>
               <div className="flex justify-between text-lg font-semibold border-t border-border pt-2">
-                <span>Total:</span>
+                <span className="flex items-center gap-1">
+                  Total:
+                  <HelpTooltip content="Final amount due before payments." />
+                </span>
                 <span>${formatMoney(currentOrder?.total)}</span>
               </div>
             </div>
@@ -1584,45 +1628,62 @@ export default function SalesOrderDetail() {
                   <span className="font-medium">${formatMoney(payments.summary.totalPaid)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Balance Due</span>
+                  <span className="text-muted-foreground flex items-center gap-1">
+                    Balance Due
+                    <HelpTooltip content="What's still unpaid on this order." />
+                  </span>
                   <span className="font-medium">${formatMoney(payments.summary.balanceDue)}</span>
                 </div>
               </div>
               <div className="space-y-2">
-                <p className="text-sm font-medium">Record Payment</p>
+                <p className="text-sm font-medium flex items-center gap-1">
+                  Record Payment
+                  <HelpTooltip content="Record a payment. Partial payments are fine." />
+                </p>
                 <div className="grid grid-cols-2 gap-2">
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder="Amount"
-                    value={paymentAmount}
-                    onChange={(e) => setPaymentAmount(e.target.value)}
-                  />
-                  <Select value={paymentMethod} onValueChange={(value) => setPaymentMethod(value as typeof paymentMethod)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Method" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PAYMENT_METHOD_OPTIONS.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="Amount"
+                      value={paymentAmount}
+                      onChange={(e) => setPaymentAmount(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Select value={paymentMethod} onValueChange={(value) => setPaymentMethod(value as typeof paymentMethod)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Method" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PAYMENT_METHOD_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground mt-1">How the customer paid (card, cash, ACH, etc.).</p>
+                  </div>
                 </div>
-                <Input
-                  placeholder="Reference (optional)"
-                  value={paymentReference}
-                  onChange={(e) => setPaymentReference(e.target.value)}
-                />
-                <Input
-                  placeholder="Notes (optional)"
-                  value={paymentNotes}
-                  onChange={(e) => setPaymentNotes(e.target.value)}
-                />
-                <Button onClick={handleAddPayment} disabled={!currentOrder || payments.addPayment.isPending}>
+                <div>
+                  <Input
+                    placeholder="Reference (optional)"
+                    value={paymentReference}
+                    onChange={(e) => setPaymentReference(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">Reference number, last 4, or approval code if needed.</p>
+                </div>
+                <div>
+                  <Input
+                    placeholder="Notes (optional)"
+                    value={paymentNotes}
+                    onChange={(e) => setPaymentNotes(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">Payment Notes — Reference number, last 4, or approval code if needed.</p>
+                </div>
+                <Button onClick={handleAddPayment} disabled={!currentOrder || payments.addPayment.isPending} title="Record a payment. Partial payments are fine.">
                   {payments.addPayment.isPending ? 'Saving...' : 'Add Payment'}
                 </Button>
               </div>
@@ -1653,6 +1714,7 @@ export default function SalesOrderDetail() {
                           variant="ghost"
                           onClick={() => handleVoidPayment(payment.id)}
                           disabled={payments.voidPayment.isPending}
+                          title="Reverses a payment while keeping an audit trail."
                         >
                           Void
                         </Button>
@@ -1764,7 +1826,10 @@ export default function SalesOrderDetail() {
       >
           <div className="space-y-4">
             <div>
-              <Label>Part *</Label>
+              <Label className="flex items-center gap-1">
+                Part *
+                <HelpTooltip content="Pick the exact part number. This keeps pricing and inventory consistent." />
+              </Label>
               <div className="flex items-center gap-2">
                 <SmartSearchSelect
                   label={undefined}
@@ -1827,7 +1892,10 @@ export default function SalesOrderDetail() {
               </div>
             )}
             <div>
-              <Label>Quantity</Label>
+              <Label className="flex items-center gap-1">
+                Quantity
+                <HelpTooltip content="Quantity sold in the selected unit." />
+              </Label>
               <Input type="number" min="1" value={partQty} onChange={(e) => setPartQty(e.target.value)} />
             </div>
           </div>
@@ -1941,7 +2009,10 @@ export default function SalesOrderDetail() {
       >
         <div className="space-y-3">
           <div>
-            <Label>Part Number *</Label>
+            <Label className="flex items-center gap-1">
+              Part Number *
+              <HelpTooltip content="Pick the exact part number. This keeps pricing and inventory consistent." />
+            </Label>
             <Input
               value={newPartData.part_number}
               onChange={(e) => setNewPartData({ ...newPartData, part_number: e.target.value.toUpperCase() })}
@@ -1950,7 +2021,10 @@ export default function SalesOrderDetail() {
             />
           </div>
           <div>
-            <Label>Description</Label>
+            <Label className="flex items-center gap-1">
+              Description
+              <HelpTooltip content="Confirm the item and clarify details if needed (size, brand, spec)." />
+            </Label>
             <Textarea
               value={newPartData.description}
               onChange={(e) => setNewPartData({ ...newPartData, description: e.target.value })}
@@ -1960,7 +2034,10 @@ export default function SalesOrderDetail() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label>Vendor *</Label>
+              <Label className="flex items-center gap-1">
+                Vendor *
+                <HelpTooltip content="Who you normally buy it from. Helps purchasing later." />
+              </Label>
               <Select
                 value={newPartData.vendor_id}
                 onValueChange={(value) => setNewPartData({ ...newPartData, vendor_id: value })}
@@ -1978,7 +2055,10 @@ export default function SalesOrderDetail() {
               </Select>
             </div>
             <div>
-              <Label>Category *</Label>
+              <Label className="flex items-center gap-1">
+                Category *
+                <HelpTooltip content="How you group parts for browsing and reporting." />
+              </Label>
               <Select
                 value={newPartData.category_id}
                 onValueChange={(value) => setNewPartData({ ...newPartData, category_id: value })}
@@ -1998,7 +2078,10 @@ export default function SalesOrderDetail() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label>Cost</Label>
+              <Label className="flex items-center gap-1">
+                Cost
+                <HelpTooltip content="What it costs you per UOM. Used for margin and profitability." />
+              </Label>
               <Input
                 type="number"
                 step="0.01"
@@ -2008,7 +2091,10 @@ export default function SalesOrderDetail() {
               />
             </div>
             <div>
-              <Label>Selling Price</Label>
+              <Label className="flex items-center gap-1">
+                Selling Price
+                <HelpTooltip content="What you charge per UOM. Keep it consistent with your quoting rules." />
+              </Label>
               <Input
                 type="number"
                 step="0.01"

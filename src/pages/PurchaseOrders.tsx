@@ -9,6 +9,7 @@ import { Plus } from 'lucide-react';
 import { useRepos } from '@/repos';
 import type { PurchaseOrder } from '@/types';
 import { getPurchaseOrderDerivedStatus } from '@/services/purchaseOrderStatus';
+import { HelpTooltip } from '@/components/help/HelpTooltip';
 
 type PurchaseOrderRow = PurchaseOrder & {
   vendor_name: string;
@@ -58,31 +59,66 @@ export default function PurchaseOrders() {
   }, [linesByPo, purchaseOrders, salesOrders, vendors, workOrders]);
 
   const columns: Column<PurchaseOrderRow>[] = [
-    { key: 'po_number', header: 'PO #', sortable: true, className: 'font-mono' },
+    { 
+      key: 'po_number', 
+      header: (
+        <span className="flex items-center gap-1">
+          PO #
+          <HelpTooltip content="Internal PO number for tracking vendor orders." />
+        </span>
+      ), 
+      sortable: true, 
+      className: 'font-mono' 
+    },
     {
       key: 'derived_status',
-      header: 'Derived Status',
+      header: (
+        <span className="flex items-center gap-1">
+          Derived Status
+          <HelpTooltip content="Calculated from line receiving: Open, Partially Received, or Received." />
+        </span>
+      ),
       sortable: true,
       render: (item) => <StatusBadge status={item.derived_status as any} variant={item.derived_status === 'RECEIVED' ? 'success' : 'warning'} />,
     },
     {
       key: 'vendor_name',
-      header: 'Vendor',
+      header: (
+        <span className="flex items-center gap-1">
+          Vendor
+          <HelpTooltip content="Who you're buying from." />
+        </span>
+      ),
       sortable: true,
     },
     {
       key: 'linked_sales_order',
-      header: 'Linked SO',
+      header: (
+        <span className="flex items-center gap-1">
+          Linked SO
+          <HelpTooltip content="Shows which customer order/job this PO is supporting." />
+        </span>
+      ),
       sortable: true,
     },
     {
       key: 'linked_work_order',
-      header: 'Linked WO',
+      header: (
+        <span className="flex items-center gap-1">
+          Linked WO
+          <HelpTooltip content="Shows which customer order/job this PO is supporting." />
+        </span>
+      ),
       sortable: true,
     },
     {
       key: 'status',
-      header: 'Status',
+      header: (
+        <span className="flex items-center gap-1">
+          Status
+          <HelpTooltip content="Manual lock status (Open/Closed). Closing locks the PO." />
+        </span>
+      ),
       sortable: true,
       render: (item) => (
         <div className="flex items-center gap-2">
@@ -97,7 +133,12 @@ export default function PurchaseOrders() {
     },
     {
       key: 'created_at',
-      header: 'Created',
+      header: (
+        <span className="flex items-center gap-1">
+          Created
+          <HelpTooltip content="When the PO was created." />
+        </span>
+      ),
       sortable: true,
       render: (item) => new Date(item.created_at).toLocaleDateString(),
     },
@@ -123,16 +164,25 @@ export default function PurchaseOrders() {
     <div className="page-container">
       <PageHeader
         title="Purchase Orders"
-        subtitle="Manage vendor orders and receiving"
+        subtitle={
+          <span className="flex items-center gap-1">
+            Manage vendor orders and receiving
+            <HelpTooltip content="Start a vendor order. Add lines, receive items, then close when complete." />
+          </span>
+        }
         actions={
-          <Button onClick={() => navigate('/purchase-orders/new')}>
+          <Button onClick={() => navigate('/purchase-orders/new')} title="Start a vendor order. Add lines, receive items, then close when complete.">
             <Plus className="w-4 h-4 mr-2" />
             New PO
           </Button>
         }
       />
 
-      <div className="flex justify-end gap-2 mb-4">
+      <div className="flex justify-end items-center gap-2 mb-4">
+        <span className="text-sm text-muted-foreground flex items-center gap-1">
+          Filters:
+          <HelpTooltip content="Filters by what's been received so you can focus on what still needs action." />
+        </span>
         {(['open', 'partial', 'received'] as const).map((filter) => (
           <Button
             key={filter}

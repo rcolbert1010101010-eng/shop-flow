@@ -4,6 +4,8 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { HelpTooltip } from '@/components/help/HelpTooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { useRepos } from '@/repos';
 
 export default function PlasmaProjects() {
@@ -34,14 +36,18 @@ export default function PlasmaProjects() {
   };
 
   return (
-    <div className="page-container">
-      <PageHeader title="Plasma Projects" />
-      <div className="flex justify-between items-center mb-4">
-        <p className="text-sm text-muted-foreground">
-          Manage standalone plasma projects and link them to Sales Orders for quoting and invoicing.
-        </p>
-        <Button onClick={handleCreate}>New Plasma Project</Button>
-      </div>
+    <TooltipProvider>
+      <div className="page-container">
+        <PageHeader title="Plasma Projects" />
+        <div className="flex justify-between items-center mb-4">
+          <p className="text-sm text-muted-foreground flex items-center gap-1">
+            Manage standalone plasma projects and link them to Sales Orders for quoting and invoicing.
+            <HelpTooltip content="Track plasma-cut jobs with machine time, cut length, pierces, and pricing totals." />
+          </p>
+          <Button onClick={handleCreate} title="Creates a new plasma job so you can add cut lines and generate a cut sheet.">
+            New Plasma Project
+          </Button>
+        </div>
       <div className="table-container">
         <Table>
           <TableHeader>
@@ -92,5 +98,6 @@ export default function PlasmaProjects() {
         </Table>
       </div>
     </div>
+    </TooltipProvider>
   );
 }

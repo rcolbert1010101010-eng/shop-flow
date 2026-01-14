@@ -10,6 +10,8 @@ import { QuickAddDialog } from '@/components/ui/quick-add-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { HelpTooltip } from '@/components/help/HelpTooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 
 export default function Customers() {
@@ -111,18 +113,33 @@ export default function Customers() {
   };
 
   return (
-    <div className="page-container">
-      <PageHeader
-        title="Customers"
-        subtitle="Manage your customer database"
-        actions={
-          <Button onClick={() => setDialogOpen(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Customer
-          </Button>
-        }
-      />
+    <TooltipProvider>
+      <div className="page-container">
+        <PageHeader
+          title="Customers"
+          subtitle={
+            <span className="flex items-center gap-1">
+              Manage your customer database
+              <HelpTooltip content="Your customer directory. Keep names, contacts, and billing info accurate." />
+            </span>
+          }
+          actions={
+            <Button
+              onClick={() => setDialogOpen(true)}
+              title="Create a new customer record for estimates, orders, and work orders."
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Customer
+            </Button>
+          }
+        />
 
+      <div className="mb-2">
+        <div className="flex items-center gap-1 text-sm text-muted-foreground">
+          <span>Search</span>
+          <HelpTooltip content="Search by name, phone, email, or account notes." />
+        </div>
+      </div>
       <DataTable
         data={tableData}
         columns={columns}
@@ -141,7 +158,10 @@ export default function Customers() {
       >
         <div className="space-y-4">
           <div>
-            <Label htmlFor="company_name">Company Name *</Label>
+            <Label htmlFor="company_name" className="flex items-center gap-1">
+              Company Name *
+              <HelpTooltip content="Official name for billing and paperwork." />
+            </Label>
             <Input
               id="company_name"
               value={formData.company_name}
@@ -150,7 +170,10 @@ export default function Customers() {
             />
           </div>
           <div>
-            <Label htmlFor="contact_name">Contact Name</Label>
+            <Label htmlFor="contact_name" className="flex items-center gap-1">
+              Contact Name
+              <HelpTooltip content="Main person to call for approvals and updates." />
+            </Label>
             <Input
               id="contact_name"
               value={formData.contact_name}
@@ -160,7 +183,10 @@ export default function Customers() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="phone">Phone</Label>
+              <Label htmlFor="phone" className="flex items-center gap-1">
+                Phone
+                <HelpTooltip content="Use a number that actually reaches the decision maker." />
+              </Label>
               <Input
                 id="phone"
                 value={formData.phone}
@@ -169,7 +195,10 @@ export default function Customers() {
               />
             </div>
             <div>
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email" className="flex items-center gap-1">
+                Email
+                <HelpTooltip content="Used for quotes, invoices, and communication." />
+              </Label>
               <Input
                 id="email"
                 type="email"
@@ -180,7 +209,10 @@ export default function Customers() {
             </div>
           </div>
           <div>
-            <Label htmlFor="address">Address</Label>
+            <Label htmlFor="address" className="flex items-center gap-1">
+              Address
+              <HelpTooltip content="Address used on invoices." />
+            </Label>
             <Textarea
               id="address"
               value={formData.address}
@@ -190,7 +222,10 @@ export default function Customers() {
             />
           </div>
           <div>
-            <Label htmlFor="notes">Notes</Label>
+            <Label htmlFor="notes" className="flex items-center gap-1">
+              Notes
+              <HelpTooltip content="Internal notes: access rules, fleet preferences, approvals." />
+            </Label>
             <Textarea
               id="notes"
               value={formData.notes}
@@ -202,5 +237,6 @@ export default function Customers() {
         </div>
       </QuickAddDialog>
     </div>
+    </TooltipProvider>
   );
 }

@@ -43,6 +43,7 @@ import { QuickAddDialog } from '@/components/ui/quick-add-dialog';
 import { getPurchaseOrderDerivedStatus } from '@/services/purchaseOrderStatus';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { SmartSearchSelect } from '@/components/common/SmartSearchSelect';
+import { HelpTooltip } from '@/components/help/HelpTooltip';
 
 const toNumber = (value: number | string | null | undefined) => {
   const numeric = typeof value === 'number' ? value : value != null ? Number(value) : NaN;
@@ -488,7 +489,10 @@ export default function PurchaseOrderDetail() {
         <div className="form-section max-w-xl">
           <div className="space-y-4">
             <div>
-              <Label>Vendor *</Label>
+              <Label className="flex items-center gap-1">
+                Vendor *
+                <HelpTooltip content="Pick the vendor first. It's required to create the PO." />
+              </Label>
               <Select value={selectedVendorId} onValueChange={setSelectedVendorId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select vendor" />
@@ -502,7 +506,7 @@ export default function PurchaseOrderDetail() {
                 </SelectContent>
               </Select>
             </div>
-            <Button onClick={handleCreate} className="w-full">
+            <Button onClick={handleCreate} className="w-full" title="Creates the PO and opens it so you can add lines.">
               <Save className="w-4 h-4 mr-2" />
               Create PO
             </Button>
@@ -533,16 +537,16 @@ export default function PurchaseOrderDetail() {
         actions={
           <div className="flex items-center gap-2">
             {currentOrder && hasRemainingQty && (
-              <Button size="sm" onClick={() => navigate(`/receiving?poId=${currentOrder.id}`)}>
+              <Button size="sm" onClick={() => navigate(`/receiving?poId=${currentOrder.id}`)} title="Receive remaining items. Updates QOH and marks lines received.">
                 Receive
               </Button>
             )}
-            <Button size="sm" variant="outline" onClick={() => setAddPartOpen(true)}>
+            <Button size="sm" variant="outline" onClick={() => setAddPartOpen(true)} title="Add a part line to the PO (ordered quantity and cost).">
               <Plus className="w-4 h-4 mr-2" />
               Add Part
             </Button>
             {allReceived && (
-              <Button size="sm" variant="outline" onClick={() => setShowCloseDialog(true)}>
+              <Button size="sm" variant="outline" onClick={() => setShowCloseDialog(true)} title="Locks the PO when everything is received. Keeps history intact.">
                 Close PO
               </Button>
             )}
@@ -551,16 +555,16 @@ export default function PurchaseOrderDetail() {
       />
 
       <div className="flex flex-wrap gap-2 text-xs">
-        <Badge variant="outline" className="px-2 py-1">
+        <Badge variant="outline" className="px-2 py-1" title="Number of line items on this PO.">
           Lines {lineSummary.totalLines}
         </Badge>
-        <Badge variant="outline" className="px-2 py-1">
+        <Badge variant="outline" className="px-2 py-1" title="Total units ordered across all lines.">
           Ordered {lineSummary.totalOrdered}
         </Badge>
-        <Badge variant="outline" className="px-2 py-1">
+        <Badge variant="outline" className="px-2 py-1" title="Total units received so far.">
           Received {lineSummary.totalReceived}
         </Badge>
-        <Badge variant={lineSummary.totalRemaining > 0 ? 'destructive' : 'secondary'} className="px-2 py-1">
+        <Badge variant={lineSummary.totalRemaining > 0 ? 'destructive' : 'secondary'} className="px-2 py-1" title="Units still outstanding.">
           Remaining {lineSummary.totalRemaining}
         </Badge>
         <Badge variant="outline" className="px-2 py-1">
@@ -589,8 +593,9 @@ export default function PurchaseOrderDetail() {
             </div>
             <div className="col-span-12 lg:col-span-5">
               <div className="flex items-center justify-between h-5">
-                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground leading-none">
+                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground leading-none flex items-center gap-1">
                   Linked Sales Order
+                  <HelpTooltip content="Optional. Link when this PO is for a specific customer sale." />
                 </span>
                 {linkedSalesOrder ? (
                   <Button
@@ -680,8 +685,9 @@ export default function PurchaseOrderDetail() {
             </div>
             <div className="col-span-12 lg:col-span-3">
               <div className="flex items-center justify-between h-5">
-                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground leading-none">
+                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground leading-none flex items-center gap-1">
                   Linked Work Order
+                  <HelpTooltip content="Optional. Link when this PO is for a specific repair job." />
                 </span>
                 {linkedWorkOrder ? (
                   <Button
@@ -772,7 +778,10 @@ export default function PurchaseOrderDetail() {
             <div className="col-span-12 space-y-1">
               <div className="flex items-start justify-between">
                 <div className="space-y-1">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Link Status</p>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+                    Link Status
+                    <HelpTooltip content="Shows whether links are clean, missing, or locked by invoicing." />
+                  </p>
                   <p className="text-sm text-muted-foreground">{linkStatusMessage}</p>
                 </div>
                 <Badge variant="outline" className="text-[11px] h-6 px-2 py-0.5 uppercase tracking-wide">
@@ -783,7 +792,7 @@ export default function PurchaseOrderDetail() {
           </div>
           {linksDirty && (
             <div className="mt-4 border-t border-border pt-3 flex justify-end">
-              <Button size="sm" variant="outline" onClick={handleSaveLinks} disabled={linksLocked}>
+              <Button size="sm" variant="outline" onClick={handleSaveLinks} disabled={linksLocked} title="Saves the SO/WO links for traceability and reporting.">
                 Save Links
               </Button>
             </div>
@@ -804,12 +813,42 @@ export default function PurchaseOrderDetail() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Part #</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead className="text-right">Ordered</TableHead>
-                    <TableHead className="text-right">Received</TableHead>
-                    <TableHead className="text-right">Remaining</TableHead>
-                    <TableHead className="text-right">Unit Cost</TableHead>
+                    <TableHead>
+                      <span className="flex items-center gap-1">
+                        Part #
+                        <HelpTooltip content="Vendor order line item. Make sure the part number matches what you'll receive." />
+                      </span>
+                    </TableHead>
+                    <TableHead>
+                      <span className="flex items-center gap-1">
+                        Description
+                        <HelpTooltip content="Quick confirmation of what's being ordered." />
+                      </span>
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <span className="flex items-center justify-end gap-1">
+                        Ordered
+                        <HelpTooltip content="How many you're ordering on this PO." />
+                      </span>
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <span className="flex items-center justify-end gap-1">
+                        Received
+                        <HelpTooltip content="How many have been received so far." />
+                      </span>
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <span className="flex items-center justify-end gap-1">
+                        Remaining
+                        <HelpTooltip content="How many are still outstanding on this line." />
+                      </span>
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <span className="flex items-center justify-end gap-1">
+                        Unit Cost
+                        <HelpTooltip content="Cost per unit for this PO line. Used for margins and cost history." />
+                      </span>
+                    </TableHead>
                     {!isClosed && <TableHead className="text-right w-32">Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
@@ -859,6 +898,7 @@ export default function PurchaseOrderDetail() {
                                       setReceiveLineId(line.id);
                                       setReceiveQty(String(remaining));
                                     }}
+                                    title="Posts receiving for this line and updates inventory."
                                   >
                                     <PackageCheck className="w-3 h-3 mr-1" />
                                     Receive
@@ -874,6 +914,7 @@ export default function PurchaseOrderDetail() {
                                     variant="ghost"
                                     className="text-destructive"
                                     onClick={() => poRemoveLine(line.id)}
+                                    title="Only available before receiving. Keeps PO clean if added by mistake."
                                   >
                                     <Trash2 className="w-4 h-4" />
                                   </Button>
@@ -892,13 +933,16 @@ export default function PurchaseOrderDetail() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle className="text-base font-semibold">Returns</CardTitle>
+            <CardTitle className="text-base font-semibold flex items-center gap-1">
+              Returns
+              <HelpTooltip content="Returns linked to this vendor PO (for credits, defects, wrong items)." />
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {poReturns.length === 0 ? (
               <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
                 <span>No returns linked to this PO.</span>
-                <Button size="sm" variant="outline" onClick={handleCreateReturnForPo}>
+                <Button size="sm" variant="outline" onClick={handleCreateReturnForPo} title="Creates a return tied to this PO so credits and history stay connected.">
                   Create Return
                 </Button>
               </div>
@@ -988,7 +1032,10 @@ export default function PurchaseOrderDetail() {
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label>Part *</Label>
+              <Label className="flex items-center gap-1">
+                Part *
+                <HelpTooltip content="Search and select the part you're ordering from the vendor." />
+              </Label>
               <div className="flex items-center gap-2">
                 <SmartSearchSelect
                   className="flex-1 min-w-0"
@@ -1013,6 +1060,7 @@ export default function PurchaseOrderDetail() {
                   className="flex-shrink-0"
                   type="button"
                   onClick={() => setIsBrowsePartsOpen(true)}
+                  title="Browse parts without typing exact search terms."
                 >
                   Browse parts
                 </Button>
@@ -1021,13 +1069,17 @@ export default function PurchaseOrderDetail() {
                   className="flex-shrink-0"
                   type="button"
                   onClick={() => setNewPartDialogOpen(true)}
+                  title="Create a new catalog part and add it to this PO."
                 >
                   New Part
                 </Button>
               </div>
             </div>
             <div>
-              <Label>Quantity</Label>
+              <Label className="flex items-center gap-1">
+                Quantity
+                <HelpTooltip content="Ordered quantity for this PO line." />
+              </Label>
               <Input
                 type="number"
                 min="1"
@@ -1062,8 +1114,9 @@ export default function PurchaseOrderDetail() {
                   onCheckedChange={setBrowsePartsInStockOnly}
                   id="po-browse-in-stock"
                 />
-                <Label htmlFor="po-browse-in-stock" className="text-sm">
+                <Label htmlFor="po-browse-in-stock" className="text-sm flex items-center gap-1">
                   In stock only
+                  <HelpTooltip content="Show only parts with QOH above zero." />
                 </Label>
               </div>
             </div>
@@ -1103,6 +1156,7 @@ export default function PurchaseOrderDetail() {
                               setSelectedPartId(p.id);
                               setIsBrowsePartsOpen(false);
                             }}
+                            title="Choose this part for the PO line."
                           >
                             Select
                           </Button>
@@ -1154,7 +1208,10 @@ export default function PurchaseOrderDetail() {
       >
         <div className="space-y-3">
           <div>
-            <Label>Part Number *</Label>
+            <Label className="flex items-center gap-1">
+              Part Number *
+              <HelpTooltip content="Your unique identifier. Keep it stable—this is what techs search." />
+            </Label>
             <Input
               value={newPartData.part_number}
               onChange={(e) => setNewPartData({ ...newPartData, part_number: e.target.value.toUpperCase() })}
@@ -1163,7 +1220,10 @@ export default function PurchaseOrderDetail() {
             />
           </div>
           <div>
-            <Label>Description</Label>
+            <Label className="flex items-center gap-1">
+              Description
+              <HelpTooltip content="Plain-English name. Include key spec so it's searchable." />
+            </Label>
             <Input
               value={newPartData.description}
               onChange={(e) => setNewPartData({ ...newPartData, description: e.target.value })}
@@ -1172,7 +1232,10 @@ export default function PurchaseOrderDetail() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label>Vendor *</Label>
+              <Label className="flex items-center gap-1">
+                Vendor *
+                <HelpTooltip content="Preferred vendor for this part." />
+              </Label>
               <Select
                 value={newPartData.vendor_id}
                 onValueChange={(value) => setNewPartData({ ...newPartData, vendor_id: value })}
@@ -1190,7 +1253,10 @@ export default function PurchaseOrderDetail() {
               </Select>
             </div>
             <div>
-              <Label>Category *</Label>
+              <Label className="flex items-center gap-1">
+                Category *
+                <HelpTooltip content="Groups parts for browsing and reporting." />
+              </Label>
               <Select
                 value={newPartData.category_id}
                 onValueChange={(value) => setNewPartData({ ...newPartData, category_id: value })}
@@ -1212,7 +1278,10 @@ export default function PurchaseOrderDetail() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label>Cost</Label>
+              <Label className="flex items-center gap-1">
+                Cost
+                <HelpTooltip content="Your unit cost. Helps margin and profitability." />
+              </Label>
               <Input
                 type="number"
                 step="0.01"
@@ -1222,7 +1291,10 @@ export default function PurchaseOrderDetail() {
               />
             </div>
             <div>
-              <Label>Selling Price</Label>
+              <Label className="flex items-center gap-1">
+                Selling Price
+                <HelpTooltip content="What you charge per unit." />
+              </Label>
               <Input
                 type="number"
                 step="0.01"
@@ -1244,7 +1316,10 @@ export default function PurchaseOrderDetail() {
         onCancel={() => setReceiveLineId(null)}
       >
         <div>
-          <Label>Quantity to Receive</Label>
+          <Label className="flex items-center gap-1">
+            Quantity to Receive
+            <HelpTooltip content="How many arrived today for this line. Partial receiving is normal." />
+          </Label>
           <Input
             type="number"
             min="1"
@@ -1265,7 +1340,7 @@ export default function PurchaseOrderDetail() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleClose}>Close PO</AlertDialogAction>
+            <AlertDialogAction onClick={handleClose} title="Locks the PO when complete. Use once all receiving is finished.">Close PO</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

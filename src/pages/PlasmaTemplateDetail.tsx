@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { HelpTooltip } from '@/components/help/HelpTooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { useRepos } from '@/repos';
 
 export default function PlasmaTemplateDetail() {
@@ -54,12 +56,16 @@ export default function PlasmaTemplateDetail() {
   }
 
   return (
-    <div className="page-container">
-      <PageHeader title={template.name} backTo="/plasma/templates" />
+    <TooltipProvider>
+      <div className="page-container">
+        <PageHeader title={template.name} backTo="/plasma/templates" />
       <div className="grid md:grid-cols-2 gap-4 mb-6">
         <div className="space-y-3">
           <div>
-            <label className="text-sm font-medium">Name</label>
+            <label className="text-sm font-medium flex items-center gap-1">
+              Name
+              <HelpTooltip content="Short name techs recognize (e.g., 'Gusset 3/8', 'Bracket Kit')." />
+            </label>
             <Input value={draftName} onChange={(e) => setDraftName(e.target.value)} />
           </div>
           <div>
@@ -77,7 +83,10 @@ export default function PlasmaTemplateDetail() {
           <h3 className="font-semibold">Add Line</h3>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-sm font-medium">Qty</label>
+              <label className="text-sm font-medium flex items-center gap-1">
+                Qty
+                <HelpTooltip content="How many of this cut piece you're making." />
+              </label>
               <Input
                 type="number"
                 min="1"
@@ -86,7 +95,10 @@ export default function PlasmaTemplateDetail() {
               />
             </div>
             <div>
-              <label className="text-sm font-medium">Cut Length</label>
+              <label className="text-sm font-medium flex items-center gap-1">
+                Cut Length
+                <HelpTooltip content="Total inches of cut for this line. Higher cut length = more machine time." />
+              </label>
               <Input
                 type="number"
                 value={lineDraft.cut_length_default}
@@ -94,7 +106,10 @@ export default function PlasmaTemplateDetail() {
               />
             </div>
             <div>
-              <label className="text-sm font-medium">Pierces</label>
+              <label className="text-sm font-medium flex items-center gap-1">
+                Pierces
+                <HelpTooltip content="How many pierces (starts). Pierces add time and consumable wear." />
+              </label>
               <Input
                 type="number"
                 value={lineDraft.pierce_count_default}
@@ -102,7 +117,10 @@ export default function PlasmaTemplateDetail() {
               />
             </div>
             <div>
-              <label className="text-sm font-medium">Notes</label>
+              <label className="text-sm font-medium flex items-center gap-1">
+                Notes
+                <HelpTooltip content="Special instructions: bevel, tabs, kerf notes, edge quality, etc." />
+              </label>
               <Input
                 value={lineDraft.notes}
                 onChange={(e) => setLineDraft({ ...lineDraft, notes: e.target.value })}
@@ -117,10 +135,30 @@ export default function PlasmaTemplateDetail() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Qty</TableHead>
-              <TableHead>Cut Length</TableHead>
-              <TableHead>Pierces</TableHead>
-              <TableHead>Notes</TableHead>
+              <TableHead>
+                <span className="flex items-center gap-1">
+                  Qty
+                  <HelpTooltip content="How many of this cut piece you're making." />
+                </span>
+              </TableHead>
+              <TableHead>
+                <span className="flex items-center gap-1">
+                  Cut Length
+                  <HelpTooltip content="Total inches of cut for this line. Higher cut length = more machine time." />
+                </span>
+              </TableHead>
+              <TableHead>
+                <span className="flex items-center gap-1">
+                  Pierces
+                  <HelpTooltip content="How many pierces (starts). Pierces add time and consumable wear." />
+                </span>
+              </TableHead>
+              <TableHead>
+                <span className="flex items-center gap-1">
+                  Notes
+                  <HelpTooltip content="Special instructions: bevel, tabs, kerf notes, edge quality, etc." />
+                </span>
+              </TableHead>
               <TableHead className="w-10"></TableHead>
             </TableRow>
           </TableHeader>
@@ -150,5 +188,6 @@ export default function PlasmaTemplateDetail() {
         </Table>
       </div>
     </div>
+    </TooltipProvider>
   );
 }

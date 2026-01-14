@@ -7,6 +7,7 @@ import { Plus } from 'lucide-react';
 import { useRepos } from '@/repos';
 import type { SalesOrder } from '@/types';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { HelpTooltip } from '@/components/help/HelpTooltip';
 
 type SalesOrderRow = SalesOrder & { customer_name: string; is_active?: boolean };
 
@@ -33,29 +34,59 @@ export default function SalesOrders() {
   }, [customers, salesOrders]);
 
   const columns: Column<SalesOrderRow>[] = [
-    { key: 'order_number', header: 'Order #', sortable: true, className: 'font-mono' },
+    { 
+      key: 'order_number', 
+      header: (
+        <span className="flex items-center gap-1">
+          Order #
+          <HelpTooltip content="System-generated order number. Use it for internal tracking and customer references." />
+        </span>
+      ), 
+      sortable: true, 
+      className: 'font-mono' 
+    },
     {
       key: 'customer_name',
-      header: 'Customer',
+      header: (
+        <span className="flex items-center gap-1">
+          Customer
+          <HelpTooltip content="Customer drives billing and history. Pick it first." />
+        </span>
+      ),
       sortable: true,
       render: (item) => item.customer_name || '-',
     },
     {
       key: 'status',
-      header: 'Status',
+      header: (
+        <span className="flex items-center gap-1">
+          Status
+          <HelpTooltip content="Status shows where this sale is in the pipeline. Keep it accurate so nothing slips." />
+        </span>
+      ),
       sortable: true,
       render: (item) => <StatusBadge status={item.status} />,
     },
     {
       key: 'total',
-      header: 'Total',
+      header: (
+        <span className="flex items-center gap-1">
+          Total
+          <HelpTooltip content="Final amount due before payments." />
+        </span>
+      ),
       sortable: true,
       render: (item) => `$${toNumber(item.total).toFixed(2)}`,
       className: 'text-right',
     },
     {
       key: 'created_at',
-      header: 'Date',
+      header: (
+        <span className="flex items-center gap-1">
+          Date
+          <HelpTooltip content="When this sales order was created." />
+        </span>
+      ),
       sortable: true,
       render: (item) => new Date(item.created_at).toLocaleDateString(),
     },

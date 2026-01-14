@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { HelpTooltip } from '@/components/help/HelpTooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { useRepos } from '@/repos';
 
 export default function PlasmaTemplates() {
@@ -28,8 +30,13 @@ export default function PlasmaTemplates() {
   };
 
   return (
-    <div className="page-container">
-      <PageHeader title="Plasma Templates" />
+    <TooltipProvider>
+      <div className="page-container">
+        <PageHeader title="Plasma Templates" />
+        <p className="text-sm text-muted-foreground mb-4 flex items-center gap-1">
+          Reusable cut line sets for common parts. Start faster and price consistently.
+          <HelpTooltip content="Reusable cut line sets for common parts. Start faster and price consistently." />
+        </p>
       <div className="grid md:grid-cols-3 gap-4 mb-4">
         <div className="md:col-span-2">
           <div className="table-container">
@@ -70,7 +77,10 @@ export default function PlasmaTemplates() {
         <div className="border rounded-lg p-4 space-y-3">
           <h3 className="font-semibold">New Template</h3>
           <div>
-            <label className="text-sm font-medium">Name</label>
+            <label className="text-sm font-medium flex items-center gap-1">
+              Name
+              <HelpTooltip content="Short name techs recognize (e.g., 'Gusset 3/8', 'Bracket Kit')." />
+            </label>
             <Input value={newTemplateName} onChange={(e) => setNewTemplateName(e.target.value)} placeholder="Template name" />
           </div>
           <div>
@@ -83,5 +93,6 @@ export default function PlasmaTemplates() {
         </div>
       </div>
     </div>
+    </TooltipProvider>
   );
 }

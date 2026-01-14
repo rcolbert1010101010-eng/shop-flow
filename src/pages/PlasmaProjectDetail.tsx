@@ -9,6 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { RotateCcw, FileCheck, Plus, Trash2 } from 'lucide-react';
+import { HelpTooltip } from '@/components/help/HelpTooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { useRepos } from '@/repos';
 import type { PlasmaJobLine } from '@/types';
 
@@ -199,14 +201,18 @@ export default function PlasmaProjectDetail() {
   if (!job) return null;
 
   return (
-    <div className="page-container">
-      <PageHeader title={`Plasma Project ${job.id}`} backTo="/plasma" />
+    <TooltipProvider>
+      <div className="page-container">
+        <PageHeader title={`Plasma Project ${job.id}`} backTo="/plasma" />
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-3">
           <div className="flex items-center gap-3">
             <div>
-              <Label>Status</Label>
+              <Label className="flex items-center gap-1">
+                Status
+                <HelpTooltip content="Status shows where this plasma job is in the pipeline. Keep it accurate so nothing slips." />
+              </Label>
               <div className="mt-1 flex gap-2 items-center">
                 <Badge variant="secondary">{job.status}</Badge>
                 {job.posted_at && (
@@ -217,7 +223,10 @@ export default function PlasmaProjectDetail() {
             </div>
           </div>
           <div>
-            <Label>Sales Order</Label>
+            <Label className="flex items-center gap-1">
+              Sales Order
+              <HelpTooltip content="Link this plasma job to a Sales Order for quoting and invoicing." />
+            </Label>
             <Select
               value={job.sales_order_id ?? UNLINKED_VALUE}
               onValueChange={handleSalesOrderChange}
@@ -246,11 +255,20 @@ export default function PlasmaProjectDetail() {
           </div>
         </div>
         <div className="flex items-end justify-end gap-2">
-          <Button variant="outline" onClick={handleRecalculate} disabled={!job || plasmaLocked}>
+          <Button
+            variant="outline"
+            onClick={handleRecalculate}
+            disabled={!job || plasmaLocked}
+            title="Rebuilds pricing from the current line inputs. Use after changing thickness, cut length, or minutes."
+          >
             <RotateCcw className="w-4 h-4 mr-2" />
             Recalculate
           </Button>
-          <Button onClick={handlePostToSalesOrder} disabled={plasmaLocked || lines.length === 0}>
+          <Button
+            onClick={handlePostToSalesOrder}
+            disabled={plasmaLocked || lines.length === 0}
+            title="Locks the plasma job so pricing can't drift after approval."
+          >
             <FileCheck className="w-4 h-4 mr-2" />
             Post to Sales Order
           </Button>
@@ -301,6 +319,10 @@ export default function PlasmaProjectDetail() {
       )}
       {warnings.length > 0 && (
         <div className="mt-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+          <div className="flex items-center gap-1 mb-1">
+            <span className="font-medium">Warnings</span>
+            <HelpTooltip content="Flags missing or suspicious values (like zero cut length or no thickness). Fix before posting." />
+          </div>
           {warnings.map((w) => (
             <div key={w}>{w}</div>
           ))}
@@ -312,14 +334,49 @@ export default function PlasmaProjectDetail() {
           <TableHeader>
             <TableRow>
               <TableHead>Material</TableHead>
-              <TableHead className="text-right">Thickness</TableHead>
-              <TableHead className="text-right">Qty</TableHead>
-              <TableHead className="text-right">Cut Length</TableHead>
-              <TableHead className="text-right">Pierces</TableHead>
-              <TableHead className="text-right">Setup (min)</TableHead>
-              <TableHead className="text-right">Machine (min)</TableHead>
+              <TableHead className="text-right">
+                <span className="flex items-center justify-end gap-1">
+                  Thickness
+                  <HelpTooltip content="Material thickness for this line. Affects cut speed and pricing." />
+                </span>
+              </TableHead>
+              <TableHead className="text-right">
+                <span className="flex items-center justify-end gap-1">
+                  Qty
+                  <HelpTooltip content="How many of this cut piece you're making." />
+                </span>
+              </TableHead>
+              <TableHead className="text-right">
+                <span className="flex items-center justify-end gap-1">
+                  Cut Length
+                  <HelpTooltip content="Total inches of cut for this line. Higher cut length = more machine time." />
+                </span>
+              </TableHead>
+              <TableHead className="text-right">
+                <span className="flex items-center justify-end gap-1">
+                  Pierces
+                  <HelpTooltip content="How many pierces (starts). Pierces add time and consumable wear." />
+                </span>
+              </TableHead>
+              <TableHead className="text-right">
+                <span className="flex items-center justify-end gap-1">
+                  Setup (min)
+                  <HelpTooltip content="One-time setup time for this line (fixturing, program setup, material handling)." />
+                </span>
+              </TableHead>
+              <TableHead className="text-right">
+                <span className="flex items-center justify-end gap-1">
+                  Machine (min)
+                  <HelpTooltip content="Run time for cutting. This is the time you're charging for on the table." />
+                </span>
+              </TableHead>
               <TableHead className="text-right">Derived?</TableHead>
-              <TableHead className="text-right">Unit Sell</TableHead>
+              <TableHead className="text-right">
+                <span className="flex items-center justify-end gap-1">
+                  Unit Sell
+                  <HelpTooltip content="What you charge for this line. Recalc can fill defaults—override only when needed." />
+                </span>
+              </TableHead>
               <TableHead className="text-right">Total</TableHead>
               {!isInvoiced && <TableHead className="w-10"></TableHead>}
             </TableRow>
@@ -453,7 +510,10 @@ export default function PlasmaProjectDetail() {
           </Button>
         )}
         <div className="text-right text-sm space-y-1">
-          <div className="font-medium">Plasma Total: ${formatNumber(plasmaTotal)}</div>
+          <div className="font-medium flex items-center justify-end gap-1">
+            <span>Plasma Total: ${formatNumber(plasmaTotal)}</span>
+            <HelpTooltip content="Total sell amount for this plasma job (sum of line totals)." />
+          </div>
           {plasmaChargeLine && (
             <div className="text-muted-foreground">
               Posted as "{plasmaChargeLine.description}" (${formatNumber(plasmaChargeLine.total_price)})
@@ -538,5 +598,6 @@ export default function PlasmaProjectDetail() {
         </div>
       </div>
     </div>
+    </TooltipProvider>
   );
 }

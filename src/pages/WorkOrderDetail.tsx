@@ -3629,7 +3629,13 @@ const jobReadinessValues = Object.values(jobReadinessById);
                 </div>
                 <div className="flex gap-2">
                   <div className="flex flex-col items-end">
-                    <Button variant="outline" size="sm" onClick={handleRecalculatePlasmaJob} disabled={!plasmaJob || plasmaLocked}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRecalculatePlasmaJob}
+                      disabled={!plasmaJob || plasmaLocked}
+                      title="Rebuilds pricing from the current line inputs. Use after changing thickness, cut length, or minutes."
+                    >
                       <RotateCcw className="w-4 h-4 mr-2" />
                       Recalculate
                     </Button>
@@ -3640,7 +3646,12 @@ const jobReadinessValues = Object.values(jobReadinessById);
                     )}
                   </div>
                   <div className="flex flex-col items-end">
-                    <Button size="sm" onClick={handlePostPlasmaJob} disabled={!plasmaJob || plasmaLines.length === 0 || plasmaLocked}>
+                    <Button
+                      size="sm"
+                      onClick={handlePostPlasmaJob}
+                      disabled={!plasmaJob || plasmaLines.length === 0 || plasmaLocked}
+                      title="Locks the plasma job so pricing can't drift after approval."
+                    >
                       <FileCheck className="w-4 h-4 mr-2" />
                       Post to Work Order
                     </Button>
@@ -3691,6 +3702,10 @@ const jobReadinessValues = Object.values(jobReadinessById);
               </div>
               {plasmaWarnings.length > 0 && (
                 <div className="mb-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                  <div className="flex items-center gap-1 mb-1">
+                    <span className="font-medium">Warnings</span>
+                    <HelpTooltip content="Flags missing or suspicious values (like zero cut length or no thickness). Fix before posting." />
+                  </div>
                   {plasmaWarnings.map((w) => (
                     <div key={w}>{w}</div>
                   ))}
@@ -3797,16 +3812,51 @@ const jobReadinessValues = Object.values(jobReadinessById);
                   <TableHeader>
                     <TableRow>
                       <TableHead>Material</TableHead>
-                      <TableHead className="text-right">Thickness</TableHead>
-                      <TableHead className="text-right">Qty</TableHead>
-                      <TableHead className="text-right">Cut Length</TableHead>
-                      <TableHead className="text-right">Pierces</TableHead>
+                      <TableHead className="text-right">
+                        <span className="flex items-center justify-end gap-1">
+                          Thickness
+                          <HelpTooltip content="Material thickness for this line. Affects cut speed and pricing." />
+                        </span>
+                      </TableHead>
+                      <TableHead className="text-right">
+                        <span className="flex items-center justify-end gap-1">
+                          Qty
+                          <HelpTooltip content="How many of this cut piece you're making." />
+                        </span>
+                      </TableHead>
+                      <TableHead className="text-right">
+                        <span className="flex items-center justify-end gap-1">
+                          Cut Length
+                          <HelpTooltip content="Total inches of cut for this line. Higher cut length = more machine time." />
+                        </span>
+                      </TableHead>
+                      <TableHead className="text-right">
+                        <span className="flex items-center justify-end gap-1">
+                          Pierces
+                          <HelpTooltip content="How many pierces (starts). Pierces add time and consumable wear." />
+                        </span>
+                      </TableHead>
                       {showPlasmaDetails && (
                         <>
-                          <TableHead className="text-right">Setup (min)</TableHead>
-                          <TableHead className="text-right">Machine (min)</TableHead>
+                          <TableHead className="text-right">
+                            <span className="flex items-center justify-end gap-1">
+                              Setup (min)
+                              <HelpTooltip content="One-time setup time for this line (fixturing, program setup, material handling)." />
+                            </span>
+                          </TableHead>
+                          <TableHead className="text-right">
+                            <span className="flex items-center justify-end gap-1">
+                              Machine (min)
+                              <HelpTooltip content="Run time for cutting. This is the time you're charging for on the table." />
+                            </span>
+                          </TableHead>
                           <TableHead className="text-right">Derived?</TableHead>
-                          <TableHead className="text-right">Unit Sell</TableHead>
+                          <TableHead className="text-right">
+                            <span className="flex items-center justify-end gap-1">
+                              Unit Sell
+                              <HelpTooltip content="What you charge for this line. Recalc can fill defaults—override only when needed." />
+                            </span>
+                          </TableHead>
                         </>
                       )}
                       <TableHead className="text-right">Total</TableHead>
@@ -3960,7 +4010,10 @@ const jobReadinessValues = Object.values(jobReadinessById);
                   </Button>
                 )}
                   <div className="text-sm text-right space-y-1">
-                    <div className="font-medium">Plasma Total: ${formatNumber(plasmaTotal)}</div>
+                    <div className="font-medium flex items-center justify-end gap-1">
+                      <span>Plasma Total: ${formatNumber(plasmaTotal)}</span>
+                      <HelpTooltip content="Total sell amount for this plasma job (sum of line totals)." />
+                    </div>
                     {plasmaChargeLine && (
                       <div className="text-muted-foreground">
                         Posted as "{plasmaChargeLine.description}" (${formatNumber(plasmaChargeLine.total_price)})

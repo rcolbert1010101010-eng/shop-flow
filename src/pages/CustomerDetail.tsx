@@ -64,6 +64,8 @@ import type { PaymentTerms, PreferredContactMethod, Unit } from '@/types';
 import { AddUnitDialog } from '@/components/units/AddUnitDialog';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { MobileActionBar, MobileActionBarSpacer } from '@/components/common/MobileActionBar';
+import { HelpTooltip } from '@/components/help/HelpTooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 export default function CustomerDetail() {
   const { id } = useParams<{ id: string }>();
@@ -403,20 +405,26 @@ export default function CustomerDetail() {
   ];
 
   return (
-    <div className="page-container">
-      <PageHeader
-        title={
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-lg font-semibold">{customer.company_name}</span>
-            {customer.credit_hold && <Badge variant="destructive">Credit Hold</Badge>}
-            {(customer.is_tax_exempt || formData.is_tax_exempt) && (
-              <Badge variant="secondary">Tax Exempt</Badge>
-            )}
-            {!customer.is_active && <Badge variant="outline">Inactive</Badge>}
-          </div>
-        }
-        subtitle={customer.is_active ? 'Active Customer' : 'Inactive Customer'}
-        backTo="/customers"
+    <TooltipProvider>
+      <div className="page-container">
+        <PageHeader
+          title={
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-lg font-semibold">{customer.company_name}</span>
+              {customer.credit_hold && <Badge variant="destructive">Credit Hold</Badge>}
+              {(customer.is_tax_exempt || formData.is_tax_exempt) && (
+                <Badge variant="secondary">Tax Exempt</Badge>
+              )}
+              {!customer.is_active && <Badge variant="outline">Inactive</Badge>}
+            </div>
+          }
+          subtitle={
+            <span className="flex items-center gap-1">
+              {customer.is_active ? 'Active Customer' : 'Inactive Customer'}
+              <HelpTooltip content="Inactive hides from new work while keeping history." />
+            </span>
+          }
+          backTo="/customers"
         actions={
           <div className="flex flex-wrap justify-end gap-2">
             {editing ? (
@@ -466,19 +474,39 @@ export default function CustomerDetail() {
           >
             Schedule Work Order
           </Button>
-          <Button variant="outline" onClick={() => setViewWorkOrdersOpen(true)}>
+          <Button
+            variant="outline"
+            onClick={() => setViewWorkOrdersOpen(true)}
+            title="Repair history and current jobs."
+          >
             View Work Orders
           </Button>
-          <Button variant="outline" onClick={() => setViewSalesOrdersOpen(true)}>
+          <Button
+            variant="outline"
+            onClick={() => setViewSalesOrdersOpen(true)}
+            title="Quotes and parts/material sales history."
+          >
             View Sales Orders
           </Button>
-          <Button variant="outline" onClick={() => setContactsDialogOpen(true)}>
+          <Button
+            variant="outline"
+            onClick={() => setContactsDialogOpen(true)}
+            title="Main person to call for approvals and updates."
+          >
             Contacts
           </Button>
-          <Button variant="outline" onClick={() => setUnitsDialogOpen(true)}>
+          <Button
+            variant="outline"
+            onClick={() => setUnitsDialogOpen(true)}
+            title="Assets tied to this customer for service history."
+          >
             Units
           </Button>
-          <Button variant="outline" onClick={() => setAccountDialogOpen(true)}>
+          <Button
+            variant="outline"
+            onClick={() => setAccountDialogOpen(true)}
+            title="Billing history and balances."
+          >
             Account
           </Button>
         </div>
@@ -494,7 +522,10 @@ export default function CustomerDetail() {
       )}
 
       <div className="form-section mb-6">
-        <h2 className="text-lg font-semibold mb-4">Customer Information</h2>
+        <h2 className="text-lg font-semibold mb-4 flex items-center gap-1">
+          Customer Information
+          <HelpTooltip content="Your customer directory. Keep names, contacts, and billing info accurate." />
+        </h2>
         <div className="text-sm text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 mb-3">
           <span>
             {primaryContact?.name || formData.contact_name || 'No primary contact'}
@@ -512,7 +543,10 @@ export default function CustomerDetail() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           <div className="space-y-3">
             <div>
-              <Label htmlFor="company_name">Company Name *</Label>
+              <Label htmlFor="company_name" className="flex items-center gap-1">
+                Company Name *
+                <HelpTooltip content="Official name for billing and paperwork." />
+              </Label>
               {editing ? (
                 <Input
                   id="company_name"
@@ -524,7 +558,10 @@ export default function CustomerDetail() {
               )}
             </div>
             <div>
-              <Label>Price Level</Label>
+              <Label className="flex items-center gap-1">
+                Price Level
+                <HelpTooltip content="Helps reporting and pricing rules." />
+              </Label>
               {editing ? (
                 <Select
                   value={formData.price_level}
@@ -558,8 +595,9 @@ export default function CustomerDetail() {
                     setFormData({ ...formData, is_tax_exempt: Boolean(checked) })
                   }
                 />
-                <Label htmlFor="is_tax_exempt" className="font-medium">
+                <Label htmlFor="is_tax_exempt" className="font-medium flex items-center gap-1">
                   Tax Exempt
+                  <HelpTooltip content="Enable only with documentation. Affects invoicing." />
                 </Label>
               </div>
             ) : (
@@ -568,7 +606,10 @@ export default function CustomerDetail() {
               </div>
             )}
             <div>
-              <Label htmlFor="tax_rate_override">Tax Rate Override (%)</Label>
+              <Label htmlFor="tax_rate_override" className="flex items-center gap-1">
+                Tax Rate Override (%)
+                <HelpTooltip content="Enable only with documentation. Affects invoicing." />
+              </Label>
               {editing ? (
                 <Input
                   id="tax_rate_override"
@@ -588,7 +629,10 @@ export default function CustomerDetail() {
           </div>
           <div className="space-y-3">
             <div>
-              <Label htmlFor="contact_name">Contact Name</Label>
+              <Label htmlFor="contact_name" className="flex items-center gap-1">
+                Contact Name
+                <HelpTooltip content="Main person to call for approvals and updates." />
+              </Label>
               {editing ? (
                 <Input
                   id="contact_name"
@@ -603,7 +647,10 @@ export default function CustomerDetail() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <Label htmlFor="phone">Phone</Label>
+                <Label htmlFor="phone" className="flex items-center gap-1">
+                  Phone
+                  <HelpTooltip content="Use a number that actually reaches the decision maker." />
+                </Label>
                 {editing ? (
                   <Input
                     id="phone"
@@ -617,7 +664,10 @@ export default function CustomerDetail() {
                 )}
               </div>
               <div>
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email" className="flex items-center gap-1">
+                  Email
+                  <HelpTooltip content="Used for quotes, invoices, and communication." />
+                </Label>
                 {editing ? (
                   <Input
                     id="email"
@@ -636,7 +686,10 @@ export default function CustomerDetail() {
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-3">
           <div>
-            <Label htmlFor="address">Address</Label>
+            <Label htmlFor="address" className="flex items-center gap-1">
+              Address
+              <HelpTooltip content="Address used on invoices." />
+            </Label>
             {editing ? (
               <Textarea
                 id="address"
@@ -651,7 +704,10 @@ export default function CustomerDetail() {
             )}
           </div>
           <div>
-            <Label htmlFor="notes">Notes</Label>
+            <Label htmlFor="notes" className="flex items-center gap-1">
+              Notes
+              <HelpTooltip content="Internal notes: access rules, fleet preferences, approvals." />
+            </Label>
             {editing ? (
               <Textarea
                 id="notes"
@@ -1043,7 +1099,10 @@ export default function CustomerDetail() {
       >
         <DialogContent className="w-full sm:max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Work Orders</DialogTitle>
+            <DialogTitle className="flex items-center gap-1">
+              Work Orders
+              <HelpTooltip content="Repair history and current jobs." />
+            </DialogTitle>
             <DialogDescription>Work orders for this customer.</DialogDescription>
           </DialogHeader>
           <div className="mt-2 space-y-3">
@@ -1160,7 +1219,10 @@ export default function CustomerDetail() {
       >
         <DialogContent className="w-full sm:max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Sales Orders</DialogTitle>
+            <DialogTitle className="flex items-center gap-1">
+              Sales Orders
+              <HelpTooltip content="Quotes and parts/material sales history." />
+            </DialogTitle>
             <DialogDescription>Sales orders for this customer.</DialogDescription>
           </DialogHeader>
           <div className="mt-2 space-y-3">
@@ -1354,7 +1416,10 @@ export default function CustomerDetail() {
       <Sheet open={contactsDialogOpen} onOpenChange={setContactsDialogOpen}>
         <SheetContent side="right" className="w-full sm:max-w-4xl">
           <SheetHeader>
-            <SheetTitle>Contacts</SheetTitle>
+            <SheetTitle className="flex items-center gap-1">
+              Contacts
+              <HelpTooltip content="Main person to call for approvals and updates." />
+            </SheetTitle>
             <SheetDescription>Manage contacts for this customer.</SheetDescription>
           </SheetHeader>
           <div className="flex items-center justify-between mb-3">
@@ -1440,12 +1505,18 @@ export default function CustomerDetail() {
       <Sheet open={accountDialogOpen} onOpenChange={setAccountDialogOpen}>
         <SheetContent side="right" className="w-full sm:max-w-xl">
           <SheetHeader>
-            <SheetTitle>Account</SheetTitle>
+            <SheetTitle className="flex items-center gap-1">
+              Account
+              <HelpTooltip content="Billing history and balances." />
+            </SheetTitle>
             <SheetDescription>Account details for this customer.</SheetDescription>
           </SheetHeader>
           <div className="space-y-4 mt-4">
             <div>
-              <Label>Payment Terms</Label>
+              <Label className="flex items-center gap-1">
+                Payment Terms
+                <HelpTooltip content="Controls due dates and aging." />
+              </Label>
               {editing ? (
                 <Select
                   value={formData.payment_terms}
@@ -1469,7 +1540,10 @@ export default function CustomerDetail() {
               )}
             </div>
             <div>
-              <Label>Credit Limit</Label>
+              <Label className="flex items-center gap-1">
+                Credit Limit
+                <HelpTooltip content="Controls due dates and aging." />
+              </Label>
               {editing ? (
                 <Input
                   type="number"
@@ -1496,8 +1570,9 @@ export default function CustomerDetail() {
                     }))
                   }
                 />
-                <Label htmlFor="credit_hold" className="font-medium">
+                <Label htmlFor="credit_hold" className="font-medium flex items-center gap-1">
                   Credit Hold
+                  <HelpTooltip content="Controls due dates and aging." />
                 </Label>
               </div>
             ) : (
@@ -1507,7 +1582,10 @@ export default function CustomerDetail() {
             )}
             {formData.credit_hold && (
               <div>
-                <Label htmlFor="credit_hold_reason">Credit Hold Reason *</Label>
+                <Label htmlFor="credit_hold_reason" className="flex items-center gap-1">
+                  Credit Hold Reason *
+                  <HelpTooltip content="Controls due dates and aging." />
+                </Label>
                 {editing ? (
                   <Textarea
                     id="credit_hold_reason"
@@ -1618,7 +1696,10 @@ export default function CustomerDetail() {
                     setContactForm((prev) => ({ ...prev, is_primary: Boolean(checked) }))
                   }
                 />
-                <Label htmlFor="is_primary_contact">Primary Contact</Label>
+                <Label htmlFor="is_primary_contact" className="flex items-center gap-1">
+                  Primary Contact
+                  <HelpTooltip content="Main person to call for approvals and updates." />
+                </Label>
               </div>
             </div>
           </div>
@@ -1637,5 +1718,6 @@ export default function CustomerDetail() {
         </DialogContent>
       </Dialog>
     </div>
+    </TooltipProvider>
   );
 }

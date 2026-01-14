@@ -48,6 +48,7 @@ import { MobileActionBar, MobileActionBarSpacer } from '@/components/common/Mobi
 import { normalizeQty, formatQtyWithUom, formatSheetsEquivalent, isSheetMaterialPart, getSqftPerSheet } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { HelpTooltip } from '@/components/help/HelpTooltip';
+import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 
 const toNumber = (value: number | string | null | undefined) => {
   const numeric = typeof value === 'number' ? value : value != null ? Number(value) : NaN;
@@ -778,6 +779,7 @@ export default function PartForm() {
         actions={
           editing ? (
             <>
+              <ModuleHelpButton moduleKey="parts" />
               <Button
                 variant="outline"
                 onClick={() =>
@@ -873,6 +875,7 @@ export default function PartForm() {
             </>
           ) : (
             <>
+              <ModuleHelpButton moduleKey="parts" />
               <Button
                 variant="outline"
                 onClick={() =>

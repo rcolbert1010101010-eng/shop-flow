@@ -48,6 +48,7 @@ import { normalizeQty, formatQtyWithUom, formatSheetsEquivalent } from '@/lib/ut
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { HelpTooltip } from '@/components/help/HelpTooltip';
 import { ImportPartsDialog } from '@/components/inventory/ImportPartsDialog';
+import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 
 export default function Inventory() {
   const navigate = useNavigate();
@@ -990,6 +991,7 @@ export default function Inventory() {
         subtitle="Manage parts and stock levels"
         actions={
           <div className="flex gap-2">
+            <ModuleHelpButton moduleKey="inventory" />
             <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
               <FileSpreadsheet className="w-4 h-4 mr-2" />
               Import Parts

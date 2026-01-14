@@ -3,6 +3,8 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { HelpTooltip } from '@/components/help/HelpTooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { useRepos } from '@/repos';
 
 const toNumber = (value: number | string | null | undefined) => {
@@ -45,10 +47,14 @@ export default function PlasmaPrint() {
   };
 
   return (
-    <div className="page-container">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h1 className="text-xl font-semibold">Plasma Cut Sheet / Shop Traveler</h1>
+    <TooltipProvider>
+      <div className="page-container">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h1 className="text-xl font-semibold flex items-center gap-1">
+              Plasma Cut Sheet / Shop Traveler
+              <HelpTooltip content="Print-friendly cut list for the table: qty, thickness, cut length, pierces, and notes." />
+            </h1>
           <div className="text-sm text-muted-foreground">
             Job ID: {job.id} &middot; Status: <Badge variant="outline">{job.status}</Badge>
           </div>
@@ -197,5 +203,6 @@ export default function PlasmaPrint() {
         )}
       </div>
     </div>
+    </TooltipProvider>
   );
 }
