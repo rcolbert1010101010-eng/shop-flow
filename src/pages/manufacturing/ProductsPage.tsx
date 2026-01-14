@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import type { ManufacturedProduct } from '@/types';
 import { useManufacturedProducts } from '@/hooks/useManufacturing';
+import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 
 const toNumber = (value: number | string | null | undefined) => {
   const numeric = typeof value === 'number' ? value : value != null ? Number(value) : NaN;
@@ -47,10 +48,13 @@ export default function ManufacturingProductsPage() {
         title="Manufactured Products"
         subtitle="Manage dump bodies, trailers, and custom equipment"
         actions={
-          <Button onClick={() => navigate('/manufacturing/products/new')}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Product
-          </Button>
+          <>
+            <ModuleHelpButton moduleKey="manufacturing" />
+            <Button onClick={() => navigate('/manufacturing/products/new')}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Product
+            </Button>
+          </>
         }
       />
 

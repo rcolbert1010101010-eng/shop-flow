@@ -65,6 +65,7 @@ import { AddUnitDialog } from '@/components/units/AddUnitDialog';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { MobileActionBar, MobileActionBarSpacer } from '@/components/common/MobileActionBar';
 import { HelpTooltip } from '@/components/help/HelpTooltip';
+import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 export default function CustomerDetail() {
@@ -427,6 +428,7 @@ export default function CustomerDetail() {
           backTo="/customers"
         actions={
           <div className="flex flex-wrap justify-end gap-2">
+            <ModuleHelpButton moduleKey="customers" />
             {editing ? (
               <>
                 <Button variant="outline" onClick={() => setEditing(false)}>

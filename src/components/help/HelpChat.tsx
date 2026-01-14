@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Send, MessageSquare } from 'lucide-react';
 import { respond } from './helpResponder';
 import type { ModuleHelpContent } from '@/help/helpRegistry';
+import type { HelpContext } from '@/help/types';
 import { cn } from '@/lib/utils';
 
 interface Message {
@@ -15,6 +16,7 @@ interface Message {
 interface HelpChatProps {
   moduleKey: string;
   content: ModuleHelpContent;
+  context?: HelpContext;
 }
 
 function getModuleSuggestions(moduleKey: string): string[] {
@@ -100,17 +102,75 @@ function getModuleSuggestions(moduleKey: string): string[] {
       'What statuses should we use for fab work?',
       'How do plasma/brake/weld jobs differ in tracking?',
     ],
+    units: [
+      'How do I add a new truck for an existing fleet customer?',
+      "What should I fill out on a unit if I'm in a hurry?",
+      'How do I quickly see all work we have done on this unit?',
+    ],
+    technicians: [
+      'How should I set up tech names for a large shop?',
+      "What's the best way to handle inactive or seasonal techs?",
+      'How do techs connect to the schedule and work orders?',
+    ],
+    plasma_projects: [
+      'How do I organize multiple cut jobs for the same customer?',
+      "What's the difference between a plasma project and a template?",
+      'How should I name plasma projects so they are easy to find later?',
+    ],
+    plasma_templates: [
+      'When should I use a plasma template vs a one-off project?',
+      'How do I update a template without losing history?',
+      'What info should I always fill out on a template?',
+    ],
+    receiving_history: [
+      'How do I see all receipts for a specific part?',
+      'How can I check what was received on a particular PO?',
+      'How do I use receiving history to audit inventory issues?',
+    ],
+    vendors: [
+      'What vendor info is most important to set up first?',
+      'How do vendors tie into purchase orders and receiving?',
+      'How should I handle duplicate vendors?',
+    ],
+    part_categories: [
+      'How should I structure part categories for reporting?',
+      'How many categories is too many?',
+      "What's the impact of changing a part's category?",
+    ],
+    cycle_counts: [
+      'Which parts should I count first?',
+      'How often should I run cycle counts?',
+      'How do cycle counts affect on-hand quantity?',
+    ],
+    returns_warranty_report: [
+      'How do I see all warranty jobs for the last 30 days?',
+      'How can I spot repeat issues with the same part or component?',
+      "What's the best way to use this report in a weekly meeting?",
+    ],
+    settings: [
+      'Which settings should I change first when I set up a new shop?',
+      'Who should be allowed to edit settings?',
+      'How do settings affect inventory and finance behavior?',
+    ],
   };
   return suggestions[moduleKey] || ['How do I get started?', 'What are the key features?'];
 }
 
-export function HelpChat({ moduleKey, content }: HelpChatProps) {
+export function HelpChat({ moduleKey, content, context }: HelpChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const suggestions = getModuleSuggestions(moduleKey);
+  const explainQuestion = 'Explain this screen';
+  const baseSuggestions = getModuleSuggestions(moduleKey);
+  const suggestions = (() => {
+    const hasExplain = baseSuggestions.some(
+      (s) => s.toLowerCase().includes('explain this screen')
+    );
+    const list = hasExplain ? baseSuggestions : [explainQuestion, ...baseSuggestions];
+    return list;
+  })();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -120,23 +180,21 @@ export function HelpChat({ moduleKey, content }: HelpChatProps) {
     scrollToBottom();
   }, [messages]);
 
-  const handleSend = () => {
-    const userText = input.trim();
-    if (!userText || isLoading) return;
+  const sendMessage = (userText: string) => {
+    if (!userText.trim() || isLoading) return;
 
-    // Add user message
+    const cleanText = userText.trim();
     const userMessage: Message = {
       role: 'user',
-      text: userText,
+      text: cleanText,
       ts: Date.now(),
     };
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
 
-    // Simulate async response (even though it's local)
     setTimeout(() => {
-      const response = respond(moduleKey, content, userText);
+      const response = respond(moduleKey, content, cleanText, context);
       const assistantMessage: Message = {
         role: 'assistant',
         text: response.answer,
@@ -145,12 +203,16 @@ export function HelpChat({ moduleKey, content }: HelpChatProps) {
       setMessages((prev) => [...prev, assistantMessage]);
       setIsLoading(false);
       inputRef.current?.focus();
-    }, 300);
+    }, 250);
+  };
+
+  const handleSend = () => {
+    sendMessage(input);
   };
 
   const handleSuggestionClick = (suggestion: string) => {
-    setInput(suggestion);
-    inputRef.current?.focus();
+    setInput('');
+    sendMessage(suggestion);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -162,48 +224,50 @@ export function HelpChat({ moduleKey, content }: HelpChatProps) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto space-y-4 mb-4 min-h-[200px] max-h-[400px]">
+      {suggestions.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-2">
+          {suggestions.map((suggestion, idx) => (
+            <Button
+              key={idx}
+              variant="outline"
+              size="sm"
+              className="text-xs"
+              onClick={() => handleSuggestionClick(suggestion)}
+            >
+              {suggestion}
+            </Button>
+          ))}
+        </div>
+      )}
+
+      <div className="space-y-3 mb-3">
         {messages.length === 0 ? (
-          <div className="text-center text-sm text-muted-foreground py-8">
-            <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-50" />
-            <p>Ask me anything about {content.title}</p>
-            {suggestions.length > 0 && (
-              <div className="mt-4 flex flex-wrap gap-2 justify-center">
-                {suggestions.map((suggestion, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => handleSuggestionClick(suggestion)}
-                    className="text-xs px-3 py-1.5 rounded-full border border-border bg-background hover:bg-muted transition-colors"
-                  >
-                    {suggestion}
-                  </button>
-                ))}
-              </div>
-            )}
+          <div className="text-sm text-muted-foreground flex items-center gap-2">
+            <MessageSquare className="w-4 h-4 opacity-60" />
+            <span>Ask anything about {content.title}</span>
           </div>
         ) : (
           <>
             {messages.map((msg, idx) => (
               <div
                 key={idx}
-                className={cn(
-                  'flex',
-                  msg.role === 'user' ? 'justify-end' : 'justify-start'
-                )}
+                className={cn('flex', msg.role === 'user' ? 'justify-end' : 'justify-start')}
               >
                 <div
                   className={cn(
-                    'max-w-[85%] rounded-lg px-3 py-2 text-sm',
+                    'max-w-[85%] rounded-lg px-3 py-2 text-sm shadow-sm',
                     msg.role === 'user'
                       ? 'bg-primary text-primary-foreground'
                       : 'bg-muted text-foreground'
                   )}
                 >
-                  <div className="whitespace-pre-wrap break-words">
+                  <div className="text-[11px] font-medium text-muted-foreground mb-1">
+                    {msg.role === 'user' ? 'You' : 'ShopFlow'}
+                  </div>
+                  <div className="whitespace-pre-wrap break-words leading-relaxed">
                     {msg.role === 'assistant' ? (
                       <div className="space-y-1.5">
                         {msg.text.split('\n').map((line, lineIdx) => {
-                          // Handle bold text (**text**)
                           const parts: React.ReactNode[] = [];
                           let lastIndex = 0;
                           const boldRegex = /\*\*(.+?)\*\*/g;
@@ -227,7 +291,6 @@ export function HelpChat({ moduleKey, content }: HelpChatProps) {
                             parts.push(<span key={key++}>{line.substring(lastIndex)}</span>);
                           }
 
-                          // Handle bullet points and numbered lists
                           if (line.trim().startsWith('•') || line.trim().match(/^\d+\./)) {
                             return (
                               <div key={lineIdx} className="pl-2">
@@ -262,7 +325,7 @@ export function HelpChat({ moduleKey, content }: HelpChatProps) {
         )}
       </div>
 
-      <div className="border-t pt-4">
+      <div className="border-t pt-3 bg-background sticky bottom-0">
         <div className="flex gap-2">
           <Input
             ref={inputRef}
@@ -281,19 +344,6 @@ export function HelpChat({ moduleKey, content }: HelpChatProps) {
             <Send className="w-4 h-4" />
           </Button>
         </div>
-        {messages.length > 0 && suggestions.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-2">
-            {suggestions.slice(0, 2).map((suggestion, idx) => (
-              <button
-                key={idx}
-                onClick={() => handleSuggestionClick(suggestion)}
-                className="text-xs px-2 py-1 rounded border border-border bg-background hover:bg-muted transition-colors"
-              >
-                {suggestion}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );

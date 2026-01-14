@@ -12,6 +12,7 @@ import { Trash2 } from 'lucide-react';
 import { formatQtyWithUom, formatSheetsEquivalent } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { HelpTooltip } from '@/components/help/HelpTooltip';
+import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 
 type Line = {
   id: string;
@@ -237,7 +238,8 @@ export default function ReceiveInventory() {
           </span>
         } 
         subtitle="Increase stock with audit trail" 
-        backTo="/inventory" 
+        backTo="/inventory"
+        actions={<ModuleHelpButton moduleKey="receiving" />}
       />
 
       <Card className="p-4 space-y-4">

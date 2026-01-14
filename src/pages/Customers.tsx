@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { HelpTooltip } from '@/components/help/HelpTooltip';
+import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 
@@ -29,6 +30,7 @@ export default function Customers() {
     address: '',
     notes: '',
   });
+  const hasAnyCustomers = customers.length > 0;
 
   const columns: Column<Customer>[] = [
     { key: 'company_name', header: 'Company Name', sortable: true },
@@ -124,13 +126,16 @@ export default function Customers() {
             </span>
           }
           actions={
-            <Button
-              onClick={() => setDialogOpen(true)}
-              title="Create a new customer record for estimates, orders, and work orders."
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Add Customer
-            </Button>
+            <>
+              <ModuleHelpButton moduleKey="customers" context={{ isEmpty: !hasAnyCustomers }} />
+              <Button
+                onClick={() => setDialogOpen(true)}
+                title="Create a new customer record for estimates, orders, and work orders."
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Customer
+              </Button>
+            </>
           }
         />
 

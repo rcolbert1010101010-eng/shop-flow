@@ -8,6 +8,7 @@ import { useRepos } from '@/repos';
 import type { SalesOrder } from '@/types';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { HelpTooltip } from '@/components/help/HelpTooltip';
+import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 
 type SalesOrderRow = SalesOrder & { customer_name: string; is_active?: boolean };
 
@@ -120,6 +121,7 @@ export default function SalesOrders() {
 
     return statusFiltered;
   }, [statusFilter, tableData]);
+  const hasAnySalesOrders = filteredTableData.length > 0;
 
   return (
     <div className="page-container">
@@ -127,10 +129,13 @@ export default function SalesOrders() {
         title="Sales Orders"
         subtitle="Manage counter sales and parts orders"
         actions={
-          <Button onClick={() => navigate('/sales-orders/new')}>
-            <Plus className="w-4 h-4 mr-2" />
-            New Sales Order
-          </Button>
+          <>
+            <ModuleHelpButton moduleKey="sales_orders" context={{ isEmpty: !hasAnySalesOrders }} />
+            <Button onClick={() => navigate('/sales-orders/new')}>
+              <Plus className="w-4 h-4 mr-2" />
+              New Sales Order
+            </Button>
+          </>
         }
       />
 

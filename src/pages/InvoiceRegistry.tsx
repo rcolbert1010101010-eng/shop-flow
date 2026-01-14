@@ -15,6 +15,7 @@ import { useRepos } from '@/repos';
 import { useOrderPayments } from '@/hooks/usePayments';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from '@/components/ui/textarea';
+import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 
 const PAYMENT_METHOD_OPTIONS: Array<{ value: PaymentMethod; label: string }> = [
   { value: 'cash', label: 'Cash' },
@@ -158,6 +159,7 @@ export default function InvoiceRegistry() {
       (a, b) => new Date(b.invoiceDate).getTime() - new Date(a.invoiceDate).getTime()
     );
   }, [customers, invoicedSalesOrders, invoicedWorkOrders, paymentsByOrder, invoicesBySource]);
+  const hasAnyInvoices = invoiceRows.length > 0;
 
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<PaymentStatus | 'ALL' | 'OVERDUE'>('ALL');
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRowWithMeta | null>(null);
@@ -300,7 +302,16 @@ export default function InvoiceRegistry() {
 
   return (
     <div className="page-container space-y-6">
-      <PageHeader title="Invoice Registry" subtitle="Sales and work orders that have been invoiced" />
+      <PageHeader 
+        title="Invoice Registry" 
+        subtitle="Sales and work orders that have been invoiced"
+        actions={
+          <ModuleHelpButton
+            moduleKey="invoices"
+            context={{ isEmpty: !hasAnyInvoices }}
+          />
+        }
+      />
 
       <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
         <Card>

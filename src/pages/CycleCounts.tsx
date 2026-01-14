@@ -9,6 +9,7 @@ import { useRepos } from '@/repos';
 import type { CycleCountSession } from '@/types';
 import { useShopStore } from '@/stores/shopStore';
 import { useMemo, useState } from 'react';
+import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 
 export default function CycleCounts() {
   const navigate = useNavigate();
@@ -38,6 +39,7 @@ export default function CycleCounts() {
       </span>
     );
   };
+  const hasAnyCycleCounts = cycleCountSessions.length > 0;
 
   const columns: Column<CycleCountSession>[] = [
     {
@@ -96,10 +98,13 @@ export default function CycleCounts() {
         title="Cycle Counts"
         subtitle="Track and post stock counts"
         actions={
-          <Button onClick={handleNew}>
-            <Plus className="w-4 h-4 mr-2" />
-            New Cycle Count
-          </Button>
+          <div className="flex items-center gap-2">
+            <ModuleHelpButton moduleKey="cycle_counts" context={{ isEmpty: !hasAnyCycleCounts }} />
+            <Button onClick={handleNew}>
+              <Plus className="w-4 h-4 mr-2" />
+              New Cycle Count
+            </Button>
+          </div>
         }
       />
 

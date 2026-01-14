@@ -35,7 +35,7 @@ export default function ReturnDetail() {
   const [newLineCondition, setNewLineCondition] = useState<ReturnLineCondition>('UNKNOWN');
   const [newLineReason, setNewLineReason] = useState('');
 
-  const lines = useMemo(() => (currentReturn ? getReturnLines(currentReturn.id) : []), [currentReturn, getReturnLines]);
+  const lines = currentReturn ? getReturnLines(currentReturn.id) : [];
   const vendor = vendors.find((v) => v.id === currentReturn?.vendor_id);
   const insight = currentReturn ? getReturnInsights(currentReturn, { returns, returnLines: repos.returns.returnLines }) : null;
 

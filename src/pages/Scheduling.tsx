@@ -17,6 +17,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { HelpTooltip } from '@/components/help/HelpTooltip';
+import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 import { cn } from '@/lib/utils';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useToast } from '@/components/ui/use-toast';
@@ -1074,6 +1075,7 @@ export default function Scheduling() {
           }
         actions={
           <div className="flex items-center gap-2 overflow-x-auto pb-1 min-w-0">
+            <ModuleHelpButton moduleKey="scheduling" />
             <div className="flex items-center gap-1">
               <Select value={technicianFilter} onValueChange={(val) => setTechnicianFilter(val as typeof technicianFilter)}>
                 <SelectTrigger className="w-44">

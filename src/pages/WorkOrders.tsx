@@ -8,6 +8,7 @@ import type { WorkOrder } from '@/types';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 
 type WorkOrderRow = WorkOrder & { customer_name: string; unit_label: string; is_active?: boolean };
 
@@ -173,6 +174,7 @@ export default function WorkOrders() {
 
     return statusFiltered;
   }, [scheduledWorkOrderIds, showUnscheduledOnly, statusFilter, tableData]);
+  const hasAnyWorkOrders = filteredTableData.length > 0;
 
   return (
     <div className="page-container">
@@ -180,10 +182,13 @@ export default function WorkOrders() {
         title="Work Orders"
         subtitle="Manage job, labor, parts, and status"
         actions={
-          <Button onClick={() => navigate('/work-orders/new')}>
-            <Plus className="w-4 h-4 mr-2" />
-            New Work Order
-          </Button>
+          <>
+            <ModuleHelpButton moduleKey="work_orders" context={{ isEmpty: !hasAnyWorkOrders }} />
+            <Button onClick={() => navigate('/work-orders/new')}>
+              <Plus className="w-4 h-4 mr-2" />
+              New Work Order
+            </Button>
+          </>
         }
       />
 

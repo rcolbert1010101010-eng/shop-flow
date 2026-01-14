@@ -11,6 +11,7 @@ import type { WarrantyClaim } from '@/types';
 import { Plus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { getWarrantyClaimInsights } from '@/services/returnsWarrantyInsights';
+import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 
 type ClaimRow = WarrantyClaim & { vendor_name: string; work_order_number: string };
 
@@ -99,10 +100,13 @@ export default function WarrantyClaims() {
         title="Warranty Claims"
         subtitle="Track vendor warranty claims"
         actions={
-          <Button onClick={handleCreate}>
-            <Plus className="w-4 h-4 mr-2" />
-            New Claim
-          </Button>
+          <>
+            <ModuleHelpButton moduleKey="warranty_returns" />
+            <Button onClick={handleCreate}>
+              <Plus className="w-4 h-4 mr-2" />
+              New Claim
+            </Button>
+          </>
         }
       />
 

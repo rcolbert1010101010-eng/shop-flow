@@ -5,6 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useRepos } from '@/repos';
 import { computeReturnsWarrantyReport } from '@/services/returnsWarrantyReporting';
+import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 
 const toNumber = (value: number | string | null | undefined) => {
   const numeric = typeof value === 'number' ? value : value != null ? Number(value) : NaN;
@@ -40,12 +41,14 @@ export default function ReturnsWarrantyReport() {
       vendorId: vendorFilter === '__ALL__' ? undefined : vendorFilter,
     });
   }, [returns, returnLines, warrantyClaims, warrantyClaimLines, vendors, parts, range, vendorFilter]);
+  const hasAnyReturns = returns.length > 0 || warrantyClaims.length > 0;
 
   return (
     <div className="page-container space-y-4">
       <PageHeader
         title="Returns & Warranty Report"
         subtitle="Aging, financials, and top vendors/parts"
+        actions={<ModuleHelpButton moduleKey="returns_warranty_report" context={{ isEmpty: !hasAnyReturns }} />}
       />
 
       <div className="flex flex-wrap gap-3">

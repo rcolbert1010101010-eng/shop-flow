@@ -10,6 +10,7 @@ import { useRepos } from '@/repos';
 import type { PurchaseOrder } from '@/types';
 import { getPurchaseOrderDerivedStatus } from '@/services/purchaseOrderStatus';
 import { HelpTooltip } from '@/components/help/HelpTooltip';
+import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 
 type PurchaseOrderRow = PurchaseOrder & {
   vendor_name: string;
@@ -171,10 +172,13 @@ export default function PurchaseOrders() {
           </span>
         }
         actions={
-          <Button onClick={() => navigate('/purchase-orders/new')} title="Start a vendor order. Add lines, receive items, then close when complete.">
-            <Plus className="w-4 h-4 mr-2" />
-            New PO
-          </Button>
+          <>
+            <ModuleHelpButton moduleKey="purchase_orders" />
+            <Button onClick={() => navigate('/purchase-orders/new')} title="Start a vendor order. Add lines, receive items, then close when complete.">
+              <Plus className="w-4 h-4 mr-2" />
+              New PO
+            </Button>
+          </>
         }
       />
 

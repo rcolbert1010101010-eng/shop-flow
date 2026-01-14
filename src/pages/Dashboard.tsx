@@ -30,6 +30,7 @@ import {
   CommandList,
 } from '@/components/ui/command';
 import { Wrench, ShoppingCart, AlertTriangle, DollarSign, Shield, ClipboardList, Clock3, Search, LayoutDashboard, RotateCw, Command as CommandIcon } from 'lucide-react';
+import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 import type { ScheduleItem, WorkOrder, Customer, Unit, Part } from '@/types';
 import { inventoryInsights } from '@/services/aiAssist/aiAssistPreview';
 import { useIsMobile } from '@/hooks/useIsMobile';
@@ -781,6 +782,7 @@ export default function Dashboard() {
         actions={
           <div className="flex flex-col gap-3 w-full">
             <div className="flex flex-wrap items-center gap-2">
+              <ModuleHelpButton moduleKey="dashboard" />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button size="sm" variant="outline" className="flex items-center gap-2">

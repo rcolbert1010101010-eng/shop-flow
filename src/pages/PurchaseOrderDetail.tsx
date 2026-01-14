@@ -44,6 +44,7 @@ import { getPurchaseOrderDerivedStatus } from '@/services/purchaseOrderStatus';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { SmartSearchSelect } from '@/components/common/SmartSearchSelect';
 import { HelpTooltip } from '@/components/help/HelpTooltip';
+import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 
 const toNumber = (value: number | string | null | undefined) => {
   const numeric = typeof value === 'number' ? value : value != null ? Number(value) : NaN;
@@ -536,6 +537,7 @@ export default function PurchaseOrderDetail() {
         backTo="/purchase-orders"
         actions={
           <div className="flex items-center gap-2">
+            <ModuleHelpButton moduleKey="purchase_orders" />
             {currentOrder && hasRemainingQty && (
               <Button size="sm" onClick={() => navigate(`/receiving?poId=${currentOrder.id}`)} title="Receive remaining items. Updates QOH and marks lines received.">
                 Receive

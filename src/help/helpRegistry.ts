@@ -9,6 +9,18 @@ import { paymentsHelp } from './modules/payments';
 import { schedulingHelp } from './modules/scheduling';
 import { warrantyReturnsHelp } from './modules/warranty_returns';
 import { manufacturingHelp } from './modules/manufacturing';
+import { customersHelp } from './modules/customers';
+import { dashboardHelp } from './modules/dashboard';
+import { unitsHelp } from './modules/units';
+import { techniciansHelp } from './modules/technicians';
+import { plasmaProjectsHelp } from './modules/plasma_projects';
+import { plasmaTemplatesHelp } from './modules/plasma_templates';
+import { receivingHistoryHelp } from './modules/receiving_history';
+import { vendorsHelp } from './modules/vendors';
+import { partCategoriesHelp } from './modules/part_categories';
+import { cycleCountsHelp } from './modules/cycle_counts';
+import { returnsWarrantyReportHelp } from './modules/returns_warranty_report';
+import { settingsHelp } from './modules/settings';
 
 export interface ModuleHelpContent {
   title: string;
@@ -29,6 +41,18 @@ export const helpByModule: Record<string, ModuleHelpContent> = {
   scheduling: schedulingHelp,
   warranty_returns: warrantyReturnsHelp,
   manufacturing: manufacturingHelp,
+  customers: customersHelp,
+  dashboard: dashboardHelp,
+  units: unitsHelp,
+  technicians: techniciansHelp,
+  plasma_projects: plasmaProjectsHelp,
+  plasma_templates: plasmaTemplatesHelp,
+  receiving_history: receivingHistoryHelp,
+  vendors: vendorsHelp,
+  part_categories: partCategoriesHelp,
+  cycle_counts: cycleCountsHelp,
+  returns_warranty_report: returnsWarrantyReportHelp,
+  settings: settingsHelp,
 };
 
 export function getModuleHelp(moduleKey: string): ModuleHelpContent | null {

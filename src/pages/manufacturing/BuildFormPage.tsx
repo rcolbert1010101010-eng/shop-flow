@@ -4,6 +4,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -300,9 +301,12 @@ export default function ManufacturingBuildFormPage() {
         title={isNew ? 'New Build' : build?.build_number ?? 'Build'}
         subtitle="Configure the build lifecycle"
         actions={
-          <Button type="submit" form="build-form">
-            Save Build
-          </Button>
+          <>
+            <ModuleHelpButton moduleKey="manufacturing" />
+            <Button type="submit" form="build-form">
+              Save Build
+            </Button>
+          </>
         }
       />
 

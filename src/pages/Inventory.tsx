@@ -4,7 +4,7 @@ import { useMutation } from '@tanstack/react-query';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { DataTable, Column } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
-import { FileSpreadsheet, Plus, Settings2, X as XIcon } from 'lucide-react';
+import { FileSpreadsheet, Plus, Settings2 } from 'lucide-react';
 import { useRepos } from '@/repos';
 import type { Part } from '@/types';
 import { cn } from '@/lib/utils';
@@ -98,6 +98,8 @@ export default function Inventory() {
   const [priceAdjustValue, setPriceAdjustValue] = useState('');
   const [bulkSummary, setBulkSummary] = useState<string | null>(null);
   const isMobile = useIsMobile();
+  const [vendorFilter, setVendorFilter] = useState<string>('ALL');
+  const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const toNumber = (value: number | string | null | undefined) => {
     const numeric = typeof value === 'number' ? value : value != null ? Number(value) : NaN;
     return Number.isFinite(numeric) ? numeric : 0;
@@ -496,8 +498,14 @@ export default function Inventory() {
     if (needsReorderOnly) {
       list = list.filter((p) => p.__needsReorder);
     }
+    if (vendorFilter !== 'ALL') {
+      list = list.filter((p) => p.vendor_id === vendorFilter);
+    }
+    if (categoryFilter !== 'ALL') {
+      list = list.filter((p) => p.category_id === categoryFilter);
+    }
     return list;
-  }, [enhancedParts, needsReorderOnly, searchParams, stockFilter]);
+  }, [enhancedParts, needsReorderOnly, searchParams, stockFilter, vendorFilter, categoryFilter]);
   const selectedParts = useMemo(
     () => filteredParts.filter((p) => selectedIds[p.id]),
     [filteredParts, selectedIds]
@@ -1004,7 +1012,7 @@ export default function Inventory() {
         }
       />
 
-      <div className="sticky top-16 z-20 bg-background/95 backdrop-blur border-b mb-4 space-y-3 py-3">
+      <div className="mb-4 space-y-3 py-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
           <div className="flex flex-wrap items-center gap-2">
             <Input
@@ -1078,25 +1086,37 @@ export default function Inventory() {
               {bulkSelectMode ? 'Exit Bulk Select' : 'Bulk Select'}
             </Button>
           </div>
-          <div className="flex items-center gap-2 lg:ml-auto w-full lg:w-auto">
-            <Input
-              placeholder="Search parts"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="w-full lg:w-56"
-            />
-            {searchInput && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setSearchInput('')}
-                aria-label="Clear search"
-              >
-                <XIcon className="w-4 h-4" />
-              </Button>
-            )}
-          </div>
         </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Select value={vendorFilter} onValueChange={setVendorFilter}>
+          <SelectTrigger className="w-48">
+            <SelectValue placeholder="All Vendors" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">All Vendors</SelectItem>
+            {vendors.map((v) => (
+              <SelectItem key={v.id} value={v.id}>
+                {v.vendor_name || (v as any).name || (v as any).company_name || 'Vendor'}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+          <SelectTrigger className="w-48">
+            <SelectValue placeholder="All Categories" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">All Categories</SelectItem>
+            {categories.map((c) => (
+              <SelectItem key={c.id} value={c.id}>
+                {c.category_name || (c as any).name || 'Category'}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex flex-wrap items-center gap-2 text-sm">

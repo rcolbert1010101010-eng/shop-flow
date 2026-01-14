@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { HelpTooltip } from '@/components/help/HelpTooltip';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useRepos } from '@/repos';
+import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 
 export default function PlasmaProjects() {
   const repos = useRepos();
@@ -38,7 +39,7 @@ export default function PlasmaProjects() {
   return (
     <TooltipProvider>
       <div className="page-container">
-        <PageHeader title="Plasma Projects" />
+        <PageHeader title="Plasma Projects" actions={<ModuleHelpButton moduleKey="plasma_projects" />} />
         <div className="flex justify-between items-center mb-4">
           <p className="text-sm text-muted-foreground flex items-center gap-1">
             Manage standalone plasma projects and link them to Sales Orders for quoting and invoicing.

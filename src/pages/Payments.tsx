@@ -15,6 +15,7 @@ import type { Invoice, Payment, PaymentMethod, PaymentOrderType, PaymentStatus }
 import { useRepos } from '@/repos';
 import { usePayments } from '@/hooks/usePayments';
 import { useToast } from '@/hooks/use-toast';
+import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 
 const ORDER_TYPE_OPTIONS: Array<{ value: PaymentOrderType | 'ALL'; label: string }> = [
   { value: 'ALL', label: 'All Orders' },
@@ -124,6 +125,7 @@ export default function PaymentsPage() {
   });
 
   const rawPayments = useMemo(() => paymentsQuery.data ?? [], [paymentsQuery.data]);
+  const hasAnyPayments = (allPaymentsQuery.data?.length ?? 0) > 0;
   const paymentsByOrder = useMemo(() => {
     const map = new Map<string, Payment[]>();
     (allPaymentsQuery.data ?? []).forEach((payment) => {
@@ -389,7 +391,11 @@ export default function PaymentsPage() {
   return (
     <div className="page-container space-y-6">
       <div className="flex items-center justify-between gap-3">
-        <PageHeader title="Payments" subtitle="Track payments across work and sales orders" />
+        <PageHeader 
+          title="Payments" 
+          subtitle="Track payments across work and sales orders"
+          actions={<ModuleHelpButton moduleKey="payments" context={{ isEmpty: !hasAnyPayments }} />}
+        />
         <Button onClick={handleOpenReceivePayment}>Receive Payment</Button>
       </div>
 

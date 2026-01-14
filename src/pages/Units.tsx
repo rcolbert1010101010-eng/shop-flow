@@ -16,6 +16,7 @@ import { Plus, MoreHorizontal, Wrench, CalendarClock, ShoppingCart } from 'lucid
 import { useRepos } from '@/repos';
 import { useToast } from '@/hooks/use-toast';
 import type { Unit } from '@/types';
+import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 
 const OPEN_WO_STATUSES = ['OPEN', 'IN_PROGRESS', 'SCHEDULED', 'ESTIMATE', 'HOLD'];
 const OPEN_SO_STATUSES = ['OPEN', 'APPROVED', 'ESTIMATE', 'QUOTE', 'PARTIAL'];
@@ -204,6 +205,7 @@ export default function Units() {
         : unit.is_active === false;
     return matchesCustomer && matchesStatus;
   });
+  const hasAnyUnits = filteredUnits.length > 0;
 
   return (
     <div className="page-container">
@@ -211,10 +213,13 @@ export default function Units() {
         title="Units / Equipment"
         subtitle="Manage customer equipment and vehicles"
         actions={
-          <Button onClick={() => navigate('/units/new')}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Unit
-          </Button>
+          <div className="flex items-center gap-2">
+            <ModuleHelpButton moduleKey="units" context={{ isEmpty: !hasAnyUnits }} />
+            <Button onClick={() => navigate('/units/new')}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Unit
+            </Button>
+          </div>
         }
       />
 

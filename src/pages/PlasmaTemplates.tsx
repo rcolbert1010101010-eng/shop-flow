@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { HelpTooltip } from '@/components/help/HelpTooltip';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useRepos } from '@/repos';
+import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 
 export default function PlasmaTemplates() {
   const repos = useRepos();
@@ -32,7 +33,7 @@ export default function PlasmaTemplates() {
   return (
     <TooltipProvider>
       <div className="page-container">
-        <PageHeader title="Plasma Templates" />
+        <PageHeader title="Plasma Templates" actions={<ModuleHelpButton moduleKey="plasma_templates" />} />
         <p className="text-sm text-muted-foreground mb-4 flex items-center gap-1">
           Reusable cut line sets for common parts. Start faster and price consistently.
           <HelpTooltip content="Reusable cut line sets for common parts. Start faster and price consistently." />

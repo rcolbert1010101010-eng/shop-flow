@@ -4,11 +4,13 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Card } from '@/components/ui/card';
 import { useShopStore } from '@/stores/shopStore';
 import { useRepos } from '@/repos';
+import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 
 export default function ReceivingHistory() {
   const receipts = useShopStore((s) => s.receivingReceipts);
   const parts = useRepos().parts.parts;
   const vendors = useRepos().vendors.vendors;
+  const hasAnyReceipts = receipts.length > 0;
 
   const sorted = useMemo(
     () => [...receipts].sort((a, b) => new Date(b.received_at).getTime() - new Date(a.received_at).getTime()),
@@ -17,7 +19,12 @@ export default function ReceivingHistory() {
 
   return (
     <div className="page-container space-y-4">
-      <PageHeader title="Receiving History" subtitle="Audit of received inventory" backTo="/inventory" />
+      <PageHeader
+        title="Receiving History"
+        subtitle="Audit of received inventory"
+        backTo="/inventory"
+        actions={<ModuleHelpButton moduleKey="receiving_history" context={{ isEmpty: !hasAnyReceipts }} />}
+      />
 
       <Card className="p-4">
         <div className="overflow-x-auto">

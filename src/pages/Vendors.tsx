@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 
 export default function Vendors() {
   const navigate = useNavigate();
@@ -23,6 +24,7 @@ export default function Vendors() {
     email: '',
     notes: '',
   });
+  const hasAnyVendors = vendors.length > 0;
 
   const columns: Column<Vendor>[] = [
     { key: 'vendor_name', header: 'Vendor Name', sortable: true },
@@ -62,10 +64,13 @@ export default function Vendors() {
         title="Vendors"
         subtitle="Manage your parts vendors"
         actions={
-          <Button onClick={() => setDialogOpen(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Vendor
-          </Button>
+          <div className="flex items-center gap-2">
+            <ModuleHelpButton moduleKey="vendors" context={{ isEmpty: !hasAnyVendors }} />
+            <Button onClick={() => setDialogOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Vendor
+            </Button>
+          </div>
         }
       />
 

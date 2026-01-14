@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 
 export default function Settings() {
   const env = (import.meta as any).env ?? {};
@@ -39,6 +40,7 @@ export default function Settings() {
   const [pendingChanges, setPendingChanges] = useState<
     { key: SystemSettingKey; oldValue: any; newValue: any; sensitivity?: string; requiresReason?: boolean }[]
   >([]);
+  const hasSettings = resolvedSettings.length > 0;
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmReason, setConfirmReason] = useState('');
   const [isApplying, setIsApplying] = useState(false);
@@ -246,35 +248,38 @@ export default function Settings() {
         title="Settings"
         subtitle="Configure shop settings and defaults"
         actions={
-          editing ? (
-            <>
+          <div className="flex gap-2 items-center">
+            {editing ? (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    hydrateForm();
+                    setEditing(false);
+                  }}
+                >
+                  <X className="w-4 h-4 mr-2" />
+                  Cancel
+                </Button>
+                <Button onClick={handleSave} disabled={confirmOpen || isApplying}>
+                  <Save className="w-4 h-4 mr-2" />
+                  Save
+                </Button>
+              </>
+            ) : (
               <Button
                 variant="outline"
                 onClick={() => {
                   hydrateForm();
-                  setEditing(false);
+                  setEditing(true);
                 }}
               >
-                <X className="w-4 h-4 mr-2" />
-                Cancel
+                <Edit className="w-4 h-4 mr-2" />
+                Edit
               </Button>
-              <Button onClick={handleSave} disabled={confirmOpen || isApplying}>
-                <Save className="w-4 h-4 mr-2" />
-                Save
-              </Button>
-            </>
-          ) : (
-            <Button
-              variant="outline"
-              onClick={() => {
-                hydrateForm();
-                setEditing(true);
-              }}
-            >
-              <Edit className="w-4 h-4 mr-2" />
-              Edit
-            </Button>
-          )
+            )}
+            <ModuleHelpButton moduleKey="settings" context={{ isEmpty: !hasSettings }} />
+          </div>
         }
       />
       <div className="flex items-center justify-between mb-4 text-sm text-muted-foreground">
@@ -346,6 +351,62 @@ export default function Settings() {
             }
             return null;
           })}
+        </div>
+      </div>
+
+      <div className="form-section max-w-xl mt-6">
+        <h2 className="text-lg font-semibold mb-4">Pricing &amp; Markups</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="markup_retail_percent">Default Parts Markup (Retail %)</Label>
+            <Input
+              id="markup_retail_percent"
+              type="number"
+              step="0.01"
+              value={(draft as any).markup_retail_percent ?? ''}
+              onChange={(e) =>
+                setDraft((prev) => ({ ...prev, markup_retail_percent: e.target.value }))
+              }
+              disabled={!editing}
+            />
+          </div>
+          <div>
+            <Label htmlFor="markup_fleet_percent">Default Parts Markup (Fleet %)</Label>
+            <Input
+              id="markup_fleet_percent"
+              type="number"
+              step="0.01"
+              value={(draft as any).markup_fleet_percent ?? ''}
+              onChange={(e) =>
+                setDraft((prev) => ({ ...prev, markup_fleet_percent: e.target.value }))
+              }
+              disabled={!editing}
+            />
+          </div>
+          <div>
+            <Label htmlFor="markup_wholesale_percent">Default Parts Markup (Wholesale %)</Label>
+            <Input
+              id="markup_wholesale_percent"
+              type="number"
+              step="0.01"
+              value={(draft as any).markup_wholesale_percent ?? ''}
+              onChange={(e) =>
+                setDraft((prev) => ({ ...prev, markup_wholesale_percent: e.target.value }))
+              }
+              disabled={!editing}
+            />
+          </div>
+          <div>
+            <Label htmlFor="minimum_margin_percent">Minimum Margin %</Label>
+            <Input
+              id="minimum_margin_percent"
+              type="number"
+              step="0.01"
+              value={(draft as any).minimum_margin_percent ?? ''}
+              onChange={(e) => handleFieldChange('minimum_margin_percent', e.target.value)}
+              disabled={!editing}
+            />
+          </div>
         </div>
       </div>
 

@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 
 export default function Categories() {
   const navigate = useNavigate();
@@ -21,6 +22,7 @@ export default function Categories() {
     category_name: '',
     description: '',
   });
+  const hasAnyCategories = categories.length > 0;
 
   const columns: Column<PartCategory>[] = [
     { key: 'category_name', header: 'Category Name', sortable: true },
@@ -57,10 +59,13 @@ export default function Categories() {
         title="Part Categories"
         subtitle="Organize your inventory by category"
         actions={
-          <Button onClick={() => setDialogOpen(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Category
-          </Button>
+          <div className="flex items-center gap-2">
+            <ModuleHelpButton moduleKey="part_categories" context={{ isEmpty: !hasAnyCategories }} />
+            <Button onClick={() => setDialogOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Category
+            </Button>
+          </div>
         }
       />
 

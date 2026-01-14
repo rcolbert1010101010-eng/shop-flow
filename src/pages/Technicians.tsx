@@ -6,6 +6,7 @@ import { Plus } from 'lucide-react';
 import { useRepos } from '@/repos';
 import type { Technician } from '@/types';
 import { Badge } from '@/components/ui/badge';
+import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 
 const toNumber = (value: number | string | null | undefined) => {
   const numeric = typeof value === 'number' ? value : value != null ? Number(value) : NaN;
@@ -51,6 +52,7 @@ export default function Technicians() {
       },
     },
   ];
+  const hasAnyTechs = technicians.length > 0;
 
   return (
     <div className="page-container">
@@ -58,10 +60,13 @@ export default function Technicians() {
         title="Technicians"
         subtitle="Manage shop technicians"
         actions={
-          <Button onClick={() => navigate('/technicians/new')}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Technician
-          </Button>
+          <div className="flex items-center gap-2">
+            <ModuleHelpButton moduleKey="technicians" context={{ isEmpty: !hasAnyTechs }} />
+            <Button onClick={() => navigate('/technicians/new')}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Technician
+            </Button>
+          </div>
         }
       />
 

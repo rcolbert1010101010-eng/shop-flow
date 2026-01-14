@@ -8,39 +8,31 @@ export const settingsRepoApi: SettingsRepo = {
   get settings() {
     return useShopStore.getState().settings;
   },
+
   async updateSettings(settings: Partial<SystemSettings>) {
-    // Optimistically update local store first
-    useShopStore.getState().updateSettings(settings);
+    const current = useShopStore.getState().settings;
 
-    // Fire-and-forget server sync; do not block or throw on failure
-    void apiClient
-      .put<SystemSettings>('/settings', settings)
-      .then((updated) => {
-        useShopStore.getState().updateSettings(updated);
-      })
-      .catch((err) => {
-        console.warn('Settings sync failed; will keep local version', err);
-      });
-  },
+    // Merge current settings with the payload (payload wins)
+    const mergedFromClient = { ...current, ...settings } as SystemSettings;
 
-  async logSettingHistory(payload: any) {
-    // Best-effort; ignore failures
-    void apiClient.post('/settings/history', payload).catch((err) => {
-      console.warn('Settings history sync failed', err);
-    });
-  },
+    let updatedFromServer: SystemSettings | null = null;
 
-  async listSettingHistory(args?: { key?: string; limit?: number }): Promise<any[]> {
     try {
-      const params = new URLSearchParams();
-      if (args?.key) params.set('key', args.key);
-      if (args?.limit) params.set('limit', String(args.limit));
-      const queryString = params.toString();
-      const res = await apiClient.get<any[]>(`/settings/history${queryString ? `?${queryString}` : ''}`);
-      return res || [];
-    } catch (err) {
-      console.warn('Settings history fetch failed', err);
-      return [];
+      // Still attempt to sync with the backend
+      updatedFromServer = await apiClient.put<SystemSettings>('/settings', settings);
+    } catch (error) {
+      // On error, keep the client-merged settings so the UI reflects the change
+      useShopStore.getState().updateSettings(mergedFromClient);
+      // Re-throw so Settings.tsx can handle the error/toast
+      throw error;
     }
+
+    // If the server returned something, prefer it but let the payload fields win
+    const finalSettings = {
+      ...updatedFromServer,
+      ...settings,
+    } as SystemSettings;
+
+    useShopStore.getState().updateSettings(finalSettings);
   },
 };

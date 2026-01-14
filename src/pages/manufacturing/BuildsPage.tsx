@@ -18,6 +18,7 @@ import type { ManufacturingBuildStatus } from '@/types';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { fetchProductBom } from '@/integrations/supabase/manufacturing';
 import { fetchParts } from '@/integrations/supabase/catalog';
+import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 
 const STATUS_OPTIONS: Array<{ value: ManufacturingBuildStatus | 'all'; label: string }> = [
   { value: 'all', label: 'All Statuses' },
@@ -197,6 +198,7 @@ export default function ManufacturingBuildsPage() {
         subtitle="Track the lifecycle of each build"
         actions={
           <div className="flex items-center gap-2">
+            <ModuleHelpButton moduleKey="manufacturing" />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline">{statusLabel}</Button>

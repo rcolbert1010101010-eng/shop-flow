@@ -19,6 +19,7 @@ import { useRepos } from '@/repos';
 import type { Return } from '@/types';
 import { Plus } from 'lucide-react';
 import { getReturnInsights } from '@/services/returnsWarrantyInsights';
+import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 
 type ReturnRow = Return & { vendor_name: string };
 
@@ -95,14 +96,16 @@ export default function Returns() {
         title="Returns"
         subtitle="Track vendor returns and RMAs"
         actions={
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="w-4 h-4 mr-2" />
-                New Return
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
+          <>
+            <ModuleHelpButton moduleKey="warranty_returns" />
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="w-4 h-4 mr-2" />
+                  New Return
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
               <DialogHeader>
                 <DialogTitle>Create Return</DialogTitle>
                 <DialogDescription>Select a vendor to start a return.</DialogDescription>
@@ -131,6 +134,7 @@ export default function Returns() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          </>
         }
       />
 

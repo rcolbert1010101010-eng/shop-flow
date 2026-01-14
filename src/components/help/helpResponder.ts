@@ -1,4 +1,6 @@
 import type { ModuleHelpContent } from '@/help/helpRegistry';
+import { getModuleHelp } from '@/help/helpRegistry';
+import type { HelpContext } from '@/help/types';
 
 interface Response {
   answer: string;
@@ -12,6 +14,49 @@ function normalizeText(text: string): string {
 function countMatches(text: string, searchTerms: string[]): number {
   const normalized = normalizeText(text);
   return searchTerms.filter((term) => normalized.includes(term)).length;
+}
+
+function isExplainQuestion(text: string): boolean {
+  const cleaned = normalizeText(text).replace(/[?.!]/g, '');
+  return (
+    cleaned === 'explain this screen' ||
+    cleaned === 'what is this screen for' ||
+    cleaned === 'what does this screen do'
+  );
+}
+
+function buildExplainAnswer(moduleKey: string, fallbackContent: ModuleHelpContent, context?: HelpContext): string {
+  const moduleContent = getModuleHelp(moduleKey) ?? fallbackContent;
+  const title = moduleContent.title;
+
+  const workflows = moduleContent.workflows.slice(0, 3).map((w) => w.title);
+  const tips: string[] = [];
+  moduleContent.tips.forEach((group) => {
+    group.items.forEach((item) => {
+      if (tips.length < 2) tips.push(item);
+    });
+  });
+
+  const lines: string[] = [];
+  lines.push(`This screen is for managing ${title.toLowerCase()} in your shop.`);
+
+  if (workflows.length > 0) {
+    lines.push('\nCommon things you’ll do here include:');
+    workflows.forEach((w) => lines.push(`• ${w}`));
+  }
+
+  if (tips.length > 0) {
+    lines.push('\nWatch-outs:');
+    tips.forEach((t) => lines.push(`• ${t}`));
+  }
+
+  if (moduleKey === 'payments' && context?.isEmpty) {
+    lines.push(
+      '\nRight now this screen is empty because no payments have been recorded yet. Start by using “Receive Payment” to record your first payment. Once payments exist, you can review history, filter by date/method, and audit balances here.'
+    );
+  }
+
+  return lines.join('\n');
 }
 
 function getModuleSuggestions(moduleKey: string): string[] {
@@ -101,6 +146,56 @@ function getModuleSuggestions(moduleKey: string): string[] {
       'What statuses should we use for fab work?',
       'How do plasma/brake/weld jobs differ in tracking?',
     ],
+    units: [
+      'How do I add a new truck for an existing fleet customer?',
+      "What should I fill out on a unit if I'm in a hurry?",
+      'How do I quickly see all work we have done on this unit?',
+    ],
+    technicians: [
+      'How should I set up tech names for a large shop?',
+      "What's the best way to handle inactive or seasonal techs?",
+      'How do techs connect to the schedule and work orders?',
+    ],
+    plasma_projects: [
+      'How do I organize multiple cut jobs for the same customer?',
+      "What's the difference between a plasma project and a template?",
+      'How should I name plasma projects so they are easy to find later?',
+    ],
+    plasma_templates: [
+      'When should I use a plasma template vs a one-off project?',
+      'How do I update a template without losing history?',
+      'What info should I always fill out on a template?',
+    ],
+    receiving_history: [
+      'How do I see all receipts for a specific part?',
+      'How can I check what was received on a particular PO?',
+      'How do I use receiving history to audit inventory issues?',
+    ],
+    vendors: [
+      'What vendor info is most important to set up first?',
+      'How do vendors tie into purchase orders and receiving?',
+      'How should I handle duplicate vendors?',
+    ],
+    part_categories: [
+      'How should I structure part categories for reporting?',
+      'How many categories is too many?',
+      "What's the impact of changing a part's category?",
+    ],
+    cycle_counts: [
+      'Which parts should I count first?',
+      'How often should I run cycle counts?',
+      'How do cycle counts affect on-hand quantity?',
+    ],
+    returns_warranty_report: [
+      'How do I see all warranty jobs for the last 30 days?',
+      'How can I spot repeat issues with the same part or component?',
+      "What's the best way to use this report in a weekly meeting?",
+    ],
+    settings: [
+      'Which settings should I change first when I set up a new shop?',
+      'Who should be allowed to edit settings?',
+      'How do settings affect inventory and finance behavior?',
+    ],
   };
   return suggestions[moduleKey] || [
     'How do I get started?',
@@ -112,11 +207,19 @@ function getModuleSuggestions(moduleKey: string): string[] {
 export function respond(
   moduleKey: string,
   content: ModuleHelpContent,
-  userText: string
+  userText: string,
+  context?: HelpContext
 ): Response {
   const normalized = normalizeText(userText);
   const words = normalized.split(/\s+/).filter((w) => w.length > 2);
   
+  if (isExplainQuestion(userText)) {
+    return {
+      answer: buildExplainAnswer(moduleKey, content, context),
+      suggestions: getModuleSuggestions(moduleKey),
+    };
+  }
+
   if (words.length === 0) {
     return {
       answer: `Here's an overview of ${content.title}:\n\n${content.workflows[0]?.title || 'Get started'} workflow:\n${content.workflows[0]?.steps.slice(0, 3).map((s, i) => `${i + 1}. ${s}`).join('\n') || 'No workflows available'}`,

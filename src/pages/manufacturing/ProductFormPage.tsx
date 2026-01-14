@@ -11,6 +11,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -354,6 +355,7 @@ export default function ManufacturingProductFormPage() {
         subtitle={isNew ? 'Create a manufactured product' : 'Update product details and options'}
         actions={
           <div className="flex items-center gap-2">
+            <ModuleHelpButton moduleKey="manufacturing" />
             {!isNew && (
               <Button variant="ghost" onClick={() => setIsEditing((prev) => !prev)}>
                 <Edit className="w-4 h-4 mr-1" />

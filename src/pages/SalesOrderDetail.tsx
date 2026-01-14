@@ -66,6 +66,7 @@ import { MobileActionBar, MobileActionBarSpacer } from '@/components/common/Mobi
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { normalizeQty, formatQtyWithUom } from '@/lib/utils';
 import { HelpTooltip } from '@/components/help/HelpTooltip';
+import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 
 const BROWSE_PARTS_PAGE_SIZE = 25;
 
@@ -986,6 +987,7 @@ export default function SalesOrderDetail() {
         }
         actions={
           <div className="flex flex-wrap gap-2">
+            <ModuleHelpButton moduleKey="sales_orders" />
             {aiAssistEnabled && currentOrder && (
               <Button variant="outline" onClick={() => setAiAssistOpen(true)}>
                 <Sparkles className="w-4 h-4 mr-2" />

@@ -35,7 +35,7 @@ import shopflowLogo from '@/assets/branding/shopflow-logo.svg';
 export type NavLink = { type: 'link'; path: string; label: string; icon: LucideIcon };
 export type NavGroup = {
   type: 'group';
-  key: 'serviceOrders' | 'inventory' | 'returnsWarranty' | 'manufacturing';
+  key: 'serviceOrders' | 'inventory' | 'returnsWarranty' | 'manufacturing' | 'purchaseOrders';
   label: string;
   icon: LucideIcon;
   children: NavLink[];
@@ -66,14 +66,22 @@ const inventoryGroup: NavGroup = {
   icon: Package,
   children: [
     { type: 'link', path: '/inventory', label: 'Parts', icon: Package },
-    { type: 'link', path: '/receiving', label: 'Receiving', icon: ClipboardList },
-    { type: 'link', path: '/receiving-history', label: 'Receiving History', icon: ClipboardList },
     { type: 'link', path: '/vendors', label: 'Vendors', icon: Building2 },
     { type: 'link', path: '/categories', label: 'Categories', icon: Tags },
     { type: 'link', path: '/cycle-counts', label: 'Cycle Counts', icon: ListChecks },
   ],
 };
-const purchaseOrdersLink: NavLink = { type: 'link', path: '/purchase-orders', label: 'Purchase Orders', icon: ClipboardList };
+const purchaseOrdersGroup: NavGroup = {
+  type: 'group',
+  key: 'purchaseOrders',
+  label: 'Purchase Orders',
+  icon: ClipboardList,
+  children: [
+    { type: 'link', path: '/purchase-orders', label: 'Purchase Orders', icon: ClipboardList },
+    { type: 'link', path: '/receiving', label: 'Receiving', icon: ClipboardList },
+    { type: 'link', path: '/receiving-history', label: 'Receiving History', icon: ClipboardList },
+  ],
+};
 const schedulingLink: NavLink = { type: 'link', path: '/scheduling', label: 'Scheduling', icon: Calendar };
 const manufacturingGroup: NavGroup = {
   type: 'group',
@@ -107,7 +115,7 @@ export const navSections: NavSection[] = [
   { label: 'Sales', items: [salesOrdersLink] },
   { label: 'Service', items: [serviceGroup] },
   { label: 'Inventory', items: [inventoryGroup] },
-  { label: 'Purchasing', items: [purchaseOrdersLink] },
+  { label: 'Purchasing', items: [purchaseOrdersGroup] },
   { label: 'Scheduling', items: [schedulingLink] },
   { label: 'Manufacturing', items: [manufacturingGroup] },
   { label: 'Accounting', items: [invoicesLink, paymentsLink, returnsWarrantyGroup] },

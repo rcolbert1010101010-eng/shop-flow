@@ -69,6 +69,7 @@ import { MobileActionBar, MobileActionBarSpacer } from '@/components/common/Mobi
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { normalizeQty, formatQtyWithUom } from '@/lib/utils';
 import { HelpTooltip } from '@/components/help/HelpTooltip';
+import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 import type {
   FabJobLine,
   PlasmaJobLine,
@@ -1801,6 +1802,7 @@ const jobReadinessValues = Object.values(jobReadinessById);
         backTo="/work-orders"
         actions={
           <div className="flex flex-wrap gap-2 items-center">
+            <ModuleHelpButton moduleKey="work_orders" />
             {aiAssistEnabled && currentOrder && (
               <Button variant="outline" onClick={() => setAiAssistOpen(true)}>
                 <Sparkles className="w-4 h-4 mr-2" />
