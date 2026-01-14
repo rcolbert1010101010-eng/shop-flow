@@ -8,7 +8,6 @@ import type { WorkOrder } from '@/types';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { TableDensitySelect } from '@/components/ui/TableDensitySelect';
 
 type WorkOrderRow = WorkOrder & { customer_name: string; unit_label: string; is_active?: boolean };
 
@@ -212,7 +211,6 @@ export default function WorkOrders() {
               {showUnscheduledOnly ? 'All' : 'Unscheduled only'}
             </Button>
           </div>
-          <TableDensitySelect />
         </div>
       </div>
 

@@ -30,6 +30,7 @@ import { parsePartsImport, type ImportParseResult } from '@/lib/partsImport';
 import { cn } from '@/lib/utils';
 import { useShopStore } from '@/stores/shopStore';
 import { ChevronDown, ChevronUp, History } from 'lucide-react';
+import { HelpTooltip } from '@/components/help/HelpTooltip';
 
 type ImportPartsDialogProps = {
   open: boolean;
@@ -267,7 +268,10 @@ Optional columns: bin_location, location, min_qty, max_qty, has_core, core_cost.
         <div className="flex-1 overflow-auto space-y-4 pr-1">
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label htmlFor="parts-import-text">Paste rows</Label>
+              <Label htmlFor="parts-import-text" className="flex items-center gap-1">
+                Paste rows
+                <HelpTooltip content="Paste CSV or tab-separated data with headers. Download the template to ensure correct formatting." />
+              </Label>
               <Button variant="outline" size="sm" onClick={handleDownloadTemplate}>
                 <Download className="w-4 h-4 mr-2" />
                 Download Excel Template

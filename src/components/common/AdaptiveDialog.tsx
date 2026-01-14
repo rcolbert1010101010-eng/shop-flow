@@ -10,9 +10,10 @@ type AdaptiveDialogProps = {
   description?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
+  contentClassName?: string;
 };
 
-export function AdaptiveDialog({ open, onOpenChange, title, description, children, footer }: AdaptiveDialogProps) {
+export function AdaptiveDialog({ open, onOpenChange, title, description, children, footer, contentClassName }: AdaptiveDialogProps) {
   const isMobile = useIsMobile();
 
   if (isMobile) {
@@ -32,7 +33,7 @@ export function AdaptiveDialog({ open, onOpenChange, title, description, childre
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className={contentClassName || "sm:max-w-lg"}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}

@@ -149,7 +149,7 @@ export function Sidebar({ className }: { className?: string } = {}) {
         key={options?.nested ? `${item.path}-nested` : item.path}
         to={item.path}
         className={cn(
-          'relative flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors duration-200',
+          'relative flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors duration-200 min-w-0',
           'before:absolute before:left-0 before:top-1 before:bottom-1 before:w-[3px] before:rounded-full',
           options?.nested ? 'pl-10 text-sm' : '',
           isActive
@@ -158,7 +158,7 @@ export function Sidebar({ className }: { className?: string } = {}) {
         )}
       >
         <item.icon className={cn('flex-shrink-0', options?.nested ? 'w-4 h-4' : 'w-5 h-5')} />
-        <span className="font-medium">{item.label}</span>
+        <span className="font-medium whitespace-nowrap truncate">{item.label}</span>
       </Link>
     );
   };
@@ -234,7 +234,7 @@ export function Sidebar({ className }: { className?: string } = {}) {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 py-4 px-2 overflow-y-auto">
+        <nav className="flex-1 py-4 px-2 overflow-y-auto sidebar-scroll">
           <Accordion
             type="single"
             collapsible
@@ -243,10 +243,7 @@ export function Sidebar({ className }: { className?: string } = {}) {
             className="space-y-2"
           >
             {navSections.map((section) => (
-              <div key={section.label} className="space-y-1">
-                <div className="px-3 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {section.label}
-                </div>
+              <div key={section.label} className="mb-2">
                 <div className="space-y-1">
                   {section.items.map((item) =>
                     item.type === 'group' ? renderGroup(item) : renderLink(item)

@@ -15,7 +15,10 @@ export function TableDensitySelect({ className }: { className?: string }) {
   return (
     <div className={cn('flex items-center gap-2 text-sm text-muted-foreground', className)}>
       <span>Density</span>
-      <Select value={tableDensity} onValueChange={(value) => setTableDensity(value as TableDensity)}>
+      <Select
+        defaultValue={tableDensity}
+        onValueChange={(value) => setTableDensity(value as TableDensity)}
+      >
         <SelectTrigger className="w-[140px]">
           <SelectValue placeholder="Density" />
         </SelectTrigger>

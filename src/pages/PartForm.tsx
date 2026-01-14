@@ -45,7 +45,9 @@ import {
 } from '@/components/ui/popover';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { MobileActionBar, MobileActionBarSpacer } from '@/components/common/MobileActionBar';
-import { normalizeQty, formatQtyWithUom } from '@/lib/utils';
+import { normalizeQty, formatQtyWithUom, formatSheetsEquivalent, isSheetMaterialPart, getSqftPerSheet } from '@/lib/utils';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { HelpTooltip } from '@/components/help/HelpTooltip';
 
 const toNumber = (value: number | string | null | undefined) => {
   const numeric = typeof value === 'number' ? value : value != null ? Number(value) : NaN;
@@ -765,7 +767,8 @@ export default function PartForm() {
   };
 
   return (
-    <div className="page-container space-y-4">
+    <TooltipProvider>
+      <div className="page-container space-y-4">
       <PageHeader
         title={isNew ? 'New Part' : part?.part_number || 'Part'}
         subtitle={
@@ -799,17 +802,19 @@ export default function PartForm() {
                 </Button>
               )}
               {!isNew && part?.material_kind === 'SHEET' && part?.uom === 'SQFT' && (
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setRemnantDialogOpen(true);
-                    setRemnantWidth('');
-                    setRemnantLength('');
-                    setRemnantBinLocation('');
-                  }}
-                >
-                  Create Remnant
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setRemnantDialogOpen(true);
+                      setRemnantWidth('');
+                      setRemnantLength('');
+                      setRemnantBinLocation('');
+                    }}
+                  >
+                    Create Remnant
+                  </Button>
+                </div>
               )}
               {!isNew && (
                 part?.is_active ? (
@@ -992,7 +997,10 @@ export default function PartForm() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <Label htmlFor="part_number">Part Number *</Label>
+                <Label htmlFor="part_number" className="flex items-center gap-1">
+                  Part Number *
+                  <HelpTooltip content="Your unique identifier. Keep it stable—this is what techs search and what prints on paperwork." />
+                </Label>
                 <Input
                   id="part_number"
                   value={formData.part_number}
@@ -1003,7 +1011,10 @@ export default function PartForm() {
                 />
               </div>
               <div>
-                <Label htmlFor="barcode">Barcode</Label>
+                <Label htmlFor="barcode" className="flex items-center gap-1">
+                  Barcode
+                  <HelpTooltip content="Optional scan value. Use when you want quick add by scanner." />
+                </Label>
                 <Input
                   id="barcode"
                   value={formData.barcode}
@@ -1013,7 +1024,10 @@ export default function PartForm() {
                 />
               </div>
               <div className="md:col-span-2">
-                <Label htmlFor="description">Description</Label>
+                <Label htmlFor="description" className="flex items-center gap-1">
+                  Description
+                  <HelpTooltip content="What it is in plain English. Make it searchable (brand, size, key spec)." />
+                </Label>
                 <Textarea
                   id="description"
                   value={formData.description}
@@ -1024,7 +1038,10 @@ export default function PartForm() {
                 />
               </div>
               <div>
-                <Label htmlFor="vendor">Vendor *</Label>
+                <Label htmlFor="vendor" className="flex items-center gap-1">
+                  Vendor *
+                  <HelpTooltip content="Who you normally buy it from. Helps purchasing later." />
+                </Label>
                 <div className="flex gap-2">
                   <Select
                     value={formData.vendor_id}
@@ -1050,7 +1067,10 @@ export default function PartForm() {
                 </div>
               </div>
               <div>
-                <Label htmlFor="category">Category *</Label>
+                <Label htmlFor="category" className="flex items-center gap-1">
+                  Category *
+                  <HelpTooltip content="How you group parts for browsing and reporting." />
+                </Label>
                 <div className="flex gap-2">
                   <Select
                     value={formData.category_id}
@@ -1076,7 +1096,10 @@ export default function PartForm() {
                 </div>
               </div>
               <div>
-                <Label htmlFor="bin_location">Bin / Location</Label>
+                <Label htmlFor="bin_location" className="flex items-center gap-1">
+                  Bin / Location
+                  <HelpTooltip content="Where it lives on the shelf. Keep it short (A3-2, Rack 4)." />
+                </Label>
                 <Input
                   id="bin_location"
                   value={formData.bin_location}
@@ -1086,7 +1109,12 @@ export default function PartForm() {
                 />
               </div>
               <div>
-                <Label htmlFor="material_kind">Material Type</Label>
+                <div className="flex items-center justify-between mb-1">
+                  <Label htmlFor="material_kind" className="flex items-center gap-1">
+                    Material Type
+                    <HelpTooltip content="Select SHEET MATERIAL for parts tracked by area (like steel plates). This enables sheet-specific features like remnant creation." />
+                  </Label>
+                  </div>
                 <Select
                   value={formData.material_kind}
                   onValueChange={(value: 'STANDARD' | 'SHEET') => {
@@ -1105,7 +1133,10 @@ export default function PartForm() {
                 </Select>
               </div>
               <div>
-                <Label htmlFor="uom">Unit of Measure</Label>
+                <Label htmlFor="uom" className="flex items-center gap-1">
+                  Unit of Measure
+                  <HelpTooltip content="How this part is counted (ea, ft, in, sqft). Pick the real stocking unit." />
+                </Label>
                 <Select
                   value={formData.uom}
                   onValueChange={(value: 'EA' | 'FT' | 'SQFT') => setFormData({ ...formData, uom: value })}
@@ -1129,7 +1160,10 @@ export default function PartForm() {
               {formData.material_kind === 'SHEET' && formData.uom === 'SQFT' && (
                 <>
                   <div>
-                    <Label htmlFor="sheet_width_in">Standard Sheet Width (in) *</Label>
+                    <Label htmlFor="sheet_width_in" className="flex items-center gap-1">
+                      Standard Sheet Width (in) *
+                      <HelpTooltip content="Full sheet width in inches. Used to calculate area and remnants." />
+                    </Label>
                     <Input
                       id="sheet_width_in"
                       type="number"
@@ -1142,7 +1176,10 @@ export default function PartForm() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="sheet_length_in">Standard Sheet Length (in) *</Label>
+                    <Label htmlFor="sheet_length_in" className="flex items-center gap-1">
+                      Standard Sheet Length (in) *
+                      <HelpTooltip content="Full sheet length in inches. Used to calculate area and remnants." />
+                    </Label>
                     <Input
                       id="sheet_length_in"
                       type="number"
@@ -1155,7 +1192,10 @@ export default function PartForm() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="thickness_in">Thickness (in)</Label>
+                    <Label htmlFor="thickness_in" className="flex items-center gap-1">
+                      Thickness (in)
+                      <HelpTooltip content="Helps identify the sheet. Add what the shop actually calls it." />
+                    </Label>
                     <Input
                       id="thickness_in"
                       type="number"
@@ -1168,7 +1208,10 @@ export default function PartForm() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="grade">Grade</Label>
+                    <Label htmlFor="grade" className="flex items-center gap-1">
+                      Grade
+                      <HelpTooltip content="Material grade or specification (e.g., A36, 5052). Helps identify sheet material." />
+                    </Label>
                     <Input
                       id="grade"
                       value={formData.grade}
@@ -1181,7 +1224,10 @@ export default function PartForm() {
               )}
               {isNew && (
                 <div>
-                  <Label htmlFor="initial_qoh">Initial QOH</Label>
+                  <Label htmlFor="initial_qoh" className="flex items-center gap-1">
+                    Initial QOH
+                    <HelpTooltip content="Starting count for new items. Use it once when adding a brand-new stocked part." />
+                  </Label>
                   <Input
                     id="initial_qoh"
                     type="number"
@@ -1197,7 +1243,10 @@ export default function PartForm() {
                 </div>
               )}
               <div>
-                <Label htmlFor="model">Model</Label>
+                <Label htmlFor="model" className="flex items-center gap-1">
+                  Model
+                  <HelpTooltip content="Model number or identifier. Helps with search and identification." />
+                </Label>
                 <Input
                   id="model"
                   value={formData.model}
@@ -1206,7 +1255,10 @@ export default function PartForm() {
                 />
               </div>
               <div>
-                <Label htmlFor="serial_number">Serial Number</Label>
+                <Label htmlFor="serial_number" className="flex items-center gap-1">
+                  Serial Number
+                  <HelpTooltip content="Serial number for tracking specific units. Optional." />
+                </Label>
                 <Input
                   id="serial_number"
                   value={formData.serial_number}
@@ -1215,7 +1267,10 @@ export default function PartForm() {
                 />
               </div>
               <div>
-                <Label htmlFor="min_qty">Min Qty</Label>
+                <Label htmlFor="min_qty" className="flex items-center gap-1">
+                  Min Qty
+                  <HelpTooltip content="When QOH drops to this number, it's time to reorder." />
+                </Label>
                 <Input
                   id="min_qty"
                   type="number"
@@ -1225,7 +1280,10 @@ export default function PartForm() {
                 />
               </div>
               <div>
-                <Label htmlFor="max_qty">Max Qty</Label>
+                <Label htmlFor="max_qty" className="flex items-center gap-1">
+                  Max Qty
+                  <HelpTooltip content="Typical quantity to bring stock back to a healthy level." />
+                </Label>
                 <Input
                   id="max_qty"
                   type="number"
@@ -1252,7 +1310,10 @@ export default function PartForm() {
               </div>
               {formData.core_required && (
                 <div>
-                  <Label htmlFor="core_charge">Core Charge Amount</Label>
+                  <Label htmlFor="core_charge" className="flex items-center gap-1">
+                    Core Charge Amount
+                    <HelpTooltip content="Amount charged as deposit. Refunded when core is returned." />
+                  </Label>
                   <Input
                     id="core_charge"
                     type="number"
@@ -1273,7 +1334,10 @@ export default function PartForm() {
           <div className="rounded-lg border bg-card p-4 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="cost">Cost</Label>
+                <Label htmlFor="cost" className="flex items-center gap-1">
+                  Cost
+                  <HelpTooltip content="What it costs you per UOM. Used for margin and profitability." />
+                </Label>
                 <Input
                   id="cost"
                   type="number"
@@ -1285,7 +1349,10 @@ export default function PartForm() {
                 />
               </div>
               <div>
-                <Label htmlFor="selling_price">Selling Price</Label>
+                <Label htmlFor="selling_price" className="flex items-center gap-1">
+                  Selling Price
+                  <HelpTooltip content="What you charge per UOM. Keep it consistent with your quoting rules." />
+                </Label>
                 <Input
                   id="selling_price"
                   type="number"
@@ -1360,8 +1427,9 @@ export default function PartForm() {
                   disabled={!editing}
                   className="h-4 w-4 rounded border-input"
                 />
-                <Label htmlFor="is_kit" className="font-medium">
+                <Label htmlFor="is_kit" className="font-medium flex items-center gap-1">
                   Kit
+                  <HelpTooltip content="Enable when this part is a kit containing multiple component parts." />
                 </Label>
               </div>
               {formData.is_kit && isNew && (
@@ -1372,7 +1440,10 @@ export default function PartForm() {
               <div className="space-y-3">
                 <div className="grid grid-cols-3 gap-3 items-end">
                   <div className="col-span-2">
-                    <Label htmlFor="component_part_id">Add Component</Label>
+                    <Label htmlFor="component_part_id" className="flex items-center gap-1">
+                      Add Component
+                      <HelpTooltip content="Select a part to include in this kit. Kit price is sum of component costs." />
+                    </Label>
                     <Select value={newComponentId} onValueChange={setNewComponentId} disabled={!editing || isNew}>
                       <SelectTrigger id="component_part_id">
                         <SelectValue placeholder="Select part" />
@@ -1387,7 +1458,10 @@ export default function PartForm() {
                     </Select>
                   </div>
                   <div>
-                    <Label htmlFor="component_qty">Qty</Label>
+                    <Label htmlFor="component_qty" className="flex items-center gap-1">
+                      Qty
+                      <HelpTooltip content="Quantity of this component per kit." />
+                    </Label>
                     <Input
                       id="component_qty"
                       type="number"
@@ -1516,7 +1590,10 @@ export default function PartForm() {
             </div>
             <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground items-start">
               <div className="space-y-2">
-                <div className="text-xs">QOH</div>
+                <div className="text-xs flex items-center gap-1">
+                  QOH
+                  <HelpTooltip content="What you physically have right now. Use Adjust QOH for corrections." />
+                </div>
                 <div className="flex items-center gap-2">
                   <div className="text-3xl font-semibold text-foreground">
                     {(() => {
@@ -1796,13 +1873,57 @@ export default function PartForm() {
         }}
       >
         <div className="text-sm text-muted-foreground mb-2">
-          Current QOH: <span className="font-medium text-foreground">
-            {part ? formatQtyWithUom(part.quantity_on_hand ?? 0, part) : '—'}
-          </span>
+          <div>
+            Current QOH: <span className="font-medium text-foreground">
+              {part ? formatQtyWithUom(part.quantity_on_hand ?? 0, part) : '—'}
+            </span>
+          </div>
+          {part && formatSheetsEquivalent(part.quantity_on_hand ?? 0, part) && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="text-[11px] text-muted-foreground mt-1 cursor-help">
+                  {formatSheetsEquivalent(part.quantity_on_hand ?? 0, part)}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <div className="font-semibold text-xs mb-1">Derived from sheet size</div>
+                <div className="text-xs">This is an estimated sheet count based on the part's sheet dimensions. Inventory is tracked in square feet (SQFT).</div>
+              </TooltipContent>
+            </Tooltip>
+          )}
         </div>
+        {part && isSheetMaterialPart(part) && (() => {
+          const sqftPerSheet = getSqftPerSheet(part);
+          if (!sqftPerSheet) return null;
+
+          return (
+            <div className="mt-1 mb-1 flex items-center justify-between text-xs text-muted-foreground">
+              <span>
+                1 sheet = {sqftPerSheet.toFixed(2)} SQFT
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                onClick={() => {
+                  const currentQoh = part.quantity_on_hand ?? 0;
+                  const nextQoh = currentQoh - sqftPerSheet;
+
+                  // Pre-fill the adjustment form; still goes through normal confirmation + guardrails
+                  setNewQoh(nextQoh.toString());
+                  setAdjustReason('Cut Usage');
+                  setQtyError(null);
+                }}
+              >
+                Use 1 sheet
+              </Button>
+            </div>
+          );
+        })()}
         <div>
-          <Label htmlFor="new_qoh">
+          <Label htmlFor="new_qoh" className="flex items-center gap-1">
             New QOH {part && <span className="text-muted-foreground">({part.uom ?? 'EA'})</span>}
+            <HelpTooltip content="Enter the corrected quantity. The system will calculate the adjustment delta." />
           </Label>
           <Input
             id="new_qoh"
@@ -1844,8 +1965,11 @@ export default function PartForm() {
           )}
         </div>
         <div>
-          <Label htmlFor="adjust_reason">Reason *</Label>
-          <Select value={adjustReason} onValueChange={(value) => {
+            <Label htmlFor="adjust_reason" className="flex items-center gap-1">
+              Reason *
+              <HelpTooltip content="Select why you are adjusting inventory. Common reasons: Cycle Count, Scrap, Cut Usage, Return. Required for audit trail." />
+            </Label>
+              <Select value={adjustReason} onValueChange={(value) => {
             setAdjustReason(value);
             setAdjustReasonOther('');
           }}>
@@ -1919,7 +2043,10 @@ export default function PartForm() {
           </div>
         )}
         <div>
-          <Label htmlFor="remnant_width">Remnant Width (in) *</Label>
+          <Label htmlFor="remnant_width" className="flex items-center gap-1">
+            Remnant Width (in) *
+            <HelpTooltip content="Size of what remains after cutting." />
+          </Label>
           <Input
             id="remnant_width"
             type="number"
@@ -1931,7 +2058,10 @@ export default function PartForm() {
           />
         </div>
         <div>
-          <Label htmlFor="remnant_length">Remnant Length (in) *</Label>
+          <Label htmlFor="remnant_length" className="flex items-center gap-1">
+            Remnant Length (in) *
+            <HelpTooltip content="Size of what remains after cutting." />
+          </Label>
           <Input
             id="remnant_length"
             type="number"
@@ -1948,7 +2078,10 @@ export default function PartForm() {
           </div>
         )}
         <div>
-          <Label htmlFor="remnant_bin_location">Bin Location (optional)</Label>
+          <Label htmlFor="remnant_bin_location" className="flex items-center gap-1">
+            Bin Location (optional)
+            <HelpTooltip content="Where the remnant is stored. Keep it short (A3-2, Rack 4)." />
+          </Label>
           <Input
             id="remnant_bin_location"
             value={remnantBinLocation}
@@ -1971,14 +2104,18 @@ export default function PartForm() {
               }}
               className="h-4 w-4 rounded border-input"
             />
-            <Label htmlFor="subtract_from_parent" className="font-medium">
+            <Label htmlFor="subtract_from_parent" className="font-medium flex items-center gap-1">
               Subtract used material from parent
+              <HelpTooltip content="Enable this to automatically reduce the parent sheet quantity by the amount used. This keeps inventory accurate when cutting sheets." />
             </Label>
           </div>
           {subtractFromParent && (
             <>
               <div>
-                <Label htmlFor="used_sqft">Used SQFT *</Label>
+                <Label htmlFor="used_sqft" className="flex items-center gap-1">
+                  Used SQFT *
+                  <HelpTooltip content="How much area was consumed for this job/cut." />
+                </Label>
                 <Input
                   id="used_sqft"
                   type="number"
@@ -2027,5 +2164,6 @@ export default function PartForm() {
         </div>
       )}
     </div>
+    </TooltipProvider>
   );
 }

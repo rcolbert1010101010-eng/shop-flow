@@ -66,3 +66,43 @@ export function formatQtyWithUom(qty: number, part: { uom?: 'EA' | 'FT' | 'SQFT'
   const formatted = qty.toFixed(precision).replace(/\.?0+$/, '');
   return `${formatted} ${uom}`;
 }
+
+/**
+ * Checks if a part is a sheet material (SQFT with dimensions, not a remnant).
+ */
+export function isSheetMaterialPart(part: { uom?: 'EA' | 'FT' | 'SQFT' | null; sheet_width_in?: number | null; sheet_length_in?: number | null; is_remnant?: boolean | null } | null | undefined): boolean {
+  if (!part) return false;
+  if (part.is_remnant) return false;
+  if (part.uom !== 'SQFT') return false;
+  const width = part.sheet_width_in ?? 0;
+  const length = part.sheet_length_in ?? 0;
+  return width > 0 && length > 0;
+}
+
+/**
+ * Gets the square feet per sheet for a sheet material part.
+ */
+export function getSqftPerSheet(part: { sheet_width_in?: number | null; sheet_length_in?: number | null } | null | undefined): number | null {
+  if (!part) return null;
+  const width = part.sheet_width_in ?? 0;
+  const length = part.sheet_length_in ?? 0;
+  if (width <= 0 || length <= 0) return null;
+  return (width * length) / 144;
+}
+
+/**
+ * Formats a quantity in SQFT as an equivalent number of sheets.
+ * Returns null if the part is not a sheet material.
+ */
+export function formatSheetsEquivalent(qtySqft: number, part: { uom?: 'EA' | 'FT' | 'SQFT' | null; sheet_width_in?: number | null; sheet_length_in?: number | null; is_remnant?: boolean } | null | undefined): string | null {
+  if (!isSheetMaterialPart(part)) return null;
+  
+  const sqftPerSheet = getSqftPerSheet(part);
+  if (!sqftPerSheet) return null;
+  
+  const sheets = qtySqft / sqftPerSheet;
+  const width = part?.sheet_width_in ?? 0;
+  const length = part?.sheet_length_in ?? 0;
+  
+  return `≈ ${sheets.toFixed(2)} sheets (${width}×${length})`;
+}

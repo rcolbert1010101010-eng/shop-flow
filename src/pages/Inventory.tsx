@@ -44,8 +44,9 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { ResponsiveDataList } from '@/components/common/ResponsiveDataList';
 import { useIsMobile } from '@/hooks/useIsMobile';
-import { normalizeQty, formatQtyWithUom } from '@/lib/utils';
+import { normalizeQty, formatQtyWithUom, formatSheetsEquivalent } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { HelpTooltip } from '@/components/help/HelpTooltip';
 import { ImportPartsDialog } from '@/components/inventory/ImportPartsDialog';
 
 export default function Inventory() {
@@ -266,8 +267,9 @@ export default function Inventory() {
         const qty = item.quantity_on_hand ?? 0;
         const precision = item.qty_precision ?? (uom === 'EA' ? 0 : 2);
         const formattedQty = uom === 'EA' ? qty.toString() : qty.toFixed(precision).replace(/\.?0+$/, '');
+        const sheetsEquivalent = formatSheetsEquivalent(qty, item);
         return (
-        <div className="flex items-center gap-2 justify-end">
+        <div className="flex flex-col items-end gap-0">
           <span
             className={cn(
               'font-medium',
@@ -277,6 +279,19 @@ export default function Inventory() {
           >
             {formattedQty} {uom}
           </span>
+          {sheetsEquivalent && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="text-[11px] text-muted-foreground cursor-help">
+                  {sheetsEquivalent}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <div className="font-semibold text-xs mb-1">Derived from sheet size</div>
+                <div className="text-xs">This is an estimated sheet count based on the part's sheet dimensions. Inventory is tracked in square feet (SQFT).</div>
+              </TooltipContent>
+            </Tooltip>
+          )}
           {cycleCountMode && (
             <Input
               type="number"
@@ -1429,7 +1444,9 @@ export default function Inventory() {
       <Dialog open={adjustDialogOpen} onOpenChange={(open) => { if (!open) closeAdjustDialog(); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Adjust QOH {selectedPart ? `(${selectedPart.part_number})` : ''}</DialogTitle>
+            <div className="flex items-center justify-between">
+              <DialogTitle>Adjust QOH {selectedPart ? `(${selectedPart.part_number})` : ''}</DialogTitle>
+            </div>
           </DialogHeader>
           <div className="space-y-3">
             {adjustWarning && (
@@ -1491,7 +1508,10 @@ export default function Inventory() {
               )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="adjust_reason">Reason *</Label>
+              <Label htmlFor="adjust_reason" className="flex items-center gap-1">
+                Reason *
+                <HelpTooltip content="Select why you are adjusting inventory. Common reasons: Cycle Count, Scrap, Cut Usage, Return. Required for audit trail." />
+              </Label>
               <Select value={adjustReason} onValueChange={(value) => {
                 setAdjustReason(value);
                 setAdjustReasonOther('');

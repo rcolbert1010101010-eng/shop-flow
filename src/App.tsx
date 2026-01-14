@@ -123,7 +123,7 @@ const App = () => (
               <Route path="/settings" element={<Settings />} />
             </Route>
             <Route path="*" element={<NotFound />} />
-          </Routes>
+            </Routes>
         </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>

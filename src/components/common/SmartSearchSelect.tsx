@@ -37,6 +37,7 @@ export type SmartSearchSelectProps = {
   label?: string;
   disabled?: boolean;
   className?: string;
+  isClearable?: boolean;
 };
 
 export function SmartSearchSelect(props: SmartSearchSelectProps) {
@@ -52,6 +53,7 @@ export function SmartSearchSelect(props: SmartSearchSelectProps) {
     label,
     disabled,
     className,
+    isClearable = false,
   } = props;
 
   const [open, setOpen] = React.useState(false);
@@ -113,9 +115,9 @@ export function SmartSearchSelect(props: SmartSearchSelectProps) {
               {selectedItem ? selectedItem.label : placeholder}
             </span>
             <div className="flex items-center gap-1 flex-shrink-0">
-              {selectedItem && !disabled && (
+              {isClearable && selectedItem && !disabled && (
                 <X
-                  className="h-3 w-3 text-muted-foreground"
+                  className="h-3 w-3 text-muted-foreground hover:text-foreground cursor-pointer"
                   onClick={handleClear}
                 />
               )}

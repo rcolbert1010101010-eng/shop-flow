@@ -9,6 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useRepos } from '@/repos';
 import { useToast } from '@/hooks/use-toast';
 import { Trash2 } from 'lucide-react';
+import { formatQtyWithUom, formatSheetsEquivalent } from '@/lib/utils';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { HelpTooltip } from '@/components/help/HelpTooltip';
 
 type Line = {
   id: string;
@@ -224,8 +227,18 @@ export default function ReceiveInventory() {
   }, [poId, purchaseOrderLines, purchaseOrders]);
 
   return (
-    <div className="page-container space-y-4">
-      <PageHeader title="Receive Inventory" subtitle="Increase stock with audit trail" backTo="/inventory" />
+    <TooltipProvider>
+      <div className="page-container space-y-4">
+      <PageHeader 
+        title={
+          <span className="flex items-center gap-1">
+            Receive Inventory
+            <HelpTooltip content="Use this screen to bring parts into stock. Receiving increases QOH and records cost." />
+          </span>
+        } 
+        subtitle="Increase stock with audit trail" 
+        backTo="/inventory" 
+      />
 
       <Card className="p-4 space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -250,11 +263,17 @@ export default function ReceiveInventory() {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label>Reference</Label>
+            <Label className="flex items-center gap-1">
+              Reference
+              <HelpTooltip content="Record the vendor invoice number for traceability and cost audits." />
+            </Label>
             <Input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Invoice / packing slip #" />
           </div>
           <div className="space-y-2">
-            <Label>Received Date</Label>
+            <Label className="flex items-center gap-1">
+              Received Date
+              <HelpTooltip content="Date the parts were physically received. Used for reporting and cost history." />
+            </Label>
             <Input type="date" value={receivedDate} onChange={(e) => setReceivedDate(e.target.value)} />
           </div>
         </div>
@@ -263,7 +282,10 @@ export default function ReceiveInventory() {
       <Card className="p-4 space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
           <div className="space-y-2">
-            <Label>Add Part</Label>
+            <Label className="flex items-center gap-1">
+              Add Part
+              <HelpTooltip content="Pick the exact part number you received. This controls QOH and future picking." />
+            </Label>
             <Select value={selectedPart} onValueChange={setSelectedPart}>
               <SelectTrigger>
                 <SelectValue placeholder="Select part" />
@@ -278,7 +300,10 @@ export default function ReceiveInventory() {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label>Qty Received</Label>
+            <Label className="flex items-center gap-1">
+              Qty Received
+              <HelpTooltip content="Enter what arrived today. Partial receiving is normal—don't force it to match the PO." />
+            </Label>
             <Input
               type="number"
               min="0"
@@ -327,13 +352,31 @@ export default function ReceiveInventory() {
                             {part.sheet_width_in}" × {part.sheet_length_in}"
                           </div>
                         )}
+                        {part && (() => {
+                          const sheetsEq = formatSheetsEquivalent(part.quantity_on_hand ?? 0, part);
+                          return sheetsEq ? (
+                            <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
+                              <div>On hand: {formatQtyWithUom(part.quantity_on_hand ?? 0, part)}</div>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className="cursor-help">{sheetsEq}</div>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <div className="font-semibold text-xs mb-1">Derived from sheet size</div>
+                                  <div className="text-xs">This is an estimated sheet count based on the part's sheet dimensions. Inventory is tracked in square feet (SQFT).</div>
+                                </TooltipContent>
+                              </Tooltip>
+                            </div>
+                          ) : null;
+                        })()}
                       </td>
                       <td className="py-2 text-right">
                         {isSheetMaterial && (
                           <div className="flex items-center gap-2 justify-end mb-2">
-                            <Select
-                              value={receiveMode}
-                              onValueChange={(value: 'SQFT' | 'SHEETS') => {
+                            <div className="flex items-center gap-1">
+                              <Select
+                                value={receiveMode}
+                                onValueChange={(value: 'SQFT' | 'SHEETS') => {
                                 setLines((prev) =>
                                   prev.map((l) =>
                                     l.id === line.id
@@ -351,17 +394,20 @@ export default function ReceiveInventory() {
                                 <SelectItem value="SQFT">SQFT</SelectItem>
                               </SelectContent>
                             </Select>
+                            <HelpTooltip content="Use for metal sheets tracked by width/length and area (sqft)." />
+                            </div>
                           </div>
                         )}
                         {showSheetsInput ? (
                           <div className="space-y-1">
-                            <Input
-                              type="number"
-                              min="1"
-                              step="1"
-                              className="w-24 ml-auto"
-                              value={line.sheetsReceived || line.qty}
-                              onChange={(e) => {
+                            <div className="flex items-center gap-1 justify-end">
+                              <Input
+                                type="number"
+                                min="1"
+                                step="1"
+                                className="w-24"
+                                value={line.sheetsReceived || line.qty}
+                                onChange={(e) => {
                                 const sheets = e.target.value;
                                 const sqftPerSheet = ((part?.sheet_width_in ?? 0) * (part?.sheet_length_in ?? 0)) / 144;
                                 const precision = part?.qty_precision ?? 2;
@@ -376,8 +422,11 @@ export default function ReceiveInventory() {
                               onFocus={(e) => e.currentTarget.select()}
                               placeholder="Sheets"
                             />
-                            <div className="text-xs text-muted-foreground text-right">
+                            <HelpTooltip content="Full sheet count from the vendor. Auto-converts to SQFT based on sheet dimensions." />
+                            </div>
+                            <div className="text-xs text-muted-foreground text-right flex items-center gap-1 justify-end">
                               = {line.qty} SQFT
+                              <HelpTooltip content="Auto-calculated from width × length. Used for consumption and remnants." />
                             </div>
                           </div>
                         ) : (
@@ -439,11 +488,15 @@ export default function ReceiveInventory() {
           <Button variant="outline" onClick={clearForm}>
             Clear
           </Button>
-          <Button onClick={handlePost} disabled={!hasValidLines}>
-            Post Receipt
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button onClick={handlePost} disabled={!hasValidLines}>
+              Post Receipt
+            </Button>
+            <HelpTooltip content="Finalizes the receipt and updates inventory. Use when the slip matches what arrived." />
+          </div>
         </div>
       </Card>
     </div>
+    </TooltipProvider>
   );
 }

@@ -68,6 +68,7 @@ import { ResponsiveDataList } from '@/components/common/ResponsiveDataList';
 import { MobileActionBar, MobileActionBarSpacer } from '@/components/common/MobileActionBar';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { normalizeQty, formatQtyWithUom } from '@/lib/utils';
+import { HelpTooltip } from '@/components/help/HelpTooltip';
 import type {
   FabJobLine,
   PlasmaJobLine,
@@ -392,10 +393,7 @@ export default function WorkOrderDetail() {
     () => (aiAssistEnabled ? suggestParts(aiPartsQuery, parts) : []),
     [aiAssistEnabled, aiPartsQuery, parts]
   );
-  const jobLines: WorkOrderJobLine[] = useMemo(
-    () => (currentOrder ? getWorkOrderJobLines(currentOrder.id) : []),
-    [currentOrder, currentOrderId, currentOrderUpdatedAt, getWorkOrderJobLines]
-  );
+  const jobLines: WorkOrderJobLine[] = currentOrder ? getWorkOrderJobLines(currentOrder.id) : [];
   const activityEvents = currentOrder ? getWorkOrderActivity(currentOrder.id) : [];
   const jobMap = useMemo(
     () => {
@@ -1557,7 +1555,10 @@ const jobReadinessValues = Object.values(jobReadinessById);
           <h2 className="text-lg font-semibold mb-4">Order Details</h2>
           <div className="space-y-4">
             <div>
-              <Label>Customer *</Label>
+              <Label className="flex items-center gap-1">
+                Customer *
+                <HelpTooltip content="Customer controls billing + history. Pick it first." />
+              </Label>
               <div className="flex items-center gap-2">
                 <SmartSearchSelect
                   className="flex-1 min-w-0"
@@ -1565,15 +1566,15 @@ const jobReadinessValues = Object.values(jobReadinessById);
                   onChange={(v) => {
                     const nextId = v ?? '';
                     setSelectedCustomerId(nextId);
-                    if (!unitFromQuery) {
-                      setSelectedUnitId(null);
-                    }
+                    // Always clear unit when customer changes or is cleared
+                    setSelectedUnitId(null);
                     setIsDirty(true);
                   }}
                   items={customerPickerItems}
                   placeholder="Search customers by name, phone, email, or address..."
                   minChars={2}
                   limit={25}
+                  isClearable
                 />
                 <Button
                   type="button"
@@ -1583,26 +1584,46 @@ const jobReadinessValues = Object.values(jobReadinessById);
                 >
                   Browse customers
                 </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="flex-shrink-0 text-xs"
+                  onClick={() => {
+                    setSelectedCustomerId('');
+                    setSelectedUnitId(null);
+                    setIsDirty(true);
+                  }}
+                  disabled={!selectedCustomerId}
+                >
+                  Clear
+                </Button>
                 <Button variant="outline" size="icon" onClick={() => setQuickAddCustomerOpen(true)} className="flex-shrink-0">
                   <Plus className="w-4 h-4" />
                 </Button>
               </div>
             </div>
 
-            {selectedCustomerId && (
+            {(selectedCustomerId || currentOrder?.customer_id) && (
               <div>
-                <Label>Unit *</Label>
+                <Label className="flex items-center gap-1">
+                  Unit *
+                  <HelpTooltip content="Attach the right unit so service history stays accurate." />
+                </Label>
                 <div className="flex gap-2">
-                  <SmartSearchSelect
-                    className="flex-1 min-w-0"
-                    value={selectedUnitId || null}
-                    onChange={(v) => setSelectedUnitId(v ?? '')}
-                    items={unitPickerItems}
-                    placeholder="Search units by name, VIN, serial, or model..."
-                    minChars={2}
-                    limit={25}
-                    disabled={!!unitFromQuery}
-                  />
+                  <div className="flex-1 min-w-0">
+                    <SmartSearchSelect
+                      className="w-full"
+                      value={selectedUnitId || null}
+                      onChange={(v) => setSelectedUnitId(v ?? '')}
+                      items={unitPickerItems}
+                      placeholder="Select or search a unit..."
+                      minChars={0}
+                      limit={25}
+                      disabled={!!unitFromQuery || !(selectedCustomerId || currentOrder?.customer_id)}
+                      isClearable
+                    />
+                  </div>
                   <Button
                     variant="outline"
                     size="icon"
@@ -1768,9 +1789,14 @@ const jobReadinessValues = Object.values(jobReadinessById);
       <PageHeader
         title="Work Order"
         subtitle={
-          currentOrder
-            ? `${statusLabel} - Order ${currentOrder.order_number}`
-            : 'Manage job, labor, parts, and status'
+          currentOrder ? (
+            <div className="flex items-center gap-2">
+              <span>{statusLabel} - Order {currentOrder.order_number}</span>
+              <HelpTooltip content="Status is the shop's truth. Update it intentionally so nothing gets lost." />
+            </div>
+          ) : (
+            'Manage job, labor, parts, and status'
+          )
         }
         backTo="/work-orders"
         actions={
@@ -1827,14 +1853,17 @@ const jobReadinessValues = Object.values(jobReadinessById);
                     Convert to Work Order
                   </Button>
                 ) : (
-                  <Button
-                    onClick={() => setShowInvoiceDialog(true)}
-                    disabled={isCustomerOnHold}
-                    title={isCustomerOnHold ? 'Customer is on credit hold' : undefined}
-                  >
-                    <FileCheck className="w-4 h-4 mr-2" />
-                    Invoice
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      onClick={() => setShowInvoiceDialog(true)}
+                      disabled={isCustomerOnHold}
+                      title={isCustomerOnHold ? 'Customer is on credit hold' : undefined}
+                    >
+                      <FileCheck className="w-4 h-4 mr-2" />
+                      Invoice
+                    </Button>
+                    <HelpTooltip content="Use when totals look correct and the WO is ready to bill." />
+                  </div>
                 )}
               </>
             ) : (
@@ -1881,7 +1910,10 @@ const jobReadinessValues = Object.values(jobReadinessById);
           <h2 className="text-lg font-semibold mb-4">Order Information</h2>
           <div className="space-y-3 text-sm">
             <div>
-              <span className="text-muted-foreground">Customer:</span>
+              <span className="text-muted-foreground flex items-center gap-1">
+                Customer:
+                {currentOrder && <HelpTooltip content="Customer controls billing + history. Pick it first." />}
+              </span>
               <p className="font-medium">{customer?.company_name || '-'}</p>
             </div>
             <div>
@@ -2705,10 +2737,13 @@ const jobReadinessValues = Object.values(jobReadinessById);
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-medium">Parts</h3>
                 {!isInvoiced && (
-                  <Button size="sm" onClick={() => openPartDialog(null)}>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Part
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button size="sm" onClick={() => openPartDialog(null)}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Part
+                    </Button>
+                    <HelpTooltip content="Parts here reduce QOH. Negative stock is allowed—don't block the repair." />
+                  </div>
                 )}
               </div>
               {isMobile && partLines.length === 0 ? (
@@ -3036,10 +3071,13 @@ const jobReadinessValues = Object.values(jobReadinessById);
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-medium">Labor (Rate: ${laborRate}/hr)</h3>
                 {!isInvoiced && (
-                  <Button size="sm" onClick={() => openLaborDialog(null)}>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Labor
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button size="sm" onClick={() => openLaborDialog(null)}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Labor
+                    </Button>
+                    <HelpTooltip content="Add real hours under the closest Work Type. Notes explain exceptions." />
+                  </div>
                 )}
               </div>
               {isMobile && laborLines.length === 0 ? (
@@ -4498,6 +4536,7 @@ const jobReadinessValues = Object.values(jobReadinessById);
         open={addPartDialogOpen}
         onOpenChange={handlePartDialogOpenChange}
         title="Add Part"
+        contentClassName="w-full max-w-3xl"
         footer={
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => handlePartDialogOpenChange(false)}>
@@ -4580,7 +4619,10 @@ const jobReadinessValues = Object.values(jobReadinessById);
               </div>
             )}
             <div>
-              <Label>Quantity</Label>
+              <Label className="flex items-center gap-1">
+                Quantity
+                <HelpTooltip content="This will reduce QOH. If you need to correct it, edit the line—don't create duplicates." />
+              </Label>
               <Input type="number" min="1" value={partQty} onChange={(e) => setPartQty(e.target.value)} />
             </div>
           </div>
@@ -4792,7 +4834,10 @@ const jobReadinessValues = Object.values(jobReadinessById);
             <Textarea value={laborDescription} onChange={(e) => setLaborDescription(e.target.value)} placeholder="Describe the work performed" rows={2} />
           </div>
           <div>
-            <Label>Technician</Label>
+            <Label className="flex items-center gap-1">
+              Work Type
+              <HelpTooltip content="Pick the closest work type—this powers reporting and pricing rules later." />
+            </Label>
             <Select value={laborTechnicianId} onValueChange={setLaborTechnicianId}>
               <SelectTrigger><SelectValue placeholder="Select technician (optional)" /></SelectTrigger>
               <SelectContent>
@@ -4803,7 +4848,10 @@ const jobReadinessValues = Object.values(jobReadinessById);
             </Select>
           </div>
           <div>
-            <Label>Hours</Label>
+            <Label className="flex items-center gap-1">
+              Hours
+              <HelpTooltip content="Labor rate comes from system settings. If hours are wrong, totals are wrong." />
+            </Label>
             <Input type="number" min="0.25" step="0.25" value={laborHours} onChange={(e) => setLaborHours(e.target.value)} />
           </div>
         </div>
