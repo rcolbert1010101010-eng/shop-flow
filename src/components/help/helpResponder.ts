@@ -24,7 +24,6 @@ function isExplainQuestion(text: string): boolean {
     cleaned === 'what does this screen do'
   );
 }
-
 function buildExplainAnswer(moduleKey: string, fallbackContent: ModuleHelpContent, context?: HelpContext): string {
   const moduleContent = getModuleHelp(moduleKey) ?? fallbackContent;
   const title = moduleContent.title;
@@ -38,22 +37,36 @@ function buildExplainAnswer(moduleKey: string, fallbackContent: ModuleHelpConten
   });
 
   const lines: string[] = [];
+
+  // What this screen is for
+  lines.push('**What this screen is for**');
   lines.push(`This screen is for managing ${title.toLowerCase()} in your shop.`);
 
-  if (workflows.length > 0) {
-    lines.push('\nCommon things you’ll do here include:');
-    workflows.forEach((w) => lines.push(`• ${w}`));
+  // What to do first
+  lines.push('\n**What to do first**');
+  if (context?.status === 'INVOICED') {
+    lines.push('This record is invoiced, so most fields are locked. Use view/print/notes or create a new transaction to correct issues.');
+  } else if (moduleKey === 'payments' && context?.isEmpty) {
+    lines.push('Right now this screen is empty because no payments have been recorded yet. Start by using "Receive Payment" to record your first payment. Once payments exist, you can review history, filter by date/method, and audit balances here.');
+  } else {
+    lines.push('Start by confirming the customer/unit and reviewing the key details at the top.');
   }
 
+  // Common mistakes
+  lines.push('\n**Common mistakes**');
   if (tips.length > 0) {
-    lines.push('\nWatch-outs:');
     tips.forEach((t) => lines.push(`• ${t}`));
+  } else {
+    lines.push('• Skipping required info and having to backtrack later.');
   }
 
-  if (moduleKey === 'payments' && context?.isEmpty) {
-    lines.push(
-      '\nRight now this screen is empty because no payments have been recorded yet. Start by using “Receive Payment” to record your first payment. Once payments exist, you can review history, filter by date/method, and audit balances here.'
-    );
+  // What should happen next
+  lines.push('\n**What should happen next**');
+  if (workflows.length > 0) {
+    lines.push('Next, you'll usually:');
+    workflows.forEach((w) => lines.push(`• ${w}`));
+  } else {
+    lines.push('Add your first line item, then save and move the status forward when ready.');
   }
 
   return lines.join('\n');
