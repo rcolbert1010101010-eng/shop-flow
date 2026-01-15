@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useBlocker } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -307,31 +306,57 @@ export default function Settings() {
     return row[`${prefix}_value_json`] ?? '';
   };
 
-  // Navigation guard: block navigation when dirty
-  const blocker = useBlocker(editing && isDirty);
-
-  // Handle navigation blocker confirmation
-  useEffect(() => {
-    if (blocker.state === 'blocked' && isDirty) {
-      const shouldProceed = window.confirm('You have unsaved changes. Leave without saving?');
-      if (shouldProceed) {
-        blocker.proceed();
-      } else {
-        blocker.reset();
-      }
-    }
-  }, [blocker, isDirty]);
-
   // beforeunload warning when dirty
   useEffect(() => {
+    if (!editing || !isDirty) return;
     const handler = (e: BeforeUnloadEvent) => {
-      if (!isDirty) return;
       e.preventDefault();
       e.returnValue = '';
     };
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
-  }, [isDirty]);
+  }, [editing, isDirty]);
+
+  // Back/forward navigation guard (popstate)
+  useEffect(() => {
+    if (!editing || !isDirty) return;
+    const handlePopState = (e: PopStateEvent) => {
+      const shouldProceed = window.confirm('You have unsaved changes. Leave without saving?');
+      if (!shouldProceed) {
+        // Push user back to current path
+        window.history.pushState(null, '', window.location.pathname + window.location.search + window.location.hash);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [editing, isDirty]);
+
+  // Link click navigation guard (capture phase)
+  useEffect(() => {
+    if (!editing || !isDirty) return;
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const anchor = target.closest('a');
+      if (!anchor) return;
+      const href = anchor.getAttribute('href');
+      if (!href) return;
+      // Check if it's a same-origin internal link
+      try {
+        const url = new URL(href, window.location.origin);
+        if (url.origin === window.location.origin && href.startsWith('/')) {
+          const shouldProceed = window.confirm('You have unsaved changes. Leave without saving?');
+          if (!shouldProceed) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        }
+      } catch {
+        // Invalid URL, ignore
+      }
+    };
+    document.addEventListener('click', handleClick, true); // Capture phase
+    return () => document.removeEventListener('click', handleClick, true);
+  }, [editing, isDirty]);
 
   return (
     <div className="page-container">
