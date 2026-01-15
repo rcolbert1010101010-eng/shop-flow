@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -308,7 +308,11 @@ export default function InvoiceRegistry() {
         actions={
           <ModuleHelpButton
             moduleKey="invoices"
-            context={{ isEmpty: !hasAnyInvoices }}
+            context={{
+              isEmpty: !hasAnyInvoices,
+              recordType: 'invoice',
+              hasLines: Boolean(activeInvoiceRows.length),
+            }}
           />
         }
       />
