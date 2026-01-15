@@ -217,6 +217,38 @@ function getModuleSuggestions(moduleKey: string): string[] {
   ];
 }
 
+function getContextSuggestions(moduleKey: string, context?: HelpContext): string[] | null {
+  if (context?.status === 'INVOICED') {
+    return [
+      'How do I create a return for an invoiced order?',
+      'Can I print an invoice after it\'s been created?',
+      'How do I add notes to an invoiced record?',
+      'What happens when I create a credit memo?',
+    ];
+  }
+
+  if (context?.isEmpty === true && context?.hasCustomer === false) {
+    return [
+      'How do I search for an existing customer?',
+      'How do I create a new customer?',
+      'What information do I need to add a customer?',
+      'How do I add parts after selecting a customer?',
+    ];
+  }
+
+  if (context?.hasCustomer === true && context?.hasLines === false) {
+    const isWorkOrder = moduleKey === 'work_orders' || context.recordType === 'work_order';
+    return [
+      'How do I add parts to an order?',
+      'What unit of measure should I use?',
+      'How do I set the price for a part?',
+      isWorkOrder ? 'How do I add labor hours to a work order?' : 'What happens if I enter the wrong quantity?',
+    ];
+  }
+
+  return null;
+}
+
 export function respond(
   moduleKey: string,
   content: ModuleHelpContent,
@@ -271,14 +303,14 @@ export function respond(
   if (isExplainQuestion(userText)) {
     return {
       answer: buildExplainAnswer(moduleKey, content, context),
-      suggestions: getModuleSuggestions(moduleKey),
+      suggestions: getContextSuggestions(moduleKey, context) ?? getModuleSuggestions(moduleKey),
     };
   }
 
   if (words.length === 0) {
     return {
       answer: `Here's an overview of ${content.title}:\n\n${content.workflows[0]?.title || 'Get started'} workflow:\n${content.workflows[0]?.steps.slice(0, 3).map((s, i) => `${i + 1}. ${s}`).join('\n') || 'No workflows available'}`,
-      suggestions: getModuleSuggestions(moduleKey),
+      suggestions: getContextSuggestions(moduleKey, context) ?? getModuleSuggestions(moduleKey),
     };
   }
 
@@ -386,7 +418,9 @@ export function respond(
     suggestions.push(`How do I ${content.workflows[0]?.title.toLowerCase()}?`);
   }
   if (suggestions.length < 3) {
-    suggestions.push(...getModuleSuggestions(moduleKey).slice(0, 3 - suggestions.length));
+    const contextSuggestions = getContextSuggestions(moduleKey, context);
+    const fallbackSuggestions = contextSuggestions ?? getModuleSuggestions(moduleKey);
+    suggestions.push(...fallbackSuggestions.slice(0, 3 - suggestions.length));
   }
 
   return {
