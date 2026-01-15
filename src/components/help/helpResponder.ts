@@ -213,6 +213,48 @@ export function respond(
   const normalized = normalizeText(userText);
   const words = normalized.split(/\s+/).filter((w) => w.length > 2);
   
+  // Context-aware overrides (highest priority first)
+  if (context?.status === 'INVOICED') {
+    return {
+      answer: 'This record is already invoiced, so most fields are locked to keep the invoice accurate. You can still view and print all details, add notes for your records, create returns or warranty claims, and start a new order or work order if needed. If you need to correct something, create a new transaction like a return or credit memo rather than editing the invoiced record.',
+      suggestions: [
+        'How do I create a return for an invoiced order?',
+        'Can I print an invoice after it\'s been created?',
+        'How do I add notes to an invoiced record?',
+        'What happens when I create a credit memo?',
+      ],
+    };
+  }
+
+  if (context?.isEmpty === true && context?.hasCustomer === false) {
+    const recordTypeLabel = context.recordType ? context.recordType.replace(/_/g, ' ') : 'order';
+    return {
+      answer: `Start by selecting or adding a customer first. Use the customer search to find an existing customer, or create a new one if needed. Once you have a customer selected, you can add parts and labor to build the ${recordTypeLabel}, set pricing, and track all work for them.`,
+      suggestions: [
+        'How do I search for an existing customer?',
+        'How do I create a new customer?',
+        'What information do I need to add a customer?',
+        'How do I add parts after selecting a customer?',
+      ],
+    };
+  }
+
+  if (context?.hasCustomer === true && context?.hasLines === false) {
+    const recordTypeLabel = context.recordType ? context.recordType.replace(/_/g, ' ') : 'order';
+    const isWorkOrder = moduleKey === 'work_orders' || context.recordType === 'work_order';
+    const lineType = isWorkOrder ? 'parts or labor' : 'parts';
+    const addAction = isWorkOrder ? '"Add Part" or "Add Labor"' : '"Add Part"';
+    return {
+      answer: `You have a customer selected. Now add your first line item using ${addAction} for ${lineType}. Common mistakes to avoid: entering the wrong quantity, using the wrong unit of measure, or forgetting to set the price before saving. Double-check these before you save the line.`,
+      suggestions: [
+        'How do I add parts to an order?',
+        'What unit of measure should I use?',
+        'How do I set the price for a part?',
+        isWorkOrder ? 'How do I add labor hours to a work order?' : 'What happens if I enter the wrong quantity?',
+      ],
+    };
+  }
+
   if (isExplainQuestion(userText)) {
     return {
       answer: buildExplainAnswer(moduleKey, content, context),
