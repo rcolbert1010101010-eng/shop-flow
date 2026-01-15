@@ -1817,6 +1817,7 @@ export default function SalesOrderDetail() {
         open={addPartDialogOpen}
         onOpenChange={setAddPartDialogOpen}
         title="Add Part"
+        contentClassName="w-[min(960px,95vw)] max-w-none"
         footer={
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setAddPartDialogOpen(false)}>

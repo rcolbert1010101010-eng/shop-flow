@@ -15,15 +15,6 @@ import { useToast } from '@/hooks/use-toast';
 import { Save, Edit, X } from 'lucide-react';
 import { useSystemSettings } from '@/hooks/useSystemSettings';
 import { SYSTEM_SETTINGS_REGISTRY, type SystemSettingKey } from '@/config/systemSettingsRegistry';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 
 export default function Settings() {
@@ -37,13 +28,7 @@ export default function Settings() {
   const resolvedSettings = useMemo(() => listResolved(), [listResolved]);
   const [formData, setFormData] = useState<Record<SystemSettingKey | string, any>>({});
   const [draft, setDraft] = useState<Record<SystemSettingKey | string, any>>({});
-  const [pendingChanges, setPendingChanges] = useState<
-    { key: SystemSettingKey; oldValue: any; newValue: any; sensitivity?: string; requiresReason?: boolean }[]
-  >([]);
   const hasSettings = resolvedSettings.length > 0;
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [confirmReason, setConfirmReason] = useState('');
-  const [isApplying, setIsApplying] = useState(false);
   const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyFilter, setHistoryFilter] = useState<'all' | SystemSettingKey>('all');
@@ -115,6 +100,12 @@ export default function Settings() {
     setDraft((prev) => ({ ...prev, [key]: newValue }));
   };
 
+  const parseNumberMaybe = (v: any): number | undefined => {
+    if (v === '' || v === null || v === undefined) return undefined;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : undefined;
+  };
+
   const handleSave = async () => {
     if (!draft.shop_name?.trim?.()) {
       toast({
@@ -125,113 +116,132 @@ export default function Settings() {
       return;
     }
 
-    setSyncStatus('pending');
+    try {
+      setSyncStatus('pending');
 
-    // Diff settings vs resolved to find changes
-    const entries = Object.keys(SYSTEM_SETTINGS_REGISTRY) as SystemSettingKey[];
-    const changes: { key: SystemSettingKey; oldValue: any; newValue: any; sensitivity?: string; requiresReason?: boolean }[] = [];
-    for (const key of entries) {
-      const entry = SYSTEM_SETTINGS_REGISTRY[key];
-      const oldValue = getResolved(key).value;
-      const newValueRaw = draft[key];
-      const newValue =
-        entry.valueType === 'number' ? (newValueRaw === '' ? null : Number(newValueRaw)) : newValueRaw;
+      // Diff settings vs resolved to find changes
+      const entries = Object.keys(SYSTEM_SETTINGS_REGISTRY) as SystemSettingKey[];
+      const changes: { key: SystemSettingKey; oldValue: any; newValue: any; sensitivity?: string; requiresReason?: boolean }[] = [];
+      for (const key of entries) {
+        const entry = SYSTEM_SETTINGS_REGISTRY[key];
+        const oldValue = getResolved(key).value;
+        const newValueRaw = draft[key];
+        const newValue =
+          entry.valueType === 'number' ? (newValueRaw === '' ? null : Number(newValueRaw)) : newValueRaw;
 
-      if (newValue === undefined || newValue === null || (entry.valueType === 'number' && Number.isNaN(newValue))) continue;
-      if (newValue === oldValue) continue;
+        if (newValue === undefined || newValue === null || (entry.valueType === 'number' && Number.isNaN(newValue))) continue;
+        if (newValue === oldValue) continue;
 
-      changes.push({ key, oldValue, newValue, sensitivity: entry.sensitivity, requiresReason: (entry as any).requiresReason });
-    }
+        changes.push({ key, oldValue, newValue, sensitivity: entry.sensitivity, requiresReason: (entry as any).requiresReason });
+      }
 
-    if (changes.length === 0) {
-      toast({ title: 'No changes', description: 'Nothing to save.' });
-      setEditing(false);
-      setSyncStatus('synced');
-      return;
-    }
+      // Check for legacy field changes
+      const taxRateParsed = parseNumberMaybe(draft.default_tax_rate);
+      const markupRetailParsed = parseNumberMaybe((draft as any).markup_retail_percent);
+      const markupFleetParsed = parseNumberMaybe((draft as any).markup_fleet_percent);
+      const markupWholesaleParsed = parseNumberMaybe((draft as any).markup_wholesale_percent);
+      const legacyChanged =
+        (draft.shop_name?.trim?.() ?? '') !== (settings?.shop_name ?? '') ||
+        (taxRateParsed !== undefined && taxRateParsed !== (settings?.default_tax_rate ?? 0)) ||
+        draft.currency !== (settings?.currency ?? 'USD') ||
+        draft.units !== (settings?.units ?? 'imperial') ||
+        (markupRetailParsed !== undefined && markupRetailParsed !== (settings?.markup_retail_percent ?? 0)) ||
+        (markupFleetParsed !== undefined && markupFleetParsed !== (settings?.markup_fleet_percent ?? 0)) ||
+        (markupWholesaleParsed !== undefined && markupWholesaleParsed !== (settings?.markup_wholesale_percent ?? 0)) ||
+        ((draft as any).session_user_name?.trim?.() ?? '') !== (settings?.session_user_name ?? '') ||
+        (draft as any).inventory_negative_qoh_policy !== (settings?.inventory_negative_qoh_policy ?? 'WARN');
 
-    const protectedChanges = changes.filter(
-      (c) => c.sensitivity === 'protected' || c.sensitivity === 'critical'
-    );
-    if (protectedChanges.length > 0) {
-      setPendingChanges(protectedChanges);
-      setConfirmReason('');
-      setConfirmOpen(true);
-      setSyncStatus('synced');
-      return;
-    }
-
-    // Apply non-protected changes immediately
-    for (const change of changes) {
-      if (change.newValue === null || Number.isNaN(change.newValue)) {
-        toast({ title: 'Validation Error', description: 'Invalid numeric value', variant: 'destructive' });
-        setSyncStatus('synced');
+      if (changes.length === 0 && !legacyChanged) {
+        toast({ title: 'No changes', description: 'Nothing to save.' });
         return;
       }
-      await applySetting(change.key, change.newValue);
-    }
 
-    // Persist legacy settings fields
-    const legacyPayload = {
-      shop_name: draft.shop_name?.trim?.() ?? draft.shop_name,
-      default_labor_rate: Number(draft.default_labor_rate) || 0,
-      default_tax_rate: Number(draft.default_tax_rate) || 0,
-      currency: draft.currency,
-      units: draft.units,
-      markup_retail_percent: Number((draft as any).markup_retail_percent ?? 0),
-      markup_fleet_percent: Number((draft as any).markup_fleet_percent ?? 0),
-      markup_wholesale_percent: Number((draft as any).markup_wholesale_percent ?? 0),
-      session_user_name: (draft as any).session_user_name?.trim?.() ?? '',
-      inventory_negative_qoh_policy: (draft as any).inventory_negative_qoh_policy,
-      minimum_margin_percent: Number(draft.minimum_margin_percent) || 0,
-      labor_rate: Number(draft.labor_rate) || 0,
-    };
+      // Apply changes
+      for (const change of changes) {
+        if (change.newValue === null || Number.isNaN(change.newValue)) {
+          toast({ title: 'Validation Error', description: 'Invalid numeric value', variant: 'destructive' });
+          return;
+        }
+        const ok = await applySetting(change.key, change.newValue);
+        if (!ok) {
+          return;
+        }
+      }
 
-    await updateSettings(legacyPayload);
+      // Build patch-only legacy payload with only changed fields
+      const legacyPayload: Record<string, any> = {};
 
-    toast({
-      title: 'Settings Updated',
-      description: 'Your changes have been saved',
-    });
-    setEditing(false);
-    setSyncStatus('synced');
-  };
+      // shop_name (trim string)
+      const shopName = draft.shop_name?.trim?.();
+      if (shopName !== undefined && shopName !== (settings?.shop_name ?? '')) {
+        legacyPayload.shop_name = shopName;
+      }
 
-  const resetConfirmation = () => {
-    setPendingChanges([]);
-    setConfirmReason('');
-    setConfirmOpen(false);
-  };
+      // default_tax_rate (number via parseNumberMaybe)
+      const taxRate = parseNumberMaybe(draft.default_tax_rate);
+      if (taxRate !== undefined && taxRate !== (settings?.default_tax_rate ?? 0)) {
+        legacyPayload.default_tax_rate = taxRate;
+      }
 
-  const confirmPending = async () => {
-    if (pendingChanges.length === 0) return;
-    const requiresReason = pendingChanges.some((c) => c.requiresReason);
-    if (requiresReason && confirmReason.trim().length < 5) {
+      // currency
+      if (draft.currency !== undefined && draft.currency !== (settings?.currency ?? 'USD')) {
+        legacyPayload.currency = draft.currency;
+      }
+
+      // units
+      if (draft.units !== undefined && draft.units !== (settings?.units ?? 'imperial')) {
+        legacyPayload.units = draft.units;
+      }
+
+      // markup_retail_percent (number via parseNumberMaybe)
+      const markupRetail = parseNumberMaybe((draft as any).markup_retail_percent);
+      if (markupRetail !== undefined && markupRetail !== (settings?.markup_retail_percent ?? 0)) {
+        legacyPayload.markup_retail_percent = markupRetail;
+      }
+
+      // markup_fleet_percent (number via parseNumberMaybe)
+      const markupFleet = parseNumberMaybe((draft as any).markup_fleet_percent);
+      if (markupFleet !== undefined && markupFleet !== (settings?.markup_fleet_percent ?? 0)) {
+        legacyPayload.markup_fleet_percent = markupFleet;
+      }
+
+      // markup_wholesale_percent (number via parseNumberMaybe)
+      const markupWholesale = parseNumberMaybe((draft as any).markup_wholesale_percent);
+      if (markupWholesale !== undefined && markupWholesale !== (settings?.markup_wholesale_percent ?? 0)) {
+        legacyPayload.markup_wholesale_percent = markupWholesale;
+      }
+
+      // session_user_name (trim string)
+      const sessionUserName = (draft as any).session_user_name?.trim?.();
+      if (sessionUserName !== undefined && sessionUserName !== (settings?.session_user_name ?? '')) {
+        legacyPayload.session_user_name = sessionUserName;
+      }
+
+      // inventory_negative_qoh_policy
+      if ((draft as any).inventory_negative_qoh_policy !== undefined && 
+          (draft as any).inventory_negative_qoh_policy !== (settings?.inventory_negative_qoh_policy ?? 'WARN')) {
+        legacyPayload.inventory_negative_qoh_policy = (draft as any).inventory_negative_qoh_policy;
+      }
+
+      // Only persist if there are changes
+      if (Object.keys(legacyPayload).length > 0) {
+        await updateSettings(legacyPayload);
+      }
+
       toast({
-        title: 'Reason required',
-        description: 'Please provide at least 5 characters.',
+        title: 'Settings Updated',
+        description: 'Your changes have been saved',
+      });
+    } catch (err) {
+      toast({
+        title: 'Save failed',
+        description: (err as any)?.message ?? 'Unable to save settings',
         variant: 'destructive',
       });
-      return;
+    } finally {
+      setEditing(false);
+      setSyncStatus('synced');
     }
-    setIsApplying(true);
-    await Promise.allSettled(
-      pendingChanges.map((change) =>
-        applySetting(
-          change.key,
-          change.newValue,
-          change.requiresReason ? confirmReason.trim() : confirmReason.trim() || undefined
-        )
-      )
-    );
-    setIsApplying(false);
-    setEditing(false);
-    hydrateForm();
-    resetConfirmation();
-    toast({
-      title: 'Settings Updated',
-      description: 'Protected changes saved',
-    });
   };
 
   const formatHistoryValue = (row: any, prefix: 'old' | 'new') => {
@@ -261,7 +271,7 @@ export default function Settings() {
                   <X className="w-4 h-4 mr-2" />
                   Cancel
                 </Button>
-                <Button onClick={handleSave} disabled={confirmOpen || isApplying}>
+                <Button onClick={handleSave}>
                   <Save className="w-4 h-4 mr-2" />
                   Save
                 </Button>
@@ -485,52 +495,6 @@ export default function Settings() {
           </div>
         </div>
       )}
-
-      <Dialog open={confirmOpen} onOpenChange={(open) => !open && resetConfirmation()}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Confirm changes</DialogTitle>
-          </DialogHeader>
-          {pendingChanges.length > 0 && (
-            <div className="space-y-3">
-              <div className="space-y-2">
-                {pendingChanges.map((c) => (
-                  <div key={c.key} className="flex items-center justify-between gap-2">
-                    <div>
-                      <div className="font-medium">{SYSTEM_SETTINGS_REGISTRY[c.key].label}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {String(c.oldValue)} → {String(c.newValue)}
-                      </div>
-                    </div>
-                    <Badge variant={c.sensitivity === 'critical' ? 'destructive' : 'secondary'}>
-                      {c.sensitivity?.toUpperCase()}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-              {pendingChanges.some((c) => c.requiresReason) && (
-                <div className="space-y-1">
-                  <Label>Reason (required)</Label>
-                  <Textarea
-                    value={confirmReason}
-                    onChange={(e) => setConfirmReason(e.target.value)}
-                    placeholder="Provide context for these changes"
-                  />
-                  <p className="text-xs text-muted-foreground">At least 5 characters.</p>
-                </div>
-              )}
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={resetConfirmation}>
-              Cancel
-            </Button>
-            <Button onClick={confirmPending} disabled={isApplying}>
-              {isApplying ? 'Saving…' : 'Confirm Changes'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

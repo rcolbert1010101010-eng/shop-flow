@@ -125,14 +125,13 @@ export const systemSettingsRepo = {
     value: any,
     opts?: { reason?: string; source?: 'ui' | 'ai' | 'import'; actorLabel?: string }
   ) {
-    const { updateSettings } = useRepos().settings;
     const storeField = mapKeyToStoreField(key);
     const oldResolved = this.getResolvedSetting(key);
     const serialized = serializeValue(key, value);
     const coerced = coerceValue(key, value);
 
-    // Offline-first: update local store immediately
-    updateSettings({ [storeField]: coerced } as Partial<SystemSettings>);
+    // Offline-first: update local Zustand store immediately (never throws)
+    useShopStore.getState().updateSettings({ [storeField]: coerced } as Partial<SystemSettings>);
 
     const actorLabel =
       opts?.actorLabel ??
@@ -161,13 +160,32 @@ export const systemSettingsRepo = {
       actor_label: actorLabel,
     };
 
-    // Fire-and-forget background sync
+    // Best-effort background sync: wrap all network calls in try/catch
+    // Never throw - always return success after updating local store
     try {
       const settings = useRepos().settings;
-      settings.updateSettings(payload);
-      settings.logSettingHistory?.(historyPayload);
+      // Await updateSettings to catch any network errors
+      await settings.updateSettings(payload);
     } catch (err) {
-      console.warn('Settings sync failed; keeping local version', err);
+      if (import.meta.env.DEV) {
+        console.warn('Settings update sync failed; keeping local version', err);
+      }
+      // Continue - local store already updated, sync will retry later
+    }
+
+    // Log history separately - also best-effort
+    try {
+      const settings = useRepos().settings;
+      const historyResult = settings.logSettingHistory?.(historyPayload);
+      // If it's a promise, await it to catch errors
+      if (historyResult && typeof historyResult.then === 'function') {
+        await historyResult;
+      }
+    } catch (err) {
+      if (import.meta.env.DEV) {
+        console.warn('Settings history log failed; keeping local version', err);
+      }
+      // Continue - history logging failure doesn't affect the setting update
     }
   },
 
