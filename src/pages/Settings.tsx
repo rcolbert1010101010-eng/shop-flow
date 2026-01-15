@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useBlocker } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +11,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useRepos } from '@/repos';
 import { useToast } from '@/hooks/use-toast';
 import { Save, Edit, X } from 'lucide-react';
@@ -28,6 +39,9 @@ export default function Settings() {
   const resolvedSettings = useMemo(() => listResolved(), [listResolved]);
   const [formData, setFormData] = useState<Record<SystemSettingKey | string, any>>({});
   const [draft, setDraft] = useState<Record<SystemSettingKey | string, any>>({});
+  // Snapshot of initial state when entering edit mode (for dirty detection)
+  const [snapshot, setSnapshot] = useState<Record<SystemSettingKey | string, any> | null>(null);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
   const hasSettings = resolvedSettings.length > 0;
   const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -55,11 +69,13 @@ export default function Settings() {
     };
     setFormData(next);
     setDraft(next);
+    return next;
   }, [listResolved, settings]);
 
   useEffect(() => {
     if (!editing) {
       hydrateForm();
+      setSnapshot(null);
     }
   }, [settings, editing, hydrateForm, resolvedSettings]);
 
@@ -105,6 +121,21 @@ export default function Settings() {
     const n = Number(v);
     return Number.isFinite(n) ? n : undefined;
   };
+
+  // Stable comparison helper: JSON stringify with sorted keys for consistent comparison
+  const stableStringify = useCallback((obj: Record<string, any>): string => {
+    const sorted = Object.keys(obj).sort().reduce<Record<string, any>>((acc, key) => {
+      acc[key] = obj[key];
+      return acc;
+    }, {});
+    return JSON.stringify(sorted);
+  }, []);
+
+  // Compute isDirty by comparing current draft to snapshot
+  const isDirty = useMemo(() => {
+    if (!editing || !snapshot) return false;
+    return stableStringify(draft) !== stableStringify(snapshot);
+  }, [draft, snapshot, editing, stableStringify]);
 
   const handleSave = async () => {
     if (!draft.shop_name?.trim?.()) {
@@ -232,6 +263,8 @@ export default function Settings() {
         title: 'Settings Updated',
         description: 'Your changes have been saved',
       });
+      // Clear snapshot after successful save
+      setSnapshot(null);
     } catch (err) {
       toast({
         title: 'Save failed',
@@ -244,6 +277,28 @@ export default function Settings() {
     }
   };
 
+  const handleCancel = () => {
+    if (isDirty) {
+      setShowCancelDialog(true);
+    } else {
+      handleCancelConfirm();
+    }
+  };
+
+  const handleCancelConfirm = () => {
+    // Revert draft to snapshot
+    if (snapshot) {
+      const reverted = { ...snapshot };
+      setDraft(reverted);
+      setFormData(reverted);
+    } else {
+      hydrateForm();
+    }
+    setEditing(false);
+    setSnapshot(null);
+    setShowCancelDialog(false);
+  };
+
   const formatHistoryValue = (row: any, prefix: 'old' | 'new') => {
     const type = row[`${prefix}_value_type`];
     if (type === 'number') return row[`${prefix}_value_number`];
@@ -251,6 +306,32 @@ export default function Settings() {
     if (type === 'string') return row[`${prefix}_value_text`];
     return row[`${prefix}_value_json`] ?? '';
   };
+
+  // Navigation guard: block navigation when dirty
+  const blocker = useBlocker(editing && isDirty);
+
+  // Handle navigation blocker confirmation
+  useEffect(() => {
+    if (blocker.state === 'blocked' && isDirty) {
+      const shouldProceed = window.confirm('You have unsaved changes. Leave without saving?');
+      if (shouldProceed) {
+        blocker.proceed();
+      } else {
+        blocker.reset();
+      }
+    }
+  }, [blocker, isDirty]);
+
+  // beforeunload warning when dirty
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (!isDirty) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [isDirty]);
 
   return (
     <div className="page-container">
@@ -263,15 +344,12 @@ export default function Settings() {
               <>
                 <Button
                   variant="outline"
-                  onClick={() => {
-                    hydrateForm();
-                    setEditing(false);
-                  }}
+                  onClick={handleCancel}
                 >
                   <X className="w-4 h-4 mr-2" />
                   Cancel
                 </Button>
-                <Button onClick={handleSave}>
+                <Button onClick={handleSave} disabled={!isDirty}>
                   <Save className="w-4 h-4 mr-2" />
                   Save
                 </Button>
@@ -280,7 +358,8 @@ export default function Settings() {
               <Button
                 variant="outline"
                 onClick={() => {
-                  hydrateForm();
+                  const initial = hydrateForm();
+                  setSnapshot({ ...initial });
                   setEditing(true);
                 }}
               >
@@ -473,6 +552,23 @@ export default function Settings() {
         )}
       </div>
 
+      {/* Cancel confirmation dialog */}
+      <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved changes. Are you sure you want to discard them?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep editing</AlertDialogCancel>
+            <AlertDialogAction onClick={handleCancelConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Discard changes
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {settingsPreviewEnabled && (
         <div className="form-section max-w-xl mt-6">

@@ -63,7 +63,7 @@ function buildExplainAnswer(moduleKey: string, fallbackContent: ModuleHelpConten
   // What should happen next
   lines.push('\n**What should happen next**');
   if (workflows.length > 0) {
-    lines.push('Next, you'll usually:');
+    lines.push("Next, you'll usually:");
     workflows.forEach((w) => lines.push(`• ${w}`));
   } else {
     lines.push('Add your first line item, then save and move the status forward when ready.');
