@@ -987,7 +987,16 @@ export default function SalesOrderDetail() {
         }
         actions={
           <div className="flex flex-wrap gap-2">
-            <ModuleHelpButton moduleKey="sales_orders" />
+            <ModuleHelpButton
+              moduleKey="sales_orders"
+              context={{
+                recordType: 'sales_order',
+                status: currentOrder?.status,
+                hasCustomer: Boolean(currentOrder?.customer_id),
+                hasLines: Boolean(orderLines?.length),
+                isEmpty: !currentOrder?.customer_id && !(orderLines?.length),
+              }}
+            />
             {aiAssistEnabled && currentOrder && (
               <Button variant="outline" onClick={() => setAiAssistOpen(true)}>
                 <Sparkles className="w-4 h-4 mr-2" />
