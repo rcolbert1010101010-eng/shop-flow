@@ -999,7 +999,14 @@ export default function Inventory() {
         subtitle="Manage parts and stock levels"
         actions={
           <div className="flex gap-2">
-            <ModuleHelpButton moduleKey="inventory" />
+            <ModuleHelpButton
+              moduleKey="inventory"
+              context={{
+                recordType: 'inventory',
+                hasLines: Boolean(filteredParts.length),
+                isEmpty: filteredParts.length === 0,
+              }}
+            />
             <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
               <FileSpreadsheet className="w-4 h-4 mr-2" />
               Import Parts
