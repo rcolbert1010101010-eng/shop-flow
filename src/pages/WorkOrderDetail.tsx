@@ -1802,7 +1802,16 @@ const jobReadinessValues = Object.values(jobReadinessById);
         backTo="/work-orders"
         actions={
           <div className="flex flex-wrap gap-2 items-center">
-            <ModuleHelpButton moduleKey="work_orders" />
+            <ModuleHelpButton
+              moduleKey="work_orders"
+              context={{
+                recordType: 'work_order',
+                status: currentOrder?.status,
+                hasCustomer: Boolean(currentOrder?.customer_id),
+                hasLines: Boolean(partLines?.length || laborLines?.length),
+                isEmpty: !currentOrder?.customer_id && !(partLines?.length || laborLines?.length),
+              }}
+            />
             {aiAssistEnabled && currentOrder && (
               <Button variant="outline" onClick={() => setAiAssistOpen(true)}>
                 <Sparkles className="w-4 h-4 mr-2" />
