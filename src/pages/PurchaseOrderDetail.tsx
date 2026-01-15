@@ -537,7 +537,15 @@ export default function PurchaseOrderDetail() {
         backTo="/purchase-orders"
         actions={
           <div className="flex items-center gap-2">
-            <ModuleHelpButton moduleKey="purchase_orders" />
+            <ModuleHelpButton
+              moduleKey="purchase_orders"
+              context={{
+                recordType: 'purchase_order',
+                status: currentOrder?.status,
+                hasLines: Boolean(lineSummary.totalLines),
+                isEmpty: lineSummary.totalLines === 0,
+              }}
+            />
             {currentOrder && hasRemainingQty && (
               <Button size="sm" onClick={() => navigate(`/receiving?poId=${currentOrder.id}`)} title="Receive remaining items. Updates QOH and marks lines received.">
                 Receive
