@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router-dom';
-import { Sidebar, navSections, type NavGroup, type NavLink } from './Sidebar';
+import { Sidebar } from './Sidebar';
+import { navSections, type NavGroup, type NavLink } from './navConfig';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Menu } from 'lucide-react';
