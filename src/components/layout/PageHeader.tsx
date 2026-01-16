@@ -1,6 +1,8 @@
 import { ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { usePermissions } from '@/security/usePermissions';
+import { roleDisplayName } from '@/security/rbac';
 import type { ReactNode } from 'react';
 
 interface PageHeaderProps {
@@ -14,6 +16,7 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, subtitle, actions, breadcrumbs, backTo, description }: PageHeaderProps) {
   const navigate = useNavigate();
+  const { role, loading } = usePermissions();
 
   return (
     <div className="flex flex-col gap-3 mb-6">
@@ -37,7 +40,16 @@ export function PageHeader({ title, subtitle, actions, breadcrumbs, backTo, desc
               {description && <div className="text-xs text-muted-foreground">{description}</div>}
             </div>
           </div>
-          {actions && <div className="flex flex-wrap items-center justify-end gap-2 no-print">{actions}</div>}
+          {actions && (
+            <div className="flex flex-wrap items-center justify-end gap-2 no-print">
+              {actions}
+              {!loading && role && (
+                <span className="text-xs text-muted-foreground">
+                  Role: {roleDisplayName(role)}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
