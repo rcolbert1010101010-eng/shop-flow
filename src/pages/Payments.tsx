@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -16,6 +16,7 @@ import { useRepos } from '@/repos';
 import { usePayments } from '@/hooks/usePayments';
 import { useToast } from '@/hooks/use-toast';
 import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
+import { usePermissions } from '@/security/usePermissions';
 
 const ORDER_TYPE_OPTIONS: Array<{ value: PaymentOrderType | 'ALL'; label: string }> = [
   { value: 'ALL', label: 'All Orders' },
@@ -52,6 +53,8 @@ type PaymentRow = Payment & {
 export default function PaymentsPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { can } = usePermissions();
+  const canRecordPayments = can('payments.record');
   const repos = useRepos();
   const { salesOrders } = repos.salesOrders;
   const { workOrders } = repos.workOrders;
@@ -74,6 +77,13 @@ export default function PaymentsPage() {
   const [voidDialogOpen, setVoidDialogOpen] = useState(false);
   const [voidReason, setVoidReason] = useState('');
   const [voidPaymentId, setVoidPaymentId] = useState<string | null>(null);
+
+  const denyPayments = () =>
+    toast({
+      title: "You don't have permission",
+      description: 'You do not have permission to record or void payments.',
+      variant: 'destructive',
+    });
 
   useEffect(() => {
     const formatInputDate = (date: Date) => date.toISOString().slice(0, 10);
@@ -297,6 +307,10 @@ export default function PaymentsPage() {
   };
 
   const handleOpenReceivePayment = () => {
+    if (!canRecordPayments) {
+      denyPayments();
+      return;
+    }
     setReceivePaymentOpen(true);
     setReceiveOrderId('');
     setReceiveOrderType('WORK_ORDER');
@@ -307,6 +321,10 @@ export default function PaymentsPage() {
   };
 
   const handleOpenReceivePaymentForRow = (row: PaymentRow) => {
+    if (!canRecordPayments) {
+      denyPayments();
+      return;
+    }
     setReceiveOrderType(row.order_type);
     setReceiveOrderId(row.order_id);
     setReceiveAmount('');
@@ -317,6 +335,10 @@ export default function PaymentsPage() {
   };
 
   const handleSubmitReceivePayment = async () => {
+    if (!canRecordPayments) {
+      denyPayments();
+      return;
+    }
     if (!receiveOrderId) {
       toast({ title: 'Select an order', description: 'Choose a work or sales order to apply this payment.', variant: 'destructive' });
       return;
@@ -367,12 +389,20 @@ export default function PaymentsPage() {
   });
 
   const handleOpenVoidPayment = (paymentId: string) => {
+    if (!canRecordPayments) {
+      denyPayments();
+      return;
+    }
     setVoidPaymentId(paymentId);
     setVoidReason('');
     setVoidDialogOpen(true);
   };
 
   const handleConfirmVoid = async () => {
+    if (!canRecordPayments) {
+      denyPayments();
+      return;
+    }
     if (!voidPaymentId) return;
     if (!voidReason.trim()) {
       toast({ title: 'Void reason required', variant: 'destructive' });
@@ -396,7 +426,9 @@ export default function PaymentsPage() {
           subtitle="Track payments across work and sales orders"
           actions={<ModuleHelpButton moduleKey="payments" context={{ isEmpty: !hasAnyPayments }} />}
         />
-        <Button onClick={handleOpenReceivePayment}>Receive Payment</Button>
+        <Button onClick={handleOpenReceivePayment} disabled={!canRecordPayments}>
+          Receive Payment
+        </Button>
       </div>
 
       <div className="grid gap-3 md:grid-cols-4">
