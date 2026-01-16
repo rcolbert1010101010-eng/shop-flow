@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
+import { useToast } from '@/hooks/use-toast';
 
 export function MainLayout() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -15,10 +16,25 @@ export function MainLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const signOut = useAuthStore((s) => s.signOut);
+  const toast = useToast().toast;
 
   const handleSignOut = async () => {
-    await signOut();
-    navigate('/login');
+    setMobileNavOpen(false);
+    try {
+      await signOut();
+      toast({ title: 'Signed out' });
+    } catch (err: any) {
+      toast({
+        title: 'Sign out failed',
+        description: err?.message ?? 'Please try again',
+        variant: 'destructive',
+      });
+    } finally {
+      navigate('/login', { replace: true });
+      if (location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+    }
   };
 
   const renderLink = (item: NavLink, options?: { nested?: boolean }) => {
