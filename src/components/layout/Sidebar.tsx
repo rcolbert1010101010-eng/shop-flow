@@ -1,135 +1,23 @@
 import { Link, useLocation } from 'react-router-dom';
-import {
-  LayoutDashboard,
-  Users,
-  Truck,
-  Wrench,
-  ShoppingCart,
-  Package,
-  Building2,
-  Tags,
-  Settings,
-  ChevronLeft,
-  Menu,
-  HardHat,
-  ClipboardList,
-  Sun,
-  Moon,
-  ListChecks,
-  BarChart2,
-  Flame,
-  Calendar,
-  Factory,
-  Layers,
-  CreditCard,
-  FileText,
-} from 'lucide-react';
+import { ChevronLeft, Menu, Sun, Moon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import type { LucideIcon } from 'lucide-react';
+import { usePermissions } from '@/security/usePermissions';
+import type { NavGroup, NavLink } from './navConfig';
+import { navSections, getFilteredNavSections } from './navConfig';
 import shopflowLogo from '@/assets/branding/shopflow-logo.svg';
-
-export type NavLink = { type: 'link'; path: string; label: string; icon: LucideIcon };
-export type NavGroup = {
-  type: 'group';
-  key: 'serviceOrders' | 'inventory' | 'returnsWarranty' | 'manufacturing' | 'purchaseOrders';
-  label: string;
-  icon: LucideIcon;
-  children: NavLink[];
-};
-export type NavItem = NavLink | NavGroup;
-export type NavSection = { label: string; items: NavItem[] };
-
-const dashboardLink: NavLink = { type: 'link', path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard };
-const customersLink: NavLink = { type: 'link', path: '/customers', label: 'Customers', icon: Users };
-const salesOrdersLink: NavLink = { type: 'link', path: '/sales-orders', label: 'Sales Orders', icon: ShoppingCart };
-const serviceGroup: NavGroup = {
-  type: 'group',
-  key: 'serviceOrders',
-  label: 'Service',
-  icon: ClipboardList,
-  children: [
-    { type: 'link', path: '/work-orders', label: 'Work Orders', icon: Wrench },
-    { type: 'link', path: '/units', label: 'Units', icon: Truck },
-    { type: 'link', path: '/technicians', label: 'Technicians', icon: HardHat },
-    { type: 'link', path: '/plasma', label: 'Plasma Projects', icon: Flame },
-    { type: 'link', path: '/plasma/templates', label: 'Plasma Templates', icon: Flame },
-  ],
-};
-const inventoryGroup: NavGroup = {
-  type: 'group',
-  key: 'inventory',
-  label: 'Inventory',
-  icon: Package,
-  children: [
-    { type: 'link', path: '/inventory', label: 'Parts', icon: Package },
-    { type: 'link', path: '/vendors', label: 'Vendors', icon: Building2 },
-    { type: 'link', path: '/categories', label: 'Categories', icon: Tags },
-    { type: 'link', path: '/cycle-counts', label: 'Cycle Counts', icon: ListChecks },
-  ],
-};
-const purchaseOrdersGroup: NavGroup = {
-  type: 'group',
-  key: 'purchaseOrders',
-  label: 'Purchase Orders',
-  icon: ClipboardList,
-  children: [
-    { type: 'link', path: '/purchase-orders', label: 'Purchase Orders', icon: ClipboardList },
-    { type: 'link', path: '/receiving', label: 'Receiving', icon: ClipboardList },
-    { type: 'link', path: '/receiving-history', label: 'Receiving History', icon: ClipboardList },
-  ],
-};
-const schedulingLink: NavLink = { type: 'link', path: '/scheduling', label: 'Scheduling', icon: Calendar };
-const manufacturingGroup: NavGroup = {
-  type: 'group',
-  key: 'manufacturing',
-  label: 'Manufacturing',
-  icon: Factory,
-  children: [
-    { type: 'link', path: '/manufacturing/products', label: 'Products', icon: Package },
-    { type: 'link', path: '/manufacturing/builds', label: 'Builds', icon: Layers },
-  ],
-};
-const invoicesLink: NavLink = { type: 'link', path: '/invoices', label: 'Invoices', icon: FileText };
-const paymentsLink: NavLink = { type: 'link', path: '/payments', label: 'Payments', icon: CreditCard };
-const returnsWarrantyGroup: NavGroup = {
-  type: 'group',
-  key: 'returnsWarranty',
-  label: 'Returns & Warranty',
-  icon: BarChart2,
-  children: [
-    { type: 'link', path: '/returns', label: 'Returns', icon: BarChart2 },
-    { type: 'link', path: '/warranty', label: 'Warranty Claims', icon: BarChart2 },
-    { type: 'link', path: '/reports/returns-warranty', label: 'Returns/Warranty Report', icon: BarChart2 },
-  ],
-};
-const reportsLink: NavLink = { type: 'link', path: '/reports', label: 'Reports', icon: BarChart2 };
-const settingsLink: NavLink = { type: 'link', path: '/settings', label: 'Settings', icon: Settings };
-
-export const navSections: NavSection[] = [
-  { label: 'Dashboard', items: [dashboardLink] },
-  { label: 'Customers', items: [customersLink] },
-  { label: 'Sales', items: [salesOrdersLink] },
-  { label: 'Service', items: [serviceGroup] },
-  { label: 'Inventory', items: [inventoryGroup] },
-  { label: 'Purchasing', items: [purchaseOrdersGroup] },
-  { label: 'Scheduling', items: [schedulingLink] },
-  { label: 'Manufacturing', items: [manufacturingGroup] },
-  { label: 'Accounting', items: [invoicesLink, paymentsLink, returnsWarrantyGroup] },
-  { label: 'Reports', items: [reportsLink] },
-  { label: 'Settings', items: [settingsLink] },
-];
-
-export const navItems: NavItem[] = navSections.flatMap((section) => section.items);
 
 export function Sidebar({ className }: { className?: string } = {}) {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [darkSidebar, setDarkSidebar] = useState(true);
   const [openSection, setOpenSection] = useState<NavGroup['key'] | null>(null);
+  const { can, loading } = usePermissions();
+  const effectiveCan = loading ? (() => true) : can;
+  const filteredSections = getFilteredNavSections(effectiveCan);
 
   const sidebarColors = {
     bg: 'bg-[hsl(var(--sidebar-background, var(--card)))]',
@@ -250,7 +138,7 @@ export function Sidebar({ className }: { className?: string } = {}) {
             onValueChange={(value) => setOpenSection((value as NavGroup['key']) || null)}
             className="space-y-2"
           >
-            {navSections.map((section) => (
+            {filteredSections.map((section) => (
               <div key={section.label} className="mb-2">
                 <div className="space-y-1">
                   {section.items.map((item) =>
