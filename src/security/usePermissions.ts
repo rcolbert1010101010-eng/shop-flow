@@ -1,17 +1,16 @@
 import { useMemo } from 'react';
 import { type Role, type Capability, can } from './rbac';
+import { useAuthStore } from '@/stores/authStore';
 
 /**
  * Hook for accessing current user permissions
- * 
- * TODO: Replace hardcoded 'ADMIN' role with actual authenticated user's role
- * from auth profile once authentication is implemented.
  */
 export function usePermissions() {
-  // TODO: Replace with actual auth profile role
-  // const { user } = useAuth();
-  // const role = user?.role ?? 'TECH';
-  const role: Role = 'ADMIN';
+  const profile = useAuthStore((state) => state.profile);
+  const loading = useAuthStore((state) => state.loading);
+  
+  // Default to TECH until profile loads or if profile is missing
+  const role: Role = profile?.role ?? 'TECH';
 
   const canCheck = useMemo(
     () => (capability: Capability) => can(role, capability),
@@ -21,5 +20,6 @@ export function usePermissions() {
   return {
     role,
     can: canCheck,
+    loading,
   };
 }

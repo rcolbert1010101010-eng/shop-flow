@@ -9,6 +9,6 @@ const SUPABASE_KEY =
 export const supabase: SupabaseClient | null =
   SUPABASE_URL && SUPABASE_KEY
     ? createClient(SUPABASE_URL, SUPABASE_KEY, {
-        auth: { persistSession: false },
+        auth: { persistSession: true },
       })
     : null;
