@@ -26,6 +26,7 @@ import { Save, Edit, X } from 'lucide-react';
 import { useSystemSettings } from '@/hooks/useSystemSettings';
 import { SYSTEM_SETTINGS_REGISTRY, type SystemSettingKey } from '@/config/systemSettingsRegistry';
 import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
+import { usePermissions } from '@/security/usePermissions';
 
 export default function Settings() {
   const env = (import.meta as any).env ?? {};
@@ -33,6 +34,8 @@ export default function Settings() {
   const { settings, updateSettings } = useRepos().settings;
   const { listResolved, set, getResolved, listHistory } = useSystemSettings();
   const { toast } = useToast();
+  const { can: canCheck } = usePermissions();
+  const canEditSettings = canCheck('settings.edit');
   const [editing, setEditing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'synced' | 'pending'>('synced');
   const resolvedSettings = useMemo(() => listResolved(), [listResolved]);
@@ -374,7 +377,7 @@ export default function Settings() {
                   <X className="w-4 h-4 mr-2" />
                   Cancel
                 </Button>
-                <Button onClick={handleSave} disabled={!isDirty}>
+                <Button onClick={handleSave} disabled={!isDirty || !canEditSettings}>
                   <Save className="w-4 h-4 mr-2" />
                   Save
                 </Button>
@@ -382,7 +385,17 @@ export default function Settings() {
             ) : (
               <Button
                 variant="outline"
+                aria-disabled={!canEditSettings}
+                className={!canEditSettings ? 'opacity-50 cursor-not-allowed' : ''}
                 onClick={() => {
+                  if (!canEditSettings) {
+                    toast({
+                      title: 'Permission Denied',
+                      description: "You don't have permission to edit settings.",
+                      variant: 'destructive',
+                    });
+                    return;
+                  }
                   const initial = hydrateForm();
                   setSnapshot({ ...initial });
                   setEditing(true);
@@ -416,7 +429,7 @@ export default function Settings() {
                     inputMode="decimal"
                     value={value}
                     onChange={(e) => handleFieldChange(key, e.target.value)}
-                    disabled={!editing}
+                    disabled={!editing || !canEditSettings}
                   />
                   <p className="text-xs text-muted-foreground">{entry.description}</p>
                 </div>
@@ -429,7 +442,7 @@ export default function Settings() {
                     type="checkbox"
                     className="h-4 w-4"
                     checked={Boolean(value)}
-                    disabled={!editing}
+                    disabled={!editing || !canEditSettings}
                     onChange={(e) => handleFieldChange(key, e.target.checked)}
                   />
                   <div>
@@ -446,7 +459,7 @@ export default function Settings() {
                   <Select
                     value={String(value)}
                     onValueChange={(v) => handleFieldChange(key, v)}
-                    disabled={!editing}
+                    disabled={!editing || !canEditSettings}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder={entry.label} />
