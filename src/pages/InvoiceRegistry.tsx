@@ -16,6 +16,7 @@ import { useOrderPayments } from '@/hooks/usePayments';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from '@/components/ui/textarea';
 import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
+import { usePermissions } from '@/security/usePermissions';
 
 const PAYMENT_METHOD_OPTIONS: Array<{ value: PaymentMethod; label: string }> = [
   { value: 'cash', label: 'Cash' },
@@ -48,6 +49,9 @@ export default function InvoiceRegistry() {
   const { workOrders } = repos.workOrders;
   const { customers } = repos.customers;
   const { toast } = useToast();
+  const { can } = usePermissions();
+  const canRecordPayments = can('payments.record');
+  const canVoidInvoice = can('invoices.void');
 
   const invoicedSalesOrders = useMemo(
     () => salesOrders.filter((so) => so.status === 'INVOICED'),
@@ -199,6 +203,10 @@ export default function InvoiceRegistry() {
   );
 
   const handleOpenPayment = (row: InvoiceRowWithMeta) => {
+    if (!canRecordPayments) {
+      toast({ title: "You don't have permission to record payments.", variant: 'destructive' });
+      return;
+    }
     if (row.voided_at) {
       toast({
         title: 'Invoice is voided',
@@ -215,6 +223,10 @@ export default function InvoiceRegistry() {
   };
 
   const handleSavePayment = async () => {
+    if (!canRecordPayments) {
+      toast({ title: "You don't have permission to record payments.", variant: 'destructive' });
+      return;
+    }
     if (!selectedInvoice) return;
     const amount = toNumber(paymentAmount);
     if (amount <= 0) {
@@ -252,6 +264,10 @@ export default function InvoiceRegistry() {
   };
 
   const handleOpenVoidInvoice = (row: InvoiceRowWithMeta) => {
+    if (!canVoidInvoice) {
+      toast({ title: "You don't have permission to void invoices.", variant: 'destructive' });
+      return;
+    }
     const invoiceRecord = invoicesBySource.get(`${row.orderType}:${row.orderId}`);
     setVoidInvoiceId(invoiceRecord?.id ?? null);
     setVoidReason('');
@@ -259,6 +275,10 @@ export default function InvoiceRegistry() {
   };
 
   const handleConfirmVoid = async () => {
+    if (!canVoidInvoice) {
+      toast({ title: "You don't have permission to void invoices.", variant: 'destructive' });
+      return;
+    }
     if (!voidInvoiceId) return;
     if (!voidReason.trim()) {
       toast({ title: 'Void reason required', variant: 'destructive' });
@@ -465,8 +485,14 @@ export default function InvoiceRegistry() {
                     <Button
                       size="sm"
                       onClick={() => handleOpenPayment(row)}
-                      disabled={isVoided}
-                      title={isVoided ? 'Cannot receive payment on a voided invoice' : undefined}
+                      disabled={isVoided || !canRecordPayments}
+                      title={
+                        isVoided
+                          ? 'Cannot receive payment on a voided invoice'
+                          : !canRecordPayments
+                            ? "You don't have permission to record payments."
+                            : undefined
+                      }
                     >
                       Receive Payment
                     </Button>
@@ -474,13 +500,19 @@ export default function InvoiceRegistry() {
                       size="sm"
                       variant="ghost"
                       onClick={() => handleOpenVoidInvoice(row)}
-                      disabled={isVoided || Math.max(0, toNumber(row.orderTotal) - toNumber(row.balanceDue)) > 0.01}
+                      disabled={
+                        isVoided ||
+                        !canVoidInvoice ||
+                        Math.max(0, toNumber(row.orderTotal) - toNumber(row.balanceDue)) > 0.01
+                      }
                       title={
                         isVoided
                           ? 'Invoice already voided'
-                          : Math.max(0, toNumber(row.orderTotal) - toNumber(row.balanceDue)) > 0.01
-                            ? 'Invoice has payments; void payments first.'
-                            : undefined
+                          : !canVoidInvoice
+                            ? "You don't have permission to void invoices."
+                            : Math.max(0, toNumber(row.orderTotal) - toNumber(row.balanceDue)) > 0.01
+                              ? 'Invoice has payments; void payments first.'
+                              : undefined
                       }
                     >
                       {isVoided ? 'Voided' : 'Void'}
