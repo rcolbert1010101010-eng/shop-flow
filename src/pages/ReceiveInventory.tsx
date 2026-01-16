@@ -13,6 +13,7 @@ import { formatQtyWithUom, formatSheetsEquivalent } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { HelpTooltip } from '@/components/help/HelpTooltip';
 import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
+import { usePermissions } from '@/security/usePermissions';
 
 type Line = {
   id: string;
@@ -27,6 +28,8 @@ const newId = () => Math.random().toString(36).slice(2, 9);
 export default function ReceiveInventory() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { can } = usePermissions();
+  const canReceiveInventory = can('inventory.receive');
   const { parts: partsRepo, vendors: vendorsRepo, purchaseOrders: poRepo } = useRepos();
   const receiveInventory = partsRepo.receiveInventory;
   const parts = partsRepo.parts.filter((p) => p.is_active && !p.is_kit);
@@ -145,6 +148,10 @@ export default function ReceiveInventory() {
   };
 
   const handlePost = () => {
+    if (!canReceiveInventory) {
+      toast({ title: "You don't have permission to receive inventory.", variant: 'destructive' });
+      return;
+    }
     if (!receiveInventory) {
       toast({ title: 'Receive not available', variant: 'destructive' });
       return;
@@ -491,7 +498,11 @@ export default function ReceiveInventory() {
             Clear
           </Button>
           <div className="flex items-center gap-1">
-            <Button onClick={handlePost} disabled={!hasValidLines}>
+            <Button
+              onClick={handlePost}
+              disabled={!hasValidLines || !canReceiveInventory}
+              title={!canReceiveInventory ? "You don't have permission to receive inventory." : undefined}
+            >
               Post Receipt
             </Button>
             <HelpTooltip content="Finalizes the receipt and updates inventory. Use when the slip matches what arrived." />
