@@ -5,13 +5,21 @@ import { Button } from '@/components/ui/button';
 import { Menu } from 'lucide-react';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { useAuthStore } from '@/stores/authStore';
 
 export function MainLayout() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const isMobile = useIsMobile();
   const location = useLocation();
+  const navigate = useNavigate();
+  const signOut = useAuthStore((s) => s.signOut);
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/login');
+  };
 
   const renderLink = (item: NavLink, options?: { nested?: boolean }) => {
     const isActive =
@@ -54,8 +62,16 @@ export function MainLayout() {
           </Button>
           <span className="font-semibold">ShopFlow</span>
         </div>
+        <Button variant="ghost" size="sm" onClick={handleSignOut}>
+          Sign out
+        </Button>
       </header>
 
+      <header className="hidden md:flex items-center justify-end px-4 py-3 border-b">
+        <Button variant="ghost" size="sm" onClick={handleSignOut}>
+          Sign out
+        </Button>
+      </header>
       <div className="flex flex-1 overflow-hidden min-w-0">
         <Sidebar className="hidden md:flex" />
         <main className="flex-1 overflow-y-auto min-w-0">
