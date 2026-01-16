@@ -19,6 +19,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useRepos } from '@/repos';
 import { usePayments } from '@/hooks/usePayments';
 import { useToast } from '@/hooks/use-toast';
+import { usePermissions } from '@/security/usePermissions';
 import type { Invoice, InvoiceLine } from '@/types';
 
 const toNumber = (value: number | string | null | undefined) => {
@@ -49,6 +50,23 @@ export default function InvoiceDetail() {
   const [voidReason, setVoidReason] = useState('');
   const [voidSubmitting, setVoidSubmitting] = useState(false);
   const { toast } = useToast();
+  const { can } = usePermissions();
+  const canVoidInvoice = can('invoices.void');
+  const canRecordPayments = can('payments.record');
+
+  const denyVoidInvoice = () =>
+    toast({
+      title: "You don't have permission",
+      description: 'You do not have permission to void invoices.',
+      variant: 'destructive',
+    });
+
+  const denyPayments = () =>
+    toast({
+      title: "You don't have permission",
+      description: 'You do not have permission to record or void payments.',
+      variant: 'destructive',
+    });
 
   const backTo = invoice
     ? invoice.source_type === 'SALES_ORDER'
@@ -111,6 +129,10 @@ export default function InvoiceDetail() {
   }, [invoice, paymentAmount, summaryBalanceDue]);
 
   const handleAddPayment = async () => {
+    if (!canRecordPayments) {
+      denyPayments();
+      return;
+    }
     if (!invoice) return;
     if (invoice.voided_at) {
       toast({ title: 'Invoice is voided', description: 'Cannot apply payments to a voided invoice.', variant: 'destructive' });
@@ -142,6 +164,10 @@ export default function InvoiceDetail() {
   };
 
   const handleVoidPayment = async (paymentId: string) => {
+    if (!canRecordPayments) {
+      denyPayments();
+      return;
+    }
     const reason = window.prompt('Enter void reason (optional)') ?? '';
     try {
       await payments.voidPayment.mutateAsync({ paymentId, reason });
@@ -156,6 +182,10 @@ export default function InvoiceDetail() {
   };
 
   const handleConfirmVoid = async () => {
+    if (!canVoidInvoice) {
+      denyVoidInvoice();
+      return;
+    }
     if (!invoice) return;
     if (!voidReason.trim()) {
       toast({ title: 'Void reason required', variant: 'destructive' });
@@ -231,8 +261,14 @@ export default function InvoiceDetail() {
                 <Button
                   size="sm"
                   variant="destructive"
-                  onClick={() => setVoidDialogOpen(true)}
-                  disabled={paidFromInvoice > 0.01}
+                  onClick={() => {
+                    if (!canVoidInvoice) {
+                      denyVoidInvoice();
+                      return;
+                    }
+                    setVoidDialogOpen(true);
+                  }}
+                  disabled={!canVoidInvoice || paidFromInvoice > 0.01}
                 >
                   Void Invoice
                 </Button>
@@ -309,7 +345,10 @@ export default function InvoiceDetail() {
                     onChange={(e) => setPaymentNotes(e.target.value)}
                     disabled={Boolean(invoice.voided_at)}
                   />
-                  <Button onClick={handleAddPayment} disabled={!invoice || payments.addPayment.isPending || Boolean(invoice.voided_at)}>
+                  <Button
+                    onClick={handleAddPayment}
+                    disabled={!canRecordPayments || !invoice || payments.addPayment.isPending || Boolean(invoice.voided_at)}
+                  >
                     {payments.addPayment.isPending ? 'Saving...' : 'Add Payment'}
                   </Button>
                   {invoice.voided_at && (
