@@ -16,6 +16,7 @@ interface QuickAddDialogProps {
   onSave: () => void;
   onCancel: () => void;
   loading?: boolean;
+  saveDisabled?: boolean;
 }
 
 export function QuickAddDialog({
@@ -26,6 +27,7 @@ export function QuickAddDialog({
   onSave,
   onCancel,
   loading = false,
+  saveDisabled = false,
 }: QuickAddDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -38,7 +40,7 @@ export function QuickAddDialog({
           <Button variant="outline" onClick={onCancel} disabled={loading}>
             Cancel
           </Button>
-          <Button onClick={onSave} disabled={loading}>
+          <Button onClick={onSave} disabled={loading || saveDisabled}>
             {loading ? 'Saving...' : 'Save'}
           </Button>
         </DialogFooter>

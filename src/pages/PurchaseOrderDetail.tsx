@@ -45,6 +45,7 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { SmartSearchSelect } from '@/components/common/SmartSearchSelect';
 import { HelpTooltip } from '@/components/help/HelpTooltip';
 import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
+import { usePermissions } from '@/security/usePermissions';
 
 const toNumber = (value: number | string | null | undefined) => {
   const numeric = typeof value === 'number' ? value : value != null ? Number(value) : NaN;
@@ -76,6 +77,8 @@ export default function PurchaseOrderDetail() {
   const { units } = repos.units;
   const { getReturnsByPurchaseOrder, createReturn } = repos.returns;
   const { toast } = useToast();
+  const { can } = usePermissions();
+  const canReceiveInventory = can('inventory.receive');
 
   const isNew = id === 'new';
   const [selectedVendorId, setSelectedVendorId] = useState('');
@@ -190,6 +193,10 @@ export default function PurchaseOrderDetail() {
   };
 
   const handleReceive = () => {
+    if (!canReceiveInventory) {
+      toast({ title: "You don't have permission to receive inventory.", variant: 'destructive' });
+      return;
+    }
     if (!receiveLineId) return;
     const result = poReceive(receiveLineId, parseInt(receiveQty) || 0);
     if (result.success) {
@@ -547,7 +554,16 @@ export default function PurchaseOrderDetail() {
               }}
             />
             {currentOrder && hasRemainingQty && (
-              <Button size="sm" onClick={() => navigate(`/receiving?poId=${currentOrder.id}`)} title="Receive remaining items. Updates QOH and marks lines received.">
+              <Button
+                size="sm"
+                onClick={() => navigate(`/receiving?poId=${currentOrder.id}`)}
+                disabled={!canReceiveInventory}
+                title={
+                  !canReceiveInventory
+                    ? "You don't have permission to receive inventory."
+                    : 'Receive remaining items. Updates QOH and marks lines received.'
+                }
+              >
                 Receive
               </Button>
             )}
@@ -908,7 +924,12 @@ export default function PurchaseOrderDetail() {
                                       setReceiveLineId(line.id);
                                       setReceiveQty(String(remaining));
                                     }}
-                                    title="Posts receiving for this line and updates inventory."
+                                    disabled={!canReceiveInventory}
+                                    title={
+                                      !canReceiveInventory
+                                        ? "You don't have permission to receive inventory."
+                                        : 'Posts receiving for this line and updates inventory.'
+                                    }
                                   >
                                     <PackageCheck className="w-3 h-3 mr-1" />
                                     Receive
@@ -1324,6 +1345,7 @@ export default function PurchaseOrderDetail() {
         title="Receive Items"
         onSave={handleReceive}
         onCancel={() => setReceiveLineId(null)}
+        saveDisabled={!canReceiveInventory}
       >
         <div>
           <Label className="flex items-center gap-1">
