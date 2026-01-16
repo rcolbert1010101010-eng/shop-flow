@@ -49,6 +49,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { HelpTooltip } from '@/components/help/HelpTooltip';
 import { ImportPartsDialog } from '@/components/inventory/ImportPartsDialog';
 import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
+import { usePermissions } from '@/security/usePermissions';
 
 export default function Inventory() {
   const navigate = useNavigate();
@@ -59,6 +60,8 @@ export default function Inventory() {
   const { categories } = repos.categories;
   const poRepo = repos.purchaseOrders;
   const { toast } = useToast();
+  const { can } = usePermissions();
+  const canAdjustQoh = can('inventory.adjust_qoh');
   const [scanValue, setScanValue] = useState('');
   const scanInputRef = useRef<HTMLInputElement | null>(null);
   const inventoryMovements = useShopStore((s) => s.inventoryMovements);
@@ -385,11 +388,13 @@ export default function Inventory() {
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => {
+                  if (!canAdjustQoh) return;
                   setSelectedPart(item);
                   setNewQoh(item.quantity_on_hand.toString());
                   setAdjustReason('');
                   setAdjustDialogOpen(true);
                 }}
+                disabled={!canAdjustQoh}
               >
                 Adjust QOH
               </DropdownMenuItem>
@@ -771,11 +776,13 @@ export default function Inventory() {
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => {
+                  if (!canAdjustQoh) return;
                   setSelectedPart(item);
                   setNewQoh(item.quantity_on_hand.toString());
                   setAdjustReason('');
                   setAdjustDialogOpen(true);
                 }}
+                disabled={!canAdjustQoh}
               >
                 Adjust QOH
               </DropdownMenuItem>
@@ -887,6 +894,10 @@ export default function Inventory() {
   };
 
   const applyCounts = useCallback(() => {
+    if (!canAdjustQoh) {
+      toast({ title: "You don't have permission to adjust inventory.", variant: 'destructive' });
+      return;
+    }
     if (cycleCountBlocker) return;
     const reason = `COUNT: ${batchReason.trim()}`;
     let updated = 0;
@@ -928,7 +939,7 @@ export default function Inventory() {
       description: `Updated ${updated}, Skipped ${skipped}, Failed ${failed}`,
       variant: failed > 0 ? 'destructive' : 'default',
     });
-  }, [batchReason, countInputs, cycleCountBlocker, filteredParts, repos.parts, selectedIds, toast]);
+  }, [batchReason, canAdjustQoh, countInputs, cycleCountBlocker, filteredParts, repos.parts, selectedIds, toast]);
 
   const stockCounts = useMemo(() => {
     let low = 0;
@@ -949,6 +960,10 @@ export default function Inventory() {
   }, [enhancedParts]);
 
   const handleSaveAdjustment = () => {
+    if (!canAdjustQoh) {
+      toast({ title: "You don't have permission to adjust inventory.", variant: 'destructive' });
+      return;
+    }
     if (!selectedPart) return;
     
     // Validate quantity with UOM rules
@@ -1448,7 +1463,8 @@ export default function Inventory() {
               <div className="flex gap-2">
                 <Button
                   onClick={applyCounts}
-                  disabled={applyDisabled}
+                  disabled={!canAdjustQoh || applyDisabled}
+                  title={!canAdjustQoh ? "You don't have permission to adjust inventory." : undefined}
                 >
                   Apply Counts
                 </Button>
@@ -1660,7 +1676,11 @@ export default function Inventory() {
               <Button variant="outline" onClick={closeAdjustDialog}>
                 Cancel
               </Button>
-              <Button onClick={handleSaveAdjustment} disabled={adjustIssues.length > 0}>
+              <Button
+                onClick={handleSaveAdjustment}
+                disabled={!canAdjustQoh || adjustIssues.length > 0}
+                title={!canAdjustQoh ? "You don't have permission to adjust inventory." : undefined}
+              >
                 Save
               </Button>
             </div>
