@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ReportLayout } from '@/components/reports/ReportLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -7,6 +8,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { StatusBadge } from '@/components/ui/status-badge';
 import { useRepos } from '@/repos';
 import type { SalesOrder, SalesOrderStatus } from '@/types';
+import { usePermissions } from '@/security/usePermissions';
+import { useToast } from '@/hooks/use-toast';
 
 type SalesOrderRow = {
   id: string;
@@ -57,12 +60,27 @@ const formatStatus = (status: SalesOrderStatus) => {
 };
 
 export default function SalesOrdersReport() {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const { can, isReady } = usePermissions();
+  const canViewReports = can('reports.view');
   const repos = useRepos();
   const { salesOrders } = repos.salesOrders;
   const { customers } = repos.customers;
 
   const [statusFilter, setStatusFilter] = useState<'all' | SalesOrderStatus>('all');
   const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    if (!isReady) return;
+    if (!canViewReports) {
+      toast({
+        title: "You don't have permission to view reports.",
+        variant: 'destructive',
+      });
+      navigate('/', { replace: true });
+    }
+  }, [canViewReports, isReady, navigate, toast]);
 
   const customerMap = useMemo(() => new Map(customers.map((c) => [c.id, c])), [customers]);
 
@@ -105,6 +123,9 @@ export default function SalesOrdersReport() {
 
   const revenueTotal = filteredRows.reduce((sum, row) => sum + toNumber(row.total), 0);
   const averageTicket = filteredRows.length ? revenueTotal / filteredRows.length : 0;
+
+  if (!isReady) return null;
+  if (isReady && !canViewReports) return null;
 
   return (
     <ReportLayout

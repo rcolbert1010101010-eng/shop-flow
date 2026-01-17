@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ReportLayout } from '@/components/reports/ReportLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -18,6 +19,8 @@ import {
   type WorkOrderWithRefs,
 } from '@/lib/reports/workOrders';
 import type { WorkOrderStatus } from '@/types';
+import { usePermissions } from '@/security/usePermissions';
+import { useToast } from '@/hooks/use-toast';
 
 type WipRow = WorkOrderWithRefs & {
   daysOpen: number;
@@ -32,6 +35,10 @@ const STATUS_OPTIONS: WorkOrderStatus[] = ['OPEN', 'IN_PROGRESS', 'ESTIMATE', 'I
 const formatMoney = (value: number) => `$${value.toFixed(2)}`;
 
 export default function WorkInProcessReport() {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const { can, isReady } = usePermissions();
+  const canViewReports = can('reports.view');
   const repos = useRepos();
   const { workOrders, workOrderPartLines } = repos.workOrders;
   const { customers } = repos.customers;
@@ -46,6 +53,17 @@ export default function WorkInProcessReport() {
   const [unitQuery, setUnitQuery] = useState('');
   const [onlyOverdue, setOnlyOverdue] = useState(false);
   const [onlyWaitingParts, setOnlyWaitingParts] = useState(false);
+
+  useEffect(() => {
+    if (!isReady) return;
+    if (!canViewReports) {
+      toast({
+        title: "You don't have permission to view reports.",
+        variant: 'destructive',
+      });
+      navigate('/', { replace: true });
+    }
+  }, [canViewReports, isReady, navigate, toast]);
 
   const nowRef = useMemo(() => new Date(), []);
 
@@ -123,6 +141,9 @@ export default function WorkInProcessReport() {
       prev.includes(status) ? prev.filter((s) => s !== status) : [...prev, status]
     );
   };
+
+  if (!isReady) return null;
+  if (isReady && !canViewReports) return null;
 
   return (
     <ReportLayout

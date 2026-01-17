@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ReportLayout } from '@/components/reports/ReportLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -7,6 +8,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useRepos } from '@/repos';
+import { usePermissions } from '@/security/usePermissions';
+import { useToast } from '@/hooks/use-toast';
 
 type LowStockRow = {
   id: string;
@@ -28,6 +31,10 @@ const toNumber = (value: number | string | null | undefined) => {
 const formatMoney = (value: number | string | null | undefined) => `$${toNumber(value).toFixed(2)}`;
 
 export default function LowStockPartsReport() {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const { can, isReady } = usePermissions();
+  const canViewReports = can('reports.view');
   const repos = useRepos();
   const { parts } = repos.parts;
   const { vendors } = repos.vendors;
@@ -36,6 +43,17 @@ export default function LowStockPartsReport() {
   const [vendorFilter, setVendorFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [includeZero, setIncludeZero] = useState(false);
+
+  useEffect(() => {
+    if (!isReady) return;
+    if (!canViewReports) {
+      toast({
+        title: "You don't have permission to view reports.",
+        variant: 'destructive',
+      });
+      navigate('/', { replace: true });
+    }
+  }, [canViewReports, isReady, navigate, toast]);
 
   const vendorMap = useMemo(() => new Map(vendors.map((v) => [v.id, v.vendor_name])), [vendors]);
   const categoryMap = useMemo(() => new Map(categories.map((c) => [c.id, c.category_name])), [categories]);
@@ -97,6 +115,9 @@ export default function LowStockPartsReport() {
     const unique = Array.from(new Set(lowStockRows.map((row) => row.vendorName))).sort();
     return unique;
   }, [lowStockRows]);
+
+  if (!isReady) return null;
+  if (isReady && !canViewReports) return null;
 
   return (
     <ReportLayout

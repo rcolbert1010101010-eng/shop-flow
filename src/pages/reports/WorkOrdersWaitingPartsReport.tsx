@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ReportLayout } from '@/components/reports/ReportLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -12,6 +13,8 @@ import {
   joinWorkOrders,
   type WorkOrderWithRefs,
 } from '@/lib/reports/workOrders';
+import { usePermissions } from '@/security/usePermissions';
+import { useToast } from '@/hooks/use-toast';
 
 type WaitingRow = WorkOrderWithRefs & {
   daysOpen: number;
@@ -23,6 +26,10 @@ type WaitingRow = WorkOrderWithRefs & {
 const formatMoney = (value: number) => `$${value.toFixed(2)}`;
 
 export default function WorkOrdersWaitingPartsReport() {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const { can, isReady } = usePermissions();
+  const canViewReports = can('reports.view');
   const repos = useRepos();
   const { workOrders, workOrderPartLines } = repos.workOrders;
   const { customers } = repos.customers;
@@ -31,6 +38,17 @@ export default function WorkOrdersWaitingPartsReport() {
 
   const [search, setSearch] = useState('');
   const nowRef = useMemo(() => new Date(), []);
+
+  useEffect(() => {
+    if (!isReady) return;
+    if (!canViewReports) {
+      toast({
+        title: "You don't have permission to view reports.",
+        variant: 'destructive',
+      });
+      navigate('/', { replace: true });
+    }
+  }, [canViewReports, isReady, navigate, toast]);
 
   const rows = useMemo<WaitingRow[]>(() => {
     return joinWorkOrders(workOrders, customers, units).map((order) => {
@@ -74,6 +92,9 @@ export default function WorkOrdersWaitingPartsReport() {
     });
     return buckets;
   }, [waitingRows]);
+
+  if (!isReady) return null;
+  if (isReady && !canViewReports) return null;
 
   return (
     <ReportLayout

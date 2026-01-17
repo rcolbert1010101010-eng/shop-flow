@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -6,6 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useRepos } from '@/repos';
 import { computeReturnsWarrantyReport } from '@/services/returnsWarrantyReporting';
 import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
+import { usePermissions } from '@/security/usePermissions';
+import { useToast } from '@/hooks/use-toast';
 
 const toNumber = (value: number | string | null | undefined) => {
   const numeric = typeof value === 'number' ? value : value != null ? Number(value) : NaN;
@@ -21,6 +24,10 @@ const DATE_OPTIONS = [
 ] as const;
 
 export default function ReturnsWarrantyReport() {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const { can, isReady } = usePermissions();
+  const canViewReports = can('reports.view');
   const repos = useRepos();
   const { returns, returnLines } = repos.returns;
   const { warrantyClaims, warrantyClaimLines } = repos.warranty;
@@ -28,6 +35,17 @@ export default function ReturnsWarrantyReport() {
   const { parts } = repos.parts;
   const [range, setRange] = useState<(typeof DATE_OPTIONS)[number]['value']>('90');
   const [vendorFilter, setVendorFilter] = useState('__ALL__');
+
+  useEffect(() => {
+    if (!isReady) return;
+    if (!canViewReports) {
+      toast({
+        title: "You don't have permission to view reports.",
+        variant: 'destructive',
+      });
+      navigate('/', { replace: true });
+    }
+  }, [canViewReports, isReady, navigate, toast]);
 
   const report = useMemo(() => {
     return computeReturnsWarrantyReport({
@@ -42,6 +60,9 @@ export default function ReturnsWarrantyReport() {
     });
   }, [returns, returnLines, warrantyClaims, warrantyClaimLines, vendors, parts, range, vendorFilter]);
   const hasAnyReturns = returns.length > 0 || warrantyClaims.length > 0;
+
+  if (!isReady) return null;
+  if (isReady && !canViewReports) return null;
 
   return (
     <div className="page-container space-y-4">

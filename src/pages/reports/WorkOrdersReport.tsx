@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ReportLayout } from '@/components/reports/ReportLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -8,6 +9,8 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { useRepos } from '@/repos';
 import { joinWorkOrders, getDaysOpen, getAgingBucket, getWipValue, type WorkOrderWithRefs } from '@/lib/reports/workOrders';
 import type { WorkOrderStatus } from '@/types';
+import { usePermissions } from '@/security/usePermissions';
+import { useToast } from '@/hooks/use-toast';
 
 type ReportRow = WorkOrderWithRefs & {
   daysOpen: number;
@@ -32,6 +35,10 @@ const formatStatus = (status: WorkOrderStatus) => {
 };
 
 export default function WorkOrdersReport() {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const { can, isReady } = usePermissions();
+  const canViewReports = can('reports.view');
   const repos = useRepos();
   const { workOrders } = repos.workOrders;
   const { customers } = repos.customers;
@@ -40,6 +47,17 @@ export default function WorkOrdersReport() {
   const [statusFilter, setStatusFilter] = useState<'all' | WorkOrderStatus>('all');
   const [search, setSearch] = useState('');
   const nowRef = useMemo(() => new Date(), []);
+
+  useEffect(() => {
+    if (!isReady) return;
+    if (!canViewReports) {
+      toast({
+        title: "You don't have permission to view reports.",
+        variant: 'destructive',
+      });
+      navigate('/', { replace: true });
+    }
+  }, [canViewReports, isReady, navigate, toast]);
 
   const rows = useMemo<ReportRow[]>(() => {
     return joinWorkOrders(workOrders, customers, units).map((order) => {
@@ -90,6 +108,9 @@ export default function WorkOrdersReport() {
     const avg = filteredRows.length ? total / filteredRows.length : 0;
     return { total, avg };
   }, [filteredRows]);
+
+  if (!isReady) return null;
+  if (isReady && !canViewReports) return null;
 
   return (
     <ReportLayout
