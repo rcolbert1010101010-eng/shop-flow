@@ -9,5 +9,22 @@ export interface HelpContext {
   hasCustomer?: boolean;
   // Whether the record has line items
   hasLines?: boolean;
+  // User role used for role-aware help rendering (mapped to help roles)
+  userRole?: HelpRole;
+  // Canonical auto-help triggers detected for this screen/action
+  autoTriggers?: AutoHelpTrigger[];
+  // Optional hints for locked/disabled states
+  lockedReason?: string;
+  // Optional flag when user hesitates (hover/repeat attempts)
+  hesitation?: boolean;
+  // Optional label for the action being attempted (e.g., "Invoice", "Receive")
+  actionName?: string;
 }
 
+export type HelpRole = 'Technician' | 'Service Writer' | 'Manager/Admin';
+
+export type AutoHelpTrigger =
+  | 'high_risk_transition'
+  | 'locked_action'
+  | 'inventory_impact'
+  | 'hesitation';

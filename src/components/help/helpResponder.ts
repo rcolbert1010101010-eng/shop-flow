@@ -1,10 +1,49 @@
 import type { ModuleHelpContent } from '@/help/helpRegistry';
 import { getModuleHelp } from '@/help/helpRegistry';
-import type { HelpContext } from '@/help/types';
+import type { HelpContext, HelpRole } from '@/help/types';
+import { logHelpInteraction } from './helpAudit';
 
 interface Response {
   answer: string;
   suggestions: string[];
+}
+
+const billingKeywords = ['invoice', 'billing', 'payment', 'balance', 'void', 'price', 'cost'];
+const adminKeywords = [
+  'invoice',
+  'billing',
+  'payment',
+  'balance',
+  'void',
+  'price',
+  'cost',
+  'margin',
+  'inventory',
+  'qoh',
+  'stock',
+  'audit',
+  'lock',
+  'financial',
+  'receive',
+];
+
+function resolveHelpRole(context?: HelpContext): HelpRole {
+  const role = context?.userRole;
+  if (role === 'Manager/Admin' || role === 'Service Writer' || role === 'Technician') {
+    return role;
+  }
+  return 'Technician';
+}
+
+function renderingModeForRole(role: HelpRole): 'technician' | 'service_writer' | 'manager_admin' {
+  if (role === 'Service Writer') return 'service_writer';
+  if (role === 'Manager/Admin') return 'manager_admin';
+  return 'technician';
+}
+
+function hasKeyword(text: string, keywords: string[]): boolean {
+  const normalized = normalizeText(text);
+  return keywords.some((k) => normalized.includes(k));
 }
 
 function normalizeText(text: string): string {
@@ -255,63 +294,28 @@ export function respond(
   userText: string,
   context?: HelpContext
 ): Response {
+  const helpRole = resolveHelpRole(context);
   const normalized = normalizeText(userText);
   const words = normalized.split(/\s+/).filter((w) => w.length > 2);
-  
-  // Context-aware overrides (highest priority first)
+
+  const logAndReturn = (answer: string, suggestions: string[]): Response => {
+    logHelpInteraction({
+      moduleKey,
+      playbookTitle: content.title,
+      userRole: helpRole,
+      renderingMode: renderingModeForRole(helpRole),
+      question: userText,
+    });
+    return { answer, suggestions };
+  };
+
+  // Hard safety guard for invoiced records
   if (context?.status === 'INVOICED') {
-    return {
-      answer: 'This record is already invoiced, so most fields are locked to keep the invoice accurate. You can still view and print all details, add notes for your records, create returns or warranty claims, and start a new order or work order if needed. If you need to correct something, create a new transaction like a return or credit memo rather than editing the invoiced record.',
-      suggestions: [
-        'How do I create a return for an invoiced order?',
-        'Can I print an invoice after it\'s been created?',
-        'How do I add notes to an invoiced record?',
-        'What happens when I create a credit memo?',
-      ],
-    };
-  }
-
-  if (context?.isEmpty === true && context?.hasCustomer === false) {
-    const recordTypeLabel = context.recordType ? context.recordType.replace(/_/g, ' ') : 'order';
-    return {
-      answer: `Start by selecting or adding a customer first. Use the customer search to find an existing customer, or create a new one if needed. Once you have a customer selected, you can add parts and labor to build the ${recordTypeLabel}, set pricing, and track all work for them.`,
-      suggestions: [
-        'How do I search for an existing customer?',
-        'How do I create a new customer?',
-        'What information do I need to add a customer?',
-        'How do I add parts after selecting a customer?',
-      ],
-    };
-  }
-
-  if (context?.hasCustomer === true && context?.hasLines === false) {
-    const recordTypeLabel = context.recordType ? context.recordType.replace(/_/g, ' ') : 'order';
-    const isWorkOrder = moduleKey === 'work_orders' || context.recordType === 'work_order';
-    const lineType = isWorkOrder ? 'parts or labor' : 'parts';
-    const addAction = isWorkOrder ? '"Add Part" or "Add Labor"' : '"Add Part"';
-    return {
-      answer: `You have a customer selected. Now add your first line item using ${addAction} for ${lineType}. Common mistakes to avoid: entering the wrong quantity, using the wrong unit of measure, or forgetting to set the price before saving. Double-check these before you save the line.`,
-      suggestions: [
-        'How do I add parts to an order?',
-        'What unit of measure should I use?',
-        'How do I set the price for a part?',
-        isWorkOrder ? 'How do I add labor hours to a work order?' : 'What happens if I enter the wrong quantity?',
-      ],
-    };
-  }
-
-  if (isExplainQuestion(userText)) {
-    return {
-      answer: buildExplainAnswer(moduleKey, content, context),
-      suggestions: getContextSuggestions(moduleKey, context) ?? getModuleSuggestions(moduleKey),
-    };
-  }
-
-  if (words.length === 0) {
-    return {
-      answer: `Here's an overview of ${content.title}:\n\n${content.workflows[0]?.title || 'Get started'} workflow:\n${content.workflows[0]?.steps.slice(0, 3).map((s, i) => `${i + 1}. ${s}`).join('\n') || 'No workflows available'}`,
-      suggestions: getContextSuggestions(moduleKey, context) ?? getModuleSuggestions(moduleKey),
-    };
+    const lockedAnswer =
+      helpRole === 'Manager/Admin'
+        ? 'Record is invoiced and financially locked. Review via print/view, add notes for audit, and use returns/credits instead of editing. Unlocking is not allowed once invoiced.'
+        : 'Record is invoiced and locked. View/print details or add notes only; corrections must use a return or credit instead of editing.';
+    return logAndReturn(lockedAnswer, ['Invoice print', 'Create return', 'Add note']);
   }
 
   // Score sections
@@ -319,112 +323,112 @@ export function respond(
   const workflowScores: Array<{ workflow: { title: string; steps: string[] }; score: number }> = [];
   const tipScores: Array<{ tip: string; score: number }> = [];
 
-  // Score definitions
   content.definitions.forEach((def) => {
     const termScore = countMatches(def.term, words);
     const meaningScore = countMatches(def.meaning, words);
-    const score = termScore * 2 + meaningScore; // Terms weighted higher
-    if (score > 0) {
-      definitionScores.push({ def, score });
-    }
+    const score = termScore * 2 + meaningScore;
+    definitionScores.push({ def, score });
   });
 
-  // Score workflows
   content.workflows.forEach((workflow) => {
     const titleScore = countMatches(workflow.title, words);
     const stepsScore = workflow.steps.reduce((sum, step) => sum + countMatches(step, words), 0);
-    const score = titleScore * 3 + stepsScore; // Title weighted higher
-    if (score > 0) {
-      workflowScores.push({ workflow, score });
-    }
+    const score = titleScore * 3 + stepsScore;
+    workflowScores.push({ workflow, score });
   });
 
-  // Score tips
   content.tips.forEach((tipGroup) => {
     tipGroup.items.forEach((tip) => {
       const score = countMatches(tip, words);
-      if (score > 0) {
-        tipScores.push({ tip, score });
-      }
+      tipScores.push({ tip, score });
     });
   });
 
-  // Sort by score
-  definitionScores.sort((a, b) => b.score - a.score);
   workflowScores.sort((a, b) => b.score - a.score);
+  definitionScores.sort((a, b) => b.score - a.score);
   tipScores.sort((a, b) => b.score - a.score);
 
-  const parts: string[] = [];
+  const sortedWorkflows =
+    workflowScores.length > 0 ? workflowScores : content.workflows.map((workflow) => ({ workflow, score: 0 }));
+  const sortedDefs =
+    definitionScores.length > 0 ? definitionScores : content.definitions.map((def) => ({ def, score: 0 }));
+  const sortedTips =
+    tipScores.length > 0
+      ? tipScores
+      : content.tips.flatMap((group) => group.items.map((tip) => ({ tip, score: 0 })));
 
-  // Add definitions (up to 3)
-  if (definitionScores.length > 0) {
-    const topDefs = definitionScores.slice(0, 3);
-    parts.push('**Definitions:**');
-    topDefs.forEach(({ def }) => {
-      parts.push(`• **${def.term}**: ${def.meaning}`);
-    });
-  }
-
-  // Add workflows (1-2, max 4 steps each)
-  if (workflowScores.length > 0) {
-    const topWorkflows = workflowScores.slice(0, 2);
-    topWorkflows.forEach(({ workflow }) => {
-      parts.push(`\n**${workflow.title}:**`);
-      const stepsToShow = workflow.steps.slice(0, 4);
-      stepsToShow.forEach((step, idx) => {
-        parts.push(`${idx + 1}. ${step}`);
-      });
-      if (workflow.steps.length > 4) {
-        parts.push(`... and ${workflow.steps.length - 4} more step${workflow.steps.length - 4 > 1 ? 's' : ''}`);
-      }
-    });
-  }
-
-  // Add tips (up to 5)
-  if (tipScores.length > 0) {
-    const topTips = tipScores.slice(0, 5);
-    if (topTips.length > 0) {
-      parts.push('\n**Tips:**');
-      topTips.forEach(({ tip }) => {
-        parts.push(`• ${tip}`);
-      });
-    }
-  }
-
-  // If no strong matches, show default workflows
-  if (parts.length === 0) {
-    if (content.workflows.length > 0) {
-      parts.push(`Here are the main workflows for ${content.title}:`);
-      content.workflows.slice(0, 2).forEach((workflow) => {
-        parts.push(`\n**${workflow.title}:**`);
-        workflow.steps.slice(0, 3).forEach((step, idx) => {
-          parts.push(`${idx + 1}. ${step}`);
-        });
-      });
-      parts.push('\nTry asking about specific terms or steps for more details.');
-    } else {
-      parts.push(`I can help you with ${content.title}. Try asking about specific features or terms.`);
-    }
-  }
-
-  const answer = parts.join('\n');
-
-  // Generate suggestions based on what wasn't covered
+  const answerParts: string[] = [];
   const suggestions: string[] = [];
-  if (definitionScores.length === 0 && content.definitions.length > 0) {
-    suggestions.push(`What does ${content.definitions[0]?.term} mean?`);
-  }
-  if (workflowScores.length === 0 && content.workflows.length > 0) {
-    suggestions.push(`How do I ${content.workflows[0]?.title.toLowerCase()}?`);
-  }
-  if (suggestions.length < 3) {
-    const contextSuggestions = getContextSuggestions(moduleKey, context);
-    const fallbackSuggestions = contextSuggestions ?? getModuleSuggestions(moduleKey);
-    suggestions.push(...fallbackSuggestions.slice(0, 3 - suggestions.length));
+
+  const addWorkflowBlock = (workflowTitle: string, steps: string[]) => {
+    answerParts.push(`**${workflowTitle}**`);
+    steps.slice(0, 4).forEach((step, idx) => {
+      answerParts.push(`${idx + 1}. ${step}`);
+    });
+  };
+
+  if (helpRole === 'Technician') {
+    answerParts.push('Role: Technician — procedural steps only');
+    const topWorkflows = sortedWorkflows.slice(0, 2);
+    topWorkflows.forEach(({ workflow }) => addWorkflowBlock(workflow.title, workflow.steps));
+    suggestions.push(...topWorkflows.map(({ workflow }) => workflow.title).slice(0, 3));
+  } else if (helpRole === 'Service Writer') {
+    answerParts.push('Role: Service Writer — workflow + billing impact');
+    const topWorkflows = sortedWorkflows.slice(0, 2);
+    topWorkflows.forEach(({ workflow }) => addWorkflowBlock(workflow.title, workflow.steps));
+
+    const billingDefs = sortedDefs
+      .map(({ def }) => def)
+      .filter((def) => hasKeyword(def.term + ' ' + def.meaning, billingKeywords))
+      .slice(0, 2);
+    if (billingDefs.length > 0) {
+      answerParts.push('**Billing / impact terms**');
+      billingDefs.forEach((def) => {
+        answerParts.push(`• **${def.term}**: ${def.meaning}`);
+      });
+    }
+
+    const billingTips = sortedTips
+      .map(({ tip }) => tip)
+      .filter((tip) => hasKeyword(tip, billingKeywords))
+      .slice(0, 3);
+    if (billingTips.length > 0) {
+      answerParts.push('**Billing tips**');
+      billingTips.forEach((tip) => answerParts.push(`• ${tip}`));
+    }
+
+    suggestions.push(...topWorkflows.map(({ workflow }) => workflow.title).slice(0, 3));
+  } else {
+    answerParts.push('Role: Manager/Admin — financial, inventory, and audit impact');
+    const topWorkflows = sortedWorkflows.slice(0, 2);
+    topWorkflows.forEach(({ workflow }) => addWorkflowBlock(workflow.title, workflow.steps));
+
+    const adminDefs = sortedDefs
+      .map(({ def }) => def)
+      .filter((def) => hasKeyword(def.term + ' ' + def.meaning, adminKeywords))
+      .slice(0, 3);
+    if (adminDefs.length > 0) {
+      answerParts.push('**Financial / inventory terms**');
+      adminDefs.forEach((def) => answerParts.push(`• **${def.term}**: ${def.meaning}`));
+    }
+
+    const adminTips = sortedTips
+      .map(({ tip }) => tip)
+      .filter((tip) => hasKeyword(tip, adminKeywords))
+      .slice(0, 4);
+    if (adminTips.length > 0) {
+      answerParts.push('**Controls / audits**');
+      adminTips.forEach((tip) => answerParts.push(`• ${tip}`));
+    }
+
+    suggestions.push(...topWorkflows.map(({ workflow }) => workflow.title).slice(0, 3));
+    if (adminDefs.length === 0 && adminTips.length === 0) {
+      answerParts.push('Review locking/finance rules before changing this record.');
+    }
   }
 
-  return {
-    answer,
-    suggestions: suggestions.slice(0, 3),
-  };
+  const answer = answerParts.join('\n');
+  const dedupedSuggestions = Array.from(new Set(suggestions)).slice(0, 3);
+
+  return logAndReturn(answer, dedupedSuggestions);
 }

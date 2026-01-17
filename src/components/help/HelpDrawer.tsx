@@ -3,6 +3,8 @@ import { getModuleHelp } from '@/help/helpRegistry';
 import { Separator } from '@/components/ui/separator';
 import { HelpChat } from './HelpChat';
 import type { HelpContext } from '@/help/types';
+import { AutoHelpPanel } from './AutoHelp';
+import { OnboardingPanel } from './OnboardingPanel';
 
 interface HelpDrawerProps {
   moduleKey: string;
@@ -30,6 +32,9 @@ export function HelpDrawer({ moduleKey, open, onOpenChange, context }: HelpDrawe
         </SheetHeader>
 
         <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4">
+          <AutoHelpPanel moduleKey={moduleKey} context={context} />
+          <OnboardingPanel />
+
           {helpContent.tips.length > 0 && (
             <section className="space-y-2">
               <h3 className="text-sm font-semibold">Quick Tips</h3>

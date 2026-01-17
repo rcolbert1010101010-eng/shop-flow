@@ -12,6 +12,8 @@ import { DashboardKanban } from '@/components/dashboard/DashboardKanban';
 import type { DashboardKanbanColumn } from '@/components/dashboard/DashboardKanban';
 import { DashboardAlertsRail } from '@/components/dashboard/DashboardAlertsRail';
 import type { DashboardAlertGroup } from '@/components/dashboard/DashboardAlertsRail';
+import { InsightsPanel } from '@/components/dashboard/InsightsPanel';
+import { SimulationsPanel } from '@/components/dashboard/SimulationsPanel';
 import { useQueryClient } from '@tanstack/react-query';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import {
@@ -32,7 +34,6 @@ import {
 import { Wrench, ShoppingCart, AlertTriangle, DollarSign, Shield, ClipboardList, Clock3, Search, LayoutDashboard, RotateCw, Command as CommandIcon } from 'lucide-react';
 import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 import type { ScheduleItem, WorkOrder, Customer, Unit, Part } from '@/types';
-import { inventoryInsights } from '@/services/aiAssist/aiAssistPreview';
 import { useIsMobile } from '@/hooks/useIsMobile';
 
 const VIEW_STORAGE_KEY = 'dashboard-view';
@@ -108,8 +109,6 @@ const formatAgeLabel = (ageMs: number) => {
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const env = (import.meta as any).env || {};
-  const aiAssistEnabled = import.meta.env.DEV || env.VITE_AI_ASSIST_PREVIEW === 'true';
   const isMobile = useIsMobile();
   const {
     workOrders,
@@ -124,6 +123,8 @@ export default function Dashboard() {
     timeEntries,
     customers,
     units,
+    plasmaJobs,
+    plasmaAttachments,
   } = useShopStore();
 
   const [commandQuery, setCommandQuery] = useState('');
@@ -188,11 +189,6 @@ export default function Dashboard() {
     () => DASHBOARD_VIEWS.find((view) => view.id === selectedViewId) ?? DASHBOARD_VIEWS[0],
     [selectedViewId]
   );
-  const aiInsights = useMemo(
-    () => (aiAssistEnabled ? inventoryInsights({ parts, workOrders, salesOrders }) : []),
-    [aiAssistEnabled, parts, workOrders, salesOrders]
-  );
-
   const secondsSinceUpdate = Math.max(0, Math.floor((now - lastUpdatedAt) / 1000));
 
   const handleRefresh = () => {
@@ -1082,25 +1078,8 @@ export default function Dashboard() {
         </div>
       )}
 
-      {aiAssistEnabled && (
-        <Card className="border border-muted/70">
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-base font-semibold">AI Insights (Preview)</CardTitle>
-            <p className="text-xs text-muted-foreground">This is a demo. No external AI calls.</p>
-          </CardHeader>
-          <CardContent>
-            {aiInsights.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Connect data feeds to enable insights.</p>
-            ) : (
-              <ul className="space-y-2 list-disc list-inside text-sm">
-                {aiInsights.map((insight, idx) => (
-                  <li key={idx}>{insight}</li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      <InsightsPanel />
+      <SimulationsPanel />
 
       <Card>
         <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
