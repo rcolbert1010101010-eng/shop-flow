@@ -1,11 +1,13 @@
-import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { BarChart2, ClipboardList, FileText, Package, ShieldCheck, ShoppingCart, Wrench } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { usePermissions } from '@/security/usePermissions';
+import { useToast } from '@/hooks/use-toast';
 
 type ReportTile = {
   key: string;
@@ -93,7 +95,22 @@ const REPORTS: ReportTile[] = [
 ];
 
 export default function ReportsHome() {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const { can, isReady } = usePermissions();
+  const canViewReports = can('reports.view');
   const [query, setQuery] = useState('');
+
+  useEffect(() => {
+    if (!isReady) return;
+    if (!canViewReports) {
+      toast({
+        title: "You don't have permission to view reports.",
+        variant: 'destructive',
+      });
+      navigate('/', { replace: true });
+    }
+  }, [canViewReports, isReady, navigate, toast]);
 
   const filteredReports = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -104,6 +121,9 @@ export default function ReportsHome() {
   }, [query]);
 
   const categories: ReportTile['category'][] = ['Operations', 'Sales', 'Inventory', 'Financial/Quality'];
+
+  if (!isReady) return null;
+  if (isReady && !canViewReports) return null;
 
   return (
     <div className="page-container space-y-6">
