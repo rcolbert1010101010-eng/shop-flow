@@ -70,6 +70,7 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 import { normalizeQty, formatQtyWithUom } from '@/lib/utils';
 import { HelpTooltip } from '@/components/help/HelpTooltip';
 import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
+import { usePermissions } from '@/security/usePermissions';
 import type {
   FabJobLine,
   PlasmaJobLine,
@@ -257,6 +258,8 @@ export default function WorkOrderDetail() {
     getClaimsByWorkOrder,
   } = useShopStore();
   const { toast } = useToast();
+  const { can } = usePermissions();
+  const canCreateInvoices = can('invoices.create');
   const repos = useRepos();
   const fabricationRepo = repos.fabrication;
   const plasmaRepo = repos.plasma;
@@ -1174,6 +1177,14 @@ const jobReadinessValues = Object.values(jobReadinessById);
     }
   };
   const handleInvoice = async () => {
+    if (!canCreateInvoices) {
+      toast({
+        title: 'Permission Denied',
+        description: "You don't have permission to create invoices.",
+        variant: 'destructive',
+      });
+      return;
+    }
     if (!currentOrder) return;
     if (isCustomerOnHold) {
       toast({
@@ -1867,7 +1878,7 @@ const jobReadinessValues = Object.values(jobReadinessById);
                   <div className="flex items-center gap-1">
                     <Button
                       onClick={() => setShowInvoiceDialog(true)}
-                      disabled={isCustomerOnHold}
+                      disabled={isCustomerOnHold || !canCreateInvoices}
                       title={isCustomerOnHold ? 'Customer is on credit hold' : undefined}
                     >
                       <FileCheck className="w-4 h-4 mr-2" />
@@ -4572,7 +4583,7 @@ const jobReadinessValues = Object.values(jobReadinessById);
                   size="sm"
                   variant="outline"
                   onClick={() => setShowInvoiceDialog(true)}
-                  disabled={isCustomerOnHold}
+                  disabled={isCustomerOnHold || !canCreateInvoices}
                   className="flex-1"
                 >
                   <FileCheck className="w-4 h-4 mr-2" />

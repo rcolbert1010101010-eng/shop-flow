@@ -67,6 +67,7 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 import { normalizeQty, formatQtyWithUom } from '@/lib/utils';
 import { HelpTooltip } from '@/components/help/HelpTooltip';
 import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
+import { usePermissions } from '@/security/usePermissions';
 
 const BROWSE_PARTS_PAGE_SIZE = 25;
 
@@ -110,6 +111,8 @@ export default function SalesOrderDetail() {
   const { categories } = repos.categories;
   const { settings } = repos.settings;
   const { toast } = useToast();
+  const { can } = usePermissions();
+  const canCreateInvoices = can('invoices.create');
 
   const unitFromQuery = searchParams.get('unit_id') || '';
   const createdParam = searchParams.get('created');
@@ -494,6 +497,15 @@ export default function SalesOrderDetail() {
   };
 
   const handleInvoice = () => {
+    if (!canCreateInvoices) {
+      toast({
+        title: 'Permission Denied',
+        description: "You don't have permission to create invoices.",
+        variant: 'destructive',
+      });
+      setShowInvoiceDialog(false);
+      return;
+    }
     if (!currentOrder) return;
     if (isCustomerOnHold) {
       toast({
@@ -1065,8 +1077,14 @@ export default function SalesOrderDetail() {
                     </AlertDialog>
                     <Button
                       onClick={() => setShowInvoiceDialog(true)}
-                      disabled={isCustomerOnHold}
-                      title={isCustomerOnHold ? 'Customer is on credit hold' : 'Moves the sale into billing. Treat it like a lock mindset once invoiced.'}
+                      disabled={isCustomerOnHold || !canCreateInvoices}
+                      title={
+                        isCustomerOnHold
+                          ? 'Customer is on credit hold'
+                          : !canCreateInvoices
+                          ? "You don't have permission to create invoices."
+                          : 'Moves the sale into billing. Treat it like a lock mindset once invoiced.'
+                      }
                     >
                       <FileCheck className="w-4 h-4 mr-2" />
                       Invoice
@@ -1767,7 +1785,7 @@ export default function SalesOrderDetail() {
                   size="sm"
                   variant="outline"
                   onClick={() => setShowInvoiceDialog(true)}
-                  disabled={isCustomerOnHold}
+                  disabled={isCustomerOnHold || !canCreateInvoices}
                   className="flex-1"
                 >
                   <FileCheck className="w-4 h-4 mr-2" />

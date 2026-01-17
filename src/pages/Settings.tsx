@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,8 +35,9 @@ export default function Settings() {
   const { settings, updateSettings } = useRepos().settings;
   const { listResolved, set, getResolved, listHistory } = useSystemSettings();
   const { toast } = useToast();
-  const { can: canCheck } = usePermissions();
-  const canEditSettings = canCheck('settings.edit');
+  const navigate = useNavigate();
+  const { can, isReady } = usePermissions();
+  const canEditSettings = can('settings.edit');
   const [editing, setEditing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'synced' | 'pending'>('synced');
   const resolvedSettings = useMemo(() => listResolved(), [listResolved]);
@@ -48,6 +50,17 @@ export default function Settings() {
   const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyFilter, setHistoryFilter] = useState<'all' | SystemSettingKey>('all');
+
+  useEffect(() => {
+    if (!isReady) return;
+    if (!canEditSettings) {
+      toast({
+        title: "You don't have permission to edit settings.",
+        variant: 'destructive',
+      });
+      navigate('/', { replace: true });
+    }
+  }, [canEditSettings, isReady, navigate, toast]);
 
   const hydrateForm = useCallback(() => {
     const fromResolved = listResolved().reduce<Record<string, any>>((acc, item) => {
@@ -140,6 +153,14 @@ export default function Settings() {
   }, [draft, snapshot, editing, stableStringify]);
 
   const handleSave = async () => {
+    if (!canEditSettings) {
+      toast({
+        title: 'Permission Denied',
+        description: "You don't have permission to edit settings.",
+        variant: 'destructive',
+      });
+      return;
+    }
     if (!draft.shop_name?.trim?.()) {
       toast({
         title: 'Validation Error',
@@ -361,6 +382,9 @@ export default function Settings() {
     return () => document.removeEventListener('click', handleClick, true);
   }, [editing, isDirty]);
 
+  if (!isReady) return null;
+  if (isReady && !canEditSettings) return null;
+
   return (
     <div className="page-container">
       <PageHeader
@@ -494,7 +518,7 @@ export default function Settings() {
               onChange={(e) =>
                 setDraft((prev) => ({ ...prev, markup_retail_percent: e.target.value }))
               }
-              disabled={!editing}
+              disabled={!editing || !canEditSettings}
             />
           </div>
           <div>
@@ -507,7 +531,7 @@ export default function Settings() {
               onChange={(e) =>
                 setDraft((prev) => ({ ...prev, markup_fleet_percent: e.target.value }))
               }
-              disabled={!editing}
+              disabled={!editing || !canEditSettings}
             />
           </div>
           <div>
@@ -520,7 +544,7 @@ export default function Settings() {
               onChange={(e) =>
                 setDraft((prev) => ({ ...prev, markup_wholesale_percent: e.target.value }))
               }
-              disabled={!editing}
+              disabled={!editing || !canEditSettings}
             />
           </div>
           <div>
@@ -531,7 +555,7 @@ export default function Settings() {
               step="0.01"
               value={(draft as any).minimum_margin_percent ?? ''}
               onChange={(e) => handleFieldChange('minimum_margin_percent', e.target.value)}
-              disabled={!editing}
+              disabled={!editing || !canEditSettings}
             />
           </div>
         </div>
