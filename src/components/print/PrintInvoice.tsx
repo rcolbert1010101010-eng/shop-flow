@@ -1,4 +1,14 @@
-import type { SalesOrder, WorkOrder, SalesOrderLine, WorkOrderPartLine, WorkOrderLaborLine, Customer, Unit, Part } from '@/types';
+import { InvoicePrintLayout } from '@/pages/print/components/InvoicePrintLayout';
+import type {
+  SalesOrder,
+  WorkOrder,
+  SalesOrderLine,
+  WorkOrderPartLine,
+  WorkOrderLaborLine,
+  Customer,
+  Unit,
+  Part,
+} from '@/types';
 
 interface PrintSalesOrderProps {
   order: SalesOrder;
@@ -9,167 +19,51 @@ interface PrintSalesOrderProps {
   shopName: string;
 }
 
-const toNumber = (value: number | string | null | undefined) => {
-  const numeric = typeof value === 'number' ? value : value != null ? Number(value) : NaN;
-  return Number.isFinite(numeric) ? numeric : 0;
-};
-const formatMoney = (value: number | string | null | undefined) => toNumber(value).toFixed(2);
-
 export function PrintSalesOrder({ order, lines, customer, unit, parts, shopName }: PrintSalesOrderProps) {
-  const pickListItems = lines
-    .map((line) => {
-      const part = parts.find((p) => p.id === line.part_id);
-      return {
-        id: line.id,
-        quantity: line.quantity,
-        partNumber: part?.part_number || '-',
-        description: part?.description || '-',
-        bin: part?.bin_location || '—',
-      };
-    })
-    .sort((a, b) => {
-      const binA = a.bin === '—' ? 'ZZZ' : a.bin;
-      const binB = b.bin === '—' ? 'ZZZ' : b.bin;
-      if (binA.localeCompare(binB) !== 0) return binA.localeCompare(binB);
-      if (a.partNumber.localeCompare(b.partNumber) !== 0) return a.partNumber.localeCompare(b.partNumber);
-      return a.description.localeCompare(b.description);
-    });
+  const lineItems = lines.map((line) => {
+    const part = parts.find((p) => p.id === line.part_id);
+    return {
+      description: part?.description || 'Item',
+      quantity: line.quantity,
+      uom: part?.uom ?? null,
+      rate: line.unit_price,
+      amount: line.line_total,
+    };
+  });
 
   return (
-    <div className="print-invoice hidden print:block bg-white text-black p-8 min-h-screen">
-      {/* Header */}
-      <div className="flex justify-between items-start mb-8 border-b border-gray-300 pb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{shopName}</h1>
-          <p className="text-gray-600 mt-1">Sales Invoice</p>
-        </div>
-        <div className="text-right">
-          <p className="text-xl font-mono font-bold">{order.order_number}</p>
-          <p className="text-gray-600">{new Date(order.created_at).toLocaleDateString()}</p>
-          {order.invoiced_at && (
-            <p className="text-sm text-gray-500">
-              Invoiced: {new Date(order.invoiced_at).toLocaleDateString()}
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* Customer Info */}
-      <div className="mb-8 grid grid-cols-2 gap-8">
-        <div>
-          <h2 className="text-sm font-semibold text-gray-500 uppercase mb-2">Bill To</h2>
-          <p className="font-semibold text-gray-900">{customer?.company_name || '-'}</p>
-          {customer?.contact_name && <p className="text-gray-700">{customer.contact_name}</p>}
-          {customer?.address && <p className="text-gray-600 text-sm">{customer.address}</p>}
-          {customer?.phone && <p className="text-gray-600 text-sm">{customer.phone}</p>}
-        </div>
-        {unit && (
-          <div>
-            <h2 className="text-sm font-semibold text-gray-500 uppercase mb-2">Unit</h2>
-            <p className="font-semibold text-gray-900">{unit.unit_name}</p>
-            {unit.vin && <p className="text-gray-600 text-sm font-mono">VIN: {unit.vin}</p>}
-            {(unit.year || unit.make || unit.model) && (
-              <p className="text-gray-600 text-sm">
-                {[unit.year, unit.make, unit.model].filter(Boolean).join(' ')}
-              </p>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Pick List */}
-      {pickListItems.length > 0 && (
-        <div className="mb-6">
-          <h3 className="text-sm font-semibold text-gray-700 uppercase mb-2">Pick List</h3>
-          <table className="w-full mb-4">
-            <tbody>
-              {pickListItems.reduce<JSX.Element[]>((rows, item, index) => {
-                const prev = pickListItems[index - 1];
-                const isNewBin = !prev || prev.bin !== item.bin;
-                if (isNewBin) {
-                  rows.push(
-                    <tr key={`bin-${item.bin}-${index}`} className="bg-gray-100">
-                      <td colSpan={4} className="py-1 px-2 text-xs font-semibold text-gray-700">
-                        Bin: {item.bin}
-                      </td>
-                    </tr>
-                  );
-                }
-                rows.push(
-                  <tr key={item.id} className="border-b border-gray-200">
-                    <td className="py-1 px-2 text-sm text-right w-16">{item.quantity}</td>
-                    <td className="py-1 px-2 text-sm font-mono">{item.partNumber}</td>
-                    <td className="py-1 px-2 text-sm">{item.description}</td>
-                    <td className="py-1 px-2 text-sm">{item.bin}</td>
-                  </tr>
-                );
-                return rows;
-              }, [])}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Line Items */}
-      <table className="w-full mb-8">
-        <thead>
-          <tr className="border-b-2 border-gray-300">
-            <th className="text-left py-2 text-sm font-semibold text-gray-700">Part #</th>
-            <th className="text-left py-2 text-sm font-semibold text-gray-700">Description</th>
-            <th className="text-left py-2 text-sm font-semibold text-gray-700">Bin</th>
-            <th className="text-right py-2 text-sm font-semibold text-gray-700">Qty</th>
-            <th className="text-right py-2 text-sm font-semibold text-gray-700">Unit Price</th>
-            <th className="text-right py-2 text-sm font-semibold text-gray-700">Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {lines.map((line) => {
-            const part = parts.find((p) => p.id === line.part_id);
-            return (
-              <tr key={line.id} className="border-b border-gray-200">
-                <td className="py-2 font-mono text-sm">{part?.part_number || '-'}</td>
-                <td className="py-2 text-sm">{part?.description || '-'}</td>
-                <td className="py-2 text-sm">{part?.bin_location || '—'}</td>
-                <td className="py-2 text-right text-sm">{line.quantity}</td>
-                <td className="py-2 text-right text-sm">${formatMoney(line.unit_price)}</td>
-                <td className="py-2 text-right text-sm font-medium">${formatMoney(line.line_total)}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-
-      {/* Totals */}
-      <div className="flex justify-end">
-        <div className="w-64">
-          <div className="flex justify-between py-1">
-            <span className="text-gray-600">Subtotal:</span>
-            <span>${formatMoney(order.subtotal)}</span>
-          </div>
-          <div className="flex justify-between py-1">
-            <span className="text-gray-600">Tax ({order.tax_rate}%):</span>
-            <span>${formatMoney(order.tax_amount)}</span>
-          </div>
-          <div className="flex justify-between py-2 border-t-2 border-gray-900 font-bold text-lg">
-            <span>Total:</span>
-            <span>${formatMoney(order.total)}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Notes */}
-      {order.notes && (
-        <div className="mt-8 pt-4 border-t border-gray-200">
-          <h2 className="text-sm font-semibold text-gray-500 uppercase mb-2">Notes</h2>
-          <p className="text-gray-700 text-sm whitespace-pre-wrap">{order.notes}</p>
-        </div>
-      )}
-
-      {/* Footer */}
-      <div className="mt-12 pt-4 border-t border-gray-200 text-center text-gray-500 text-sm">
-        <p>Thank you for your business!</p>
-      </div>
-    </div>
+    <InvoicePrintLayout
+      title="INVOICE"
+      shopName={shopName}
+      meta={{
+        invoiceNumber: order.order_number,
+        issueDate: order.created_at,
+        dueDate: order.invoiced_at,
+      }}
+      billTo={{
+        name: customer?.company_name ?? null,
+        contact: customer?.contact_name ?? null,
+        address: customer?.address ?? null,
+        phone: customer?.phone ?? null,
+      }}
+      reference={{
+        sourceType: 'Sales Order',
+        sourceNumber: order.order_number,
+        unitLabel: unit?.unit_name ?? null,
+        vin: unit?.vin ?? null,
+      }}
+      lineItems={lineItems}
+      totals={{
+        subtotal: order.subtotal,
+        taxLabel: `Tax (${order.tax_rate}%)`,
+        tax: order.tax_amount,
+        total: order.total,
+        paid: 0,
+        balanceDue: order.total,
+      }}
+      notes={order.notes}
+      footer="Thank you for your business!"
+    />
   );
 }
 
@@ -184,6 +78,80 @@ interface PrintWorkOrderProps {
 }
 
 export function PrintWorkOrder({ order, partLines, laborLines, customer, unit, parts, shopName }: PrintWorkOrderProps) {
+  const partItems = partLines.map((line) => {
+    const part = parts.find((p) => p.id === line.part_id);
+    return {
+      description: line.description || part?.description || 'Part',
+      quantity: line.quantity,
+      uom: part?.uom ?? null,
+      rate: line.unit_price,
+      amount: line.line_total,
+    };
+  });
+
+  const laborItems = laborLines.map((line) => ({
+    description: line.description || 'Labor',
+    quantity: line.hours,
+    uom: 'HRS',
+    rate: line.rate,
+    amount: line.line_total,
+  }));
+
+  const lineItems = [...partItems, ...laborItems];
+
+  return (
+    <InvoicePrintLayout
+      title="INVOICE"
+      shopName={shopName}
+      meta={{
+        invoiceNumber: order.order_number,
+        issueDate: order.created_at,
+        dueDate: order.invoiced_at,
+      }}
+      billTo={{
+        name: customer?.company_name ?? null,
+        contact: customer?.contact_name ?? null,
+        address: customer?.address ?? null,
+        phone: customer?.phone ?? null,
+      }}
+      reference={{
+        sourceType: 'Work Order',
+        sourceNumber: order.order_number,
+        unitLabel: unit?.unit_name ?? null,
+        vin: unit?.vin ?? null,
+      }}
+      lineItems={lineItems}
+      totals={{
+        subtotal: order.subtotal,
+        taxLabel: `Tax (${order.tax_rate}%)`,
+        tax: order.tax_amount,
+        total: order.total,
+        paid: 0,
+        balanceDue: order.total,
+      }}
+      notes={order.notes}
+      footer="Thank you for your business!"
+    />
+  );
+}
+
+// Pick list outputs retained for existing usage
+interface PickListProps {
+  order: WorkOrder;
+  partLines: WorkOrderPartLine[];
+  laborLines: WorkOrderLaborLine[];
+  customer: Customer | undefined;
+  unit: Unit | undefined;
+  parts: Part[];
+  shopName: string;
+}
+
+export function PrintWorkOrderPickList({ order, partLines, customer, unit, parts, shopName }: PickListProps) {
+  const toNumber = (value: number | string | null | undefined) => {
+    const numeric = typeof value === 'number' ? value : value != null ? Number(value) : NaN;
+    return Number.isFinite(numeric) ? numeric : 0;
+  };
+
   const pickListItems = partLines
     .map((line) => {
       const part = parts.find((p) => p.id === line.part_id);
@@ -205,182 +173,61 @@ export function PrintWorkOrder({ order, partLines, laborLines, customer, unit, p
 
   return (
     <div className="print-invoice hidden print:block bg-white text-black p-8 min-h-screen">
-      {/* Header */}
-      <div className="flex justify-between items-start mb-8 border-b border-gray-300 pb-6">
+      <div className="flex justify-between items-start mb-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{shopName}</h1>
-          <p className="text-gray-600 mt-1">Work Order / Invoice</p>
+          <h1 className="text-xl font-bold text-gray-900">{shopName}</h1>
+          <p className="text-gray-600 mt-1">Pick List</p>
         </div>
         <div className="text-right">
-          <p className="text-xl font-mono font-bold">{order.order_number}</p>
+          <p className="text-lg font-mono font-bold">{order.order_number}</p>
           <p className="text-gray-600">{new Date(order.created_at).toLocaleDateString()}</p>
-          {order.invoiced_at && (
-            <p className="text-sm text-gray-500">
-              Invoiced: {new Date(order.invoiced_at).toLocaleDateString()}
-            </p>
-          )}
         </div>
       </div>
 
-      {/* Customer & Unit Info */}
-      <div className="mb-8 grid grid-cols-2 gap-8">
+      <div className="mb-4 grid grid-cols-2 gap-6 text-sm">
         <div>
-          <h2 className="text-sm font-semibold text-gray-500 uppercase mb-2">Customer</h2>
-          <p className="font-semibold text-gray-900">{customer?.company_name || '-'}</p>
-          {customer?.contact_name && <p className="text-gray-700">{customer.contact_name}</p>}
-          {customer?.address && <p className="text-gray-600 text-sm">{customer.address}</p>}
-          {customer?.phone && <p className="text-gray-600 text-sm">{customer.phone}</p>}
+          <div className="text-xs font-semibold uppercase text-gray-600">Customer</div>
+          <div className="font-medium text-gray-900">{customer?.company_name || '-'}</div>
+          {customer?.contact_name && <div className="text-gray-700">{customer.contact_name}</div>}
+          {customer?.phone && <div className="text-gray-700">{customer.phone}</div>}
         </div>
         <div>
-          <h2 className="text-sm font-semibold text-gray-500 uppercase mb-2">Unit / Equipment</h2>
-          <p className="font-semibold text-gray-900">{unit?.unit_name || '-'}</p>
-          {unit?.vin && <p className="text-gray-600 text-sm font-mono">VIN: {unit.vin}</p>}
-          {(unit?.year || unit?.make || unit?.model) && (
-            <p className="text-gray-600 text-sm">
-              {[unit?.year, unit?.make, unit?.model].filter(Boolean).join(' ')}
-            </p>
-          )}
-          {unit?.mileage && <p className="text-gray-600 text-sm">Mileage: {unit.mileage.toLocaleString()}</p>}
-          {unit?.hours && <p className="text-gray-600 text-sm">Hours: {unit.hours.toLocaleString()}</p>}
+          <div className="text-xs font-semibold uppercase text-gray-600">Unit</div>
+          <div className="font-medium text-gray-900">{unit?.unit_name || '—'}</div>
+          {unit?.vin && <div className="text-xs text-gray-700 font-mono">VIN: {unit.vin}</div>}
         </div>
       </div>
 
-      {/* Labor Items */}
-      {laborLines.length > 0 && (
-        <>
-          <h2 className="text-sm font-semibold text-gray-700 uppercase mb-2">Labor</h2>
-          <table className="w-full mb-6">
-            <thead>
-              <tr className="border-b-2 border-gray-300">
-                <th className="text-left py-2 text-sm font-semibold text-gray-700">Description</th>
-                <th className="text-right py-2 text-sm font-semibold text-gray-700">Hours</th>
-                <th className="text-right py-2 text-sm font-semibold text-gray-700">Rate</th>
-                <th className="text-right py-2 text-sm font-semibold text-gray-700">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-                  {laborLines.map((line) => (
-                    <tr key={line.id} className="border-b border-gray-200">
-                      <td className="py-2 text-sm">{line.description}</td>
-                      <td className="py-2 text-right text-sm">{line.hours}</td>
-                      <td className="py-2 text-right text-sm">${formatMoney(line.rate)}</td>
-                      <td className="py-2 text-right text-sm font-medium">${formatMoney(line.line_total)}</td>
-                    </tr>
-                  ))}
-            </tbody>
-          </table>
-        </>
-      )}
-
-      {/* Parts Items */}
-      {partLines.length > 0 && (
-        <>
-          <h2 className="text-sm font-semibold text-gray-700 uppercase mb-2">Parts</h2>
-          {pickListItems.length > 0 && (
-            <div className="mb-4">
-              <h3 className="text-sm font-semibold text-gray-700 uppercase mb-2">Pick List</h3>
-              <table className="w-full mb-2">
-                <tbody>
-                  {pickListItems.reduce<JSX.Element[]>((rows, item, index) => {
-                    const prev = pickListItems[index - 1];
-                    const isNewBin = !prev || prev.bin !== item.bin;
-                    if (isNewBin) {
-                      rows.push(
-                        <tr key={`bin-${item.bin}-${index}`} className="bg-gray-100">
-                          <td colSpan={4} className="py-1 px-2 text-xs font-semibold text-gray-700">
-                            Bin: {item.bin}
-                          </td>
-                        </tr>
-                      );
-                    }
-                    rows.push(
-                      <tr key={item.id} className="border-b border-gray-200">
-                        <td className="py-1 px-2 text-sm text-right w-16">{item.quantity}</td>
-                        <td className="py-1 px-2 text-sm font-mono">{item.partNumber}</td>
-                        <td className="py-1 px-2 text-sm">{item.description}</td>
-                        <td className="py-1 px-2 text-sm">{item.bin}</td>
-                      </tr>
-                    );
-                    return rows;
-                  }, [])}
-                </tbody>
-              </table>
-            </div>
-          )}
-          <table className="w-full mb-6">
-            <thead>
-              <tr className="border-b-2 border-gray-300">
-                <th className="text-left py-2 text-sm font-semibold text-gray-700">Part #</th>
-                <th className="text-left py-2 text-sm font-semibold text-gray-700">Description</th>
-                <th className="text-left py-2 text-sm font-semibold text-gray-700">Bin</th>
-                <th className="text-right py-2 text-sm font-semibold text-gray-700">Qty</th>
-                <th className="text-right py-2 text-sm font-semibold text-gray-700">Unit Price</th>
-                <th className="text-right py-2 text-sm font-semibold text-gray-700">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {partLines.map((line) => {
-                const part = parts.find((p) => p.id === line.part_id);
-                return (
-                  <tr key={line.id} className="border-b border-gray-200">
-                    <td className="py-2 font-mono text-sm">{part?.part_number || '-'}</td>
-                    <td className="py-2 text-sm">{part?.description || '-'}</td>
-                    <td className="py-2 text-sm">{part?.bin_location || '—'}</td>
-                    <td className="py-2 text-right text-sm">{line.quantity}</td>
-                    <td className="py-2 text-right text-sm">${formatMoney(line.unit_price)}</td>
-                    <td className="py-2 text-right text-sm font-medium">${formatMoney(line.line_total)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </>
-      )}
-
-      {/* Totals */}
-      <div className="flex justify-end">
-        <div className="w-64">
-          <div className="flex justify-between py-1">
-            <span className="text-gray-600">Labor:</span>
-            <span>${formatMoney(order.labor_subtotal)}</span>
-          </div>
-          <div className="flex justify-between py-1">
-            <span className="text-gray-600">Parts:</span>
-            <span>${formatMoney(order.parts_subtotal)}</span>
-          </div>
-          <div className="flex justify-between py-1 border-t border-gray-200">
-            <span className="text-gray-600">Subtotal:</span>
-            <span>${formatMoney(order.subtotal)}</span>
-          </div>
-          <div className="flex justify-between py-1">
-            <span className="text-gray-600">Tax ({order.tax_rate}%):</span>
-            <span>${formatMoney(order.tax_amount)}</span>
-          </div>
-          <div className="flex justify-between py-2 border-t-2 border-gray-900 font-bold text-lg">
-            <span>Total:</span>
-            <span>${formatMoney(order.total)}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Notes */}
-      {order.notes && (
-        <div className="mt-8 pt-4 border-t border-gray-200">
-          <h2 className="text-sm font-semibold text-gray-500 uppercase mb-2">Notes</h2>
-          <p className="text-gray-700 text-sm whitespace-pre-wrap">{order.notes}</p>
-        </div>
-      )}
-
-      {/* Footer */}
-      <div className="mt-12 pt-4 border-t border-gray-200 text-center text-gray-500 text-sm">
-        <p>Thank you for your business!</p>
-      </div>
+      <table className="w-full text-sm border-collapse">
+        <thead>
+          <tr className="border-b border-gray-300">
+            <th className="text-right py-2 px-2 w-16">Qty</th>
+            <th className="text-left py-2 px-2">Part #</th>
+            <th className="text-left py-2 px-2">Description</th>
+            <th className="text-left py-2 px-2">Bin</th>
+          </tr>
+        </thead>
+        <tbody>
+          {pickListItems.map((item, idx) => (
+            <tr key={item.id} className={idx % 2 === 0 ? 'bg-gray-50' : ''}>
+              <td className="py-2 px-2 text-right font-medium">{toNumber(item.quantity)}</td>
+              <td className="py-2 px-2 font-mono">{item.partNumber}</td>
+              <td className="py-2 px-2">{item.description}</td>
+              <td className="py-2 px-2">{item.bin}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
 
-export function PrintSalesOrderPickList(props: PrintSalesOrderProps) {
-  const { order, lines, customer, parts, shopName } = props;
+export function PrintSalesOrderPickList({ order, lines, customer, unit, parts, shopName }: PrintSalesOrderProps) {
+  const toNumber = (value: number | string | null | undefined) => {
+    const numeric = typeof value === 'number' ? value : value != null ? Number(value) : NaN;
+    return Number.isFinite(numeric) ? numeric : 0;
+  };
+
   const pickListItems = lines
     .map((line) => {
       const part = parts.find((p) => p.id === line.part_id);
@@ -400,111 +247,51 @@ export function PrintSalesOrderPickList(props: PrintSalesOrderProps) {
       return a.description.localeCompare(b.description);
     });
 
-  if (pickListItems.length === 0) return null;
-
   return (
     <div className="print-invoice hidden print:block bg-white text-black p-8 min-h-screen">
-      <div className="flex justify-between items-start mb-6">
+      <div className="flex justify-between items-start mb-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{shopName}</h1>
-          <p className="text-gray-600 mt-1">Sales Order Pick List</p>
+          <h1 className="text-xl font-bold text-gray-900">{shopName}</h1>
+          <p className="text-gray-600 mt-1">Pick List</p>
         </div>
         <div className="text-right">
-          <p className="text-xl font-mono font-bold">{order.order_number}</p>
+          <p className="text-lg font-mono font-bold">{order.order_number}</p>
           <p className="text-gray-600">{new Date(order.created_at).toLocaleDateString()}</p>
-          {customer && <p className="text-sm text-gray-600">{customer.company_name}</p>}
         </div>
       </div>
-      <table className="w-full mb-4">
-        <tbody>
-          {pickListItems.reduce<JSX.Element[]>((rows, item, index) => {
-            const prev = pickListItems[index - 1];
-            const isNewBin = !prev || prev.bin !== item.bin;
-            if (isNewBin) {
-              rows.push(
-                <tr key={`bin-${item.bin}-${index}`} className="bg-gray-100">
-                  <td colSpan={4} className="py-1 px-2 text-xs font-semibold text-gray-700">
-                    Bin: {item.bin}
-                  </td>
-                </tr>
-              );
-            }
-            rows.push(
-              <tr key={item.id} className="border-b border-gray-200">
-                <td className="py-1 px-2 text-sm text-right w-16">{item.quantity}</td>
-                <td className="py-1 px-2 text-sm font-mono">{item.partNumber}</td>
-                <td className="py-1 px-2 text-sm">{item.description}</td>
-                <td className="py-1 px-2 text-sm">{item.bin}</td>
-              </tr>
-            );
-            return rows;
-          }, [])}
-        </tbody>
-      </table>
-    </div>
-  );
-}
 
-export function PrintWorkOrderPickList(props: PrintWorkOrderProps) {
-  const { order, partLines, customer, parts, shopName } = props;
-  const pickListItems = partLines
-    .map((line) => {
-      const part = parts.find((p) => p.id === line.part_id);
-      return {
-        id: line.id,
-        quantity: line.quantity,
-        partNumber: part?.part_number || '-',
-        description: part?.description || '-',
-        bin: part?.bin_location || '—',
-      };
-    })
-    .sort((a, b) => {
-      const binA = a.bin === '—' ? 'ZZZ' : a.bin;
-      const binB = b.bin === '—' ? 'ZZZ' : b.bin;
-      if (binA.localeCompare(binB) !== 0) return binA.localeCompare(binB);
-      if (a.partNumber.localeCompare(b.partNumber) !== 0) return a.partNumber.localeCompare(b.partNumber);
-      return a.description.localeCompare(b.description);
-    });
-
-  if (pickListItems.length === 0) return null;
-
-  return (
-    <div className="print-invoice hidden print:block bg-white text-black p-8 min-h-screen">
-      <div className="flex justify-between items-start mb-6">
+      <div className="mb-4 grid grid-cols-2 gap-6 text-sm">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{shopName}</h1>
-          <p className="text-gray-600 mt-1">Work Order Pick List</p>
+          <div className="text-xs font-semibold uppercase text-gray-600">Customer</div>
+          <div className="font-medium text-gray-900">{customer?.company_name || '-'}</div>
+          {customer?.contact_name && <div className="text-gray-700">{customer.contact_name}</div>}
+          {customer?.phone && <div className="text-gray-700">{customer.phone}</div>}
         </div>
-        <div className="text-right">
-          <p className="text-xl font-mono font-bold">{order.order_number}</p>
-          <p className="text-gray-600">{new Date(order.created_at).toLocaleDateString()}</p>
-          {customer && <p className="text-sm text-gray-600">{customer.company_name}</p>}
+        <div>
+          <div className="text-xs font-semibold uppercase text-gray-600">Unit</div>
+          <div className="font-medium text-gray-900">{unit?.unit_name || '—'}</div>
+          {unit?.vin && <div className="text-xs text-gray-700 font-mono">VIN: {unit.vin}</div>}
         </div>
       </div>
-      <table className="w-full mb-4">
+
+      <table className="w-full text-sm border-collapse">
+        <thead>
+          <tr className="border-b border-gray-300">
+            <th className="text-right py-2 px-2 w-16">Qty</th>
+            <th className="text-left py-2 px-2">Part #</th>
+            <th className="text-left py-2 px-2">Description</th>
+            <th className="text-left py-2 px-2">Bin</th>
+          </tr>
+        </thead>
         <tbody>
-          {pickListItems.reduce<JSX.Element[]>((rows, item, index) => {
-            const prev = pickListItems[index - 1];
-            const isNewBin = !prev || prev.bin !== item.bin;
-            if (isNewBin) {
-              rows.push(
-                <tr key={`bin-${item.bin}-${index}`} className="bg-gray-100">
-                  <td colSpan={4} className="py-1 px-2 text-xs font-semibold text-gray-700">
-                    Bin: {item.bin}
-                  </td>
-                </tr>
-              );
-            }
-            rows.push(
-              <tr key={item.id} className="border-b border-gray-200">
-                <td className="py-1 px-2 text-sm text-right w-16">{item.quantity}</td>
-                <td className="py-1 px-2 text-sm font-mono">{item.partNumber}</td>
-                <td className="py-1 px-2 text-sm">{item.description}</td>
-                <td className="py-1 px-2 text-sm">{item.bin}</td>
-              </tr>
-            );
-            return rows;
-          }, [])}
+          {pickListItems.map((item, idx) => (
+            <tr key={item.id} className={idx % 2 === 0 ? 'bg-gray-50' : ''}>
+              <td className="py-2 px-2 text-right font-medium">{toNumber(item.quantity)}</td>
+              <td className="py-2 px-2 font-mono">{item.partNumber}</td>
+              <td className="py-2 px-2">{item.description}</td>
+              <td className="py-2 px-2">{item.bin}</td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>
