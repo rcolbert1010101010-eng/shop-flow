@@ -4,7 +4,10 @@ import type { User, Session } from '@supabase/supabase-js';
 import type { Role } from '@/security/rbac';
 
 const mapDbRoleKeyToRole = (key?: string | null): Role => {
-  switch (key) {
+  if (!key) return 'TECH';
+  const normalized = key.toLowerCase();
+  // Legacy profiles may store uppercase Role enum values; normalize before mapping
+  switch (normalized) {
     case 'admin':
       return 'ADMIN';
     case 'manager':
