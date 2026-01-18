@@ -56,6 +56,9 @@ import WorkOrdersReport from "@/pages/reports/WorkOrdersReport";
 import SalesOrdersReport from "@/pages/reports/SalesOrdersReport";
 import LowStockPartsReport from "@/pages/reports/LowStockPartsReport";
 import WorkOrderPrintOverview from "@/pages/print/WorkOrderPrintOverview";
+import PlannerHome from "@/modules/planner/PlannerHome";
+import PlannerTasks from "@/modules/planner/PlannerTasks";
+import PlannerCalendar from "@/modules/planner/PlannerCalendar";
 import Login from "@/pages/Login";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { LoginRedirect } from "@/components/auth/LoginRedirect";
@@ -128,6 +131,9 @@ const App = () => (
                 <Route path="/reports/sales-orders" element={<SalesOrdersReport />} />
                 <Route path="/reports/low-stock" element={<LowStockPartsReport />} />
                 <Route path="/payments" element={<PaymentsPage />} />
+                <Route path="/planner" element={<PlannerHome />} />
+                <Route path="/planner/tasks" element={<PlannerTasks />} />
+                <Route path="/planner/calendar" element={<PlannerCalendar />} />
                 <Route path="/cycle-counts" element={<CycleCounts />} />
                 <Route path="/cycle-counts/:id" element={<CycleCountDetail />} />
                 <Route path="/technicians" element={<Technicians />} />

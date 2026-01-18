@@ -14,6 +14,7 @@ import {
   BarChart2,
   Flame,
   Calendar,
+  CalendarCheck,
   Factory,
   Layers,
   CreditCard,
@@ -73,6 +74,7 @@ const purchaseOrdersGroup: NavGroup = {
   ],
 };
 const schedulingLink: NavLink = { type: 'link', path: '/scheduling', label: 'Scheduling', icon: Calendar };
+const plannerLink: NavLink = { type: 'link', path: '/planner', label: 'Planner', icon: CalendarCheck };
 const manufacturingGroup: NavGroup = {
   type: 'group',
   key: 'manufacturing',
@@ -85,6 +87,7 @@ const manufacturingGroup: NavGroup = {
 };
 const invoicesLink: NavLink = { type: 'link', path: '/invoices', label: 'Invoices', icon: FileText };
 const paymentsLink: NavLink = { type: 'link', path: '/payments', label: 'Payments', icon: CreditCard };
+const adminUsersLink: NavLink = { type: 'link', path: '/admin/users', label: 'Users', icon: Users };
 const returnsWarrantyGroup: NavGroup = {
   type: 'group',
   key: 'returnsWarranty',
@@ -106,11 +109,12 @@ export const navSections: NavSection[] = [
   { label: 'Service', items: [serviceGroup] },
   { label: 'Inventory', items: [inventoryGroup] },
   { label: 'Purchasing', items: [purchaseOrdersGroup] },
-  { label: 'Scheduling', items: [schedulingLink] },
+  { label: 'Scheduling', items: [schedulingLink, plannerLink] },
   { label: 'Manufacturing', items: [manufacturingGroup] },
   { label: 'Accounting', items: [invoicesLink, paymentsLink, returnsWarrantyGroup] },
   { label: 'Reports', items: [reportsLink] },
   { label: 'Settings', items: [settingsLink] },
+  { label: 'Admin', items: [adminUsersLink] },
 ];
 
 export const navItems: NavItem[] = navSections.flatMap((section) => section.items);
@@ -120,6 +124,7 @@ function requiredCapabilityForPath(path: string): Capability | null {
   if (path === '/reports' || path.startsWith('/reports')) return 'reports.view';
   if (path === '/receiving' || path.startsWith('/receiving/')) return 'inventory.receive';
   if (path === '/receiving-history' || path.startsWith('/receiving-history/')) return 'inventory.receive';
+  if (path === '/admin/users' || path.startsWith('/admin/users')) return 'admin.users';
   return null;
 }
 
