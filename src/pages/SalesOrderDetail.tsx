@@ -379,6 +379,68 @@ export default function SalesOrderDetail() {
     () => (currentOrder ? getSalesOrderChargeLines(currentOrder.id) : []),
     [currentOrder, currentOrderId, currentOrderUpdatedAt, getSalesOrderChargeLines]
   );
+  const profitability = useMemo(() => {
+    const partsRevenue = orderLines.reduce((sum, line) => sum + toNumber(line.line_total), 0);
+    const partsCostEntries = orderLines
+      .map((line) => {
+        const part = parts.find((p) => p.id === line.part_id);
+        return part?.cost != null ? toNumber(part.cost) * toNumber(line.quantity) : null;
+      })
+      .filter((v) => v != null) as number[];
+    const partsHasCost = partsCostEntries.length > 0;
+    const partsCost = partsCostEntries.reduce((sum, value) => sum + value, 0);
+
+    const laborRevenue = 0;
+    const laborHasCost = false;
+
+    const feesRevenue = chargeLines.reduce((sum, line) => sum + toNumber(line.total_price), 0);
+    const feesHasCost = false;
+
+    const categories = [
+      {
+        label: 'Parts',
+        revenue: partsRevenue,
+        hasCost: partsHasCost,
+        cost: partsHasCost ? partsCost : null,
+      },
+      {
+        label: 'Labor',
+        revenue: laborRevenue,
+        hasCost: laborHasCost,
+        cost: null,
+      },
+      {
+        label: 'Fees/Sublet',
+        revenue: feesRevenue,
+        hasCost: feesHasCost,
+        cost: null,
+      },
+    ].map((cat) => ({
+      ...cat,
+      gp: cat.hasCost && cat.cost != null ? cat.revenue - cat.cost : null,
+      gpPct: cat.hasCost && cat.cost != null && cat.revenue > 0 ? ((cat.revenue - cat.cost) / cat.revenue) * 100 : null,
+    }));
+
+    const overallRevenue = categories.reduce((sum, c) => sum + c.revenue, 0);
+    const allCostsKnown = categories.every((c) => c.hasCost && c.cost != null);
+    const overallCost = allCostsKnown
+      ? categories.reduce((sum, c) => sum + (c.cost ?? 0), 0)
+      : null;
+    const overallGp = allCostsKnown && overallCost != null ? overallRevenue - overallCost : null;
+    const overallGpPct =
+      allCostsKnown && overallCost != null && overallRevenue > 0 ? (overallGp! / overallRevenue) * 100 : null;
+
+    return {
+      categories,
+      overall: {
+        revenue: overallRevenue,
+        hasCost: allCostsKnown,
+        cost: overallCost,
+        gp: overallGp,
+        gpPct: overallGpPct,
+      },
+    };
+  }, [chargeLines, orderLines, parts, toNumber]);
   const orderTotal = toNumber(currentOrder?.total);
   const payments = usePayments('SALES_ORDER', currentOrder?.id, orderTotal);
   const paymentStatusClass = useMemo(() => {
@@ -1143,6 +1205,82 @@ export default function SalesOrderDetail() {
               <p className="font-medium">{new Date(currentOrder.invoiced_at).toLocaleString()}</p>
             </div>
             )}
+            <div className="pt-2 border-t border-border space-y-2">
+              <p className="text-sm font-medium">Profitability (read-only)</p>
+              <div className="text-xs text-muted-foreground">
+                <table className="w-full text-xs">
+                  <thead className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    <tr>
+                      <th className="text-left py-1">Category</th>
+                      <th className="text-right py-1">Revenue</th>
+                      <th className="text-right py-1">Cost</th>
+                      <th className="text-right py-1">GP</th>
+                      <th className="text-right py-1">Margin %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {profitability.categories.map((cat, idx) => (
+                      <tr key={cat.label} className={idx % 2 === 0 ? 'bg-muted/30' : ''}>
+                        <td className="py-1 text-foreground">{cat.label}</td>
+                        <td className="py-1 text-right text-foreground">${formatMoney(cat.revenue)}</td>
+                        <td className="py-1 text-right">
+                          {cat.hasCost && cat.cost != null ? `$${formatMoney(cat.cost)}` : '—'}
+                        </td>
+                        <td className="py-1 text-right">
+                          {cat.gp != null ? `$${formatMoney(cat.gp)}` : '—'}
+                        </td>
+                        <td className="py-1 text-right">
+                          {cat.gpPct != null ? (
+                            <span
+                              className={
+                                cat.gpPct >= 30
+                                  ? 'text-green-700 font-semibold'
+                                  : cat.gpPct >= 15
+                                  ? 'text-amber-700 font-semibold'
+                                  : 'text-red-700 font-semibold'
+                              }
+                            >
+                              {cat.gpPct.toFixed(1)}%
+                            </span>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                    <tr className="bg-muted/50 font-semibold">
+                      <td className="py-1 text-foreground">Overall</td>
+                      <td className="py-1 text-right text-foreground">${formatMoney(profitability.overall.revenue)}</td>
+                      <td className="py-1 text-right">
+                        {profitability.overall.hasCost && profitability.overall.cost != null
+                          ? `$${formatMoney(profitability.overall.cost)}`
+                          : '—'}
+                      </td>
+                      <td className="py-1 text-right">
+                        {profitability.overall.gp != null ? `$${formatMoney(profitability.overall.gp)}` : '—'}
+                      </td>
+                      <td className="py-1 text-right">
+                        {profitability.overall.gpPct != null ? (
+                          <span
+                            className={
+                              profitability.overall.gpPct >= 30
+                                ? 'text-green-700 font-semibold'
+                                : profitability.overall.gpPct >= 15
+                                ? 'text-amber-700 font-semibold'
+                                : 'text-red-700 font-semibold'
+                            }
+                          >
+                            {profitability.overall.gpPct.toFixed(1)}%
+                          </span>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
             <div className="pt-2 border-t border-border space-y-2">
               <p className="text-sm font-medium">Purchase Orders</p>
               {linkedPurchaseOrders.length === 0 ? (
