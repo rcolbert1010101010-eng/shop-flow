@@ -1,5 +1,5 @@
 -- RLS: payments (Phase 2)
--- Role source: public.profiles.role (id = auth.uid()).
+-- Role source: public.user_roles -> roles.key (fallback to public.profiles.role).
 
 -- 1) Helper function
 create or replace function public.current_app_role()
@@ -10,6 +10,13 @@ security definer
 set search_path = public
 as $$
   select coalesce(
+    (
+      select r.key
+      from public.user_roles ur
+      join public.roles r on r.id = ur.role_id
+      where ur.user_id = auth.uid()
+      limit 1
+    ),
     (select role::text from public.profiles where id = auth.uid()),
     'TECH'
   );
