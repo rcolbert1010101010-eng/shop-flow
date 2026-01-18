@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CalendarCheck, CheckSquare, Plus, Clock } from 'lucide-react';
+import { CalendarCheck, CheckSquare, Plus, Clock, Download } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { TaskDialog } from './components/TaskDialog';
 import { EventDialog } from './components/EventDialog';
-import type { PlannerEvent, PlannerTask } from './models';
+import { PlannerBackupDialog } from './components/PlannerBackupDialog';
+import type { PlannerData, PlannerEvent, PlannerTask } from './models';
 import { loadPlannerData, savePlannerData, upsertEvent, upsertTask } from './storage';
 
 const formatDate = (value?: string | null) =>
@@ -19,6 +20,9 @@ export default function PlannerHome() {
   const [events, setEvents] = useState<PlannerEvent[]>([]);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [eventDialogOpen, setEventDialogOpen] = useState(false);
+  const [backupDialogOpen, setBackupDialogOpen] = useState(false);
+  const [taskDefaults, setTaskDefaults] = useState<{ due_date?: string | null }>({});
+  const [eventDefaults, setEventDefaults] = useState<{ start_date?: string; end_date?: string | null }>({});
 
   useEffect(() => {
     const data = loadPlannerData();
@@ -48,7 +52,22 @@ export default function PlannerHome() {
     const data = loadPlannerData();
     setTasks(data.tasks);
     savePlannerData(data);
+    setTaskDefaults({});
     return saved;
+  };
+
+  const handleDataImported = (data: PlannerData) => {
+    setTasks(data.tasks ?? []);
+    setEvents(data.events ?? []);
+    setTaskDefaults({});
+    setEventDefaults({});
+  };
+
+  const handleDataReset = (data: PlannerData) => {
+    setTasks(data.tasks ?? []);
+    setEvents(data.events ?? []);
+    setTaskDefaults({});
+    setEventDefaults({});
   };
 
   const handleEventSave = (event: Omit<PlannerEvent, 'created_at'> & { created_at?: string }) => {
@@ -56,6 +75,7 @@ export default function PlannerHome() {
     const data = loadPlannerData();
     setEvents(data.events);
     savePlannerData(data);
+    setEventDefaults({});
     return saved;
   };
 
@@ -77,6 +97,10 @@ export default function PlannerHome() {
                 <CalendarCheck className="mr-2 h-4 w-4" />
                 Calendar
               </Link>
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setBackupDialogOpen(true)}>
+              <Download className="mr-2 h-4 w-4" />
+              Export / Import
             </Button>
             <Button onClick={() => setTaskDialogOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
@@ -220,8 +244,14 @@ export default function PlannerHome() {
         </Card>
       </div>
 
-      <TaskDialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen} onSave={handleTaskSave} />
-      <EventDialog open={eventDialogOpen} onOpenChange={setEventDialogOpen} onSave={handleEventSave} />
+      <TaskDialog open={taskDialogOpen} defaults={taskDefaults} onOpenChange={setTaskDialogOpen} onSave={handleTaskSave} />
+      <EventDialog open={eventDialogOpen} defaults={eventDefaults} onOpenChange={setEventDialogOpen} onSave={handleEventSave} />
+      <PlannerBackupDialog
+        open={backupDialogOpen}
+        onOpenChange={setBackupDialogOpen}
+        onDataImported={handleDataImported}
+        onDataReset={handleDataReset}
+      />
     </div>
   );
 }
