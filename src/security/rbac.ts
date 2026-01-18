@@ -96,6 +96,9 @@ const roleCapabilities: Record<Role, Set<Capability>> = {
  * Checks if a role has a specific capability
  */
 export function can(role: Role, capability: Capability): boolean {
+  // ADMIN is allow-all to avoid drift when new capabilities are added
+  if (role === 'ADMIN') return true;
+
   const capabilities = roleCapabilities[role];
   if (!capabilities) {
     return false;
