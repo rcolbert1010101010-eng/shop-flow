@@ -1,6 +1,7 @@
 import type { PlannerData, PlannerEvent, PlannerTask, TaskStatus } from './models';
 
 const STORAGE_KEY = 'planner-data-v1';
+const STORAGE_VERSION = 1;
 
 const getFallbackData = (): PlannerData => ({
   tasks: [],
@@ -54,7 +55,7 @@ export function savePlannerData(data: PlannerData): void {
   storage.setItem(
     STORAGE_KEY,
     JSON.stringify({
-      version: 1,
+      version: STORAGE_VERSION,
       data,
     })
   );
@@ -129,4 +130,47 @@ export function deleteTask(taskId: string): void {
 export function deleteEvent(eventId: string): void {
   const data = loadPlannerData();
   savePlannerData({ ...data, events: data.events.filter((e) => e.id !== eventId) });
+}
+
+export function exportPlannerData(): { version: number; exportedAt: string; data: PlannerData } {
+  const data = loadPlannerData();
+  return {
+    version: STORAGE_VERSION,
+    exportedAt: new Date().toISOString(),
+    data,
+  };
+}
+
+export function importPlannerData(payload: unknown): PlannerData | null {
+  try {
+    if (!payload || typeof payload !== 'object') return null;
+
+    // New schema
+    if ('version' in payload && 'data' in (payload as any)) {
+      const parsed = payload as { version: number; data: PlannerData };
+      const data = parsed.data ?? getFallbackData();
+      savePlannerData({
+        tasks: data.tasks ?? [],
+        events: data.events ?? [],
+      });
+      return data;
+    }
+
+    // Legacy schema
+    const legacy = payload as PlannerData;
+    if (!legacy.tasks && !legacy.events) return null;
+    savePlannerData({
+      tasks: legacy.tasks ?? [],
+      events: legacy.events ?? [],
+    });
+    return legacy;
+  } catch {
+    return null;
+  }
+}
+
+export function resetPlannerData(): PlannerData {
+  const data = getFallbackData();
+  savePlannerData(data);
+  return data;
 }
