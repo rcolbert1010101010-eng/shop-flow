@@ -3,9 +3,30 @@ import { supabase } from '@/integrations/supabase/client';
 import type { User, Session } from '@supabase/supabase-js';
 import type { Role } from '@/security/rbac';
 
+const mapDbRoleKeyToRole = (key?: string | null): Role => {
+  switch (key) {
+    case 'admin':
+      return 'ADMIN';
+    case 'manager':
+      return 'MANAGER';
+    case 'service_writer':
+      return 'SERVICE_WRITER';
+    case 'parts_manager':
+      return 'PARTS';
+    case 'sales_counter':
+      return 'SERVICE_WRITER';
+    case 'technician':
+      return 'TECH';
+    case 'guest':
+    default:
+      return 'TECH';
+  }
+};
+
 type Profile = {
   id: string;
   role: Role;
+  roleKey?: string | null;
 };
 
 type AuthState = {
@@ -26,19 +47,27 @@ const loadProfile = async (userId: string, set: (state: Partial<AuthState>) => v
     return;
   }
 
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id, role')
-    .eq('id', userId)
-    .single();
+  let roleKey: string | null | undefined = null;
 
-  if (error || !data) {
-    // Fallback to TECH if profile is missing
-    set({ profile: { id: userId, role: 'TECH' } });
-    return;
+  const { data: userRoleRow } = await supabase
+    .from('user_roles')
+    .select('roles!inner(key)')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  roleKey = (userRoleRow as any)?.roles?.key ?? null;
+
+  if (!roleKey) {
+    const { data: legacyProfile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', userId)
+      .maybeSingle();
+    roleKey = (legacyProfile as any)?.role ?? null;
   }
 
-  set({ profile: { id: data.id, role: data.role as Role } });
+  const mappedRole = mapDbRoleKeyToRole(roleKey);
+  set({ profile: { id: userId, role: mappedRole, roleKey } });
 };
 
 export const useAuthStore = create<AuthState>((set, get) => ({

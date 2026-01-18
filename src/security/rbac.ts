@@ -10,6 +10,7 @@ export type Role = 'ADMIN' | 'MANAGER' | 'SERVICE_WRITER' | 'PARTS' | 'TECH';
 export type Capability =
   | 'settings.view'
   | 'settings.edit'
+  | 'admin.users'
   | 'inventory.view'
   | 'inventory.adjust_qoh'
   | 'inventory.receive'
@@ -29,6 +30,7 @@ const roleCapabilities: Record<Role, Set<Capability>> = {
   ADMIN: new Set([
     'settings.view',
     'settings.edit',
+    'admin.users',
     'inventory.view',
     'inventory.adjust_qoh',
     'inventory.receive',

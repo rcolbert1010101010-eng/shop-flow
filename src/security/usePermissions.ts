@@ -21,5 +21,6 @@ export function usePermissions() {
     role,
     can: canCheck,
     loading,
+    isReady: !loading,
   };
 }
