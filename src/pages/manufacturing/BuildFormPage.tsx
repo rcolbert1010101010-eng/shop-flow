@@ -20,6 +20,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { useShopStore } from '@/stores/shopStore';
 import { apiClient } from '@/api/client';
@@ -260,6 +261,7 @@ export default function ManufacturingBuildFormPage() {
     if (!build || !selectedOptionId) return;
     const option = productOptionsQuery.data?.find((opt) => opt.id === selectedOptionId);
     if (!option) return;
+    pushHelpTrigger('inventory_impact');
     try {
       await selectOptions.addOption.mutateAsync({
         build_id: build.id,
@@ -293,24 +295,41 @@ export default function ManufacturingBuildFormPage() {
   };
 
   const selectedOptions = selectedOptionsQuery.data ?? [];
+  const [helpTriggers, setHelpTriggers] = useState<string[]>([]);
+
+  const pushHelpTrigger = (trigger: string) => {
+    setHelpTriggers((prev) => (prev.includes(trigger) ? prev : [...prev, trigger]));
+  };
 
   return (
-    <div className="page-container space-y-6">
-      <PageHeader
-        backTo="/manufacturing/builds"
-        title={isNew ? 'New Build' : build?.build_number ?? 'Build'}
-        subtitle="Configure the build lifecycle"
-        actions={
-          <>
-            <ModuleHelpButton moduleKey="manufacturing" />
-            <Button type="submit" form="build-form">
-              Save Build
-            </Button>
-          </>
-        }
-      />
+    <TooltipProvider>
+      <div className="page-container space-y-6">
+        <PageHeader
+          backTo="/manufacturing/builds"
+          title={isNew ? 'New Build' : build?.build_number ?? 'Build'}
+          subtitle="Configure the build lifecycle"
+          actions={
+            <>
+              <ModuleHelpButton moduleKey="manufacturing" context={{ autoTriggers: helpTriggers }} />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="submit"
+                    form="build-form"
+                    onClick={() => pushHelpTrigger('high_risk_transition')}
+                  >
+                    Save Build
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  Saving finalizes changes that affect cost and margin. Ensure materials and labor are accurate.
+                </TooltipContent>
+              </Tooltip>
+            </>
+          }
+        />
 
-      <form id="build-form" onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-6">
+        <form id="build-form" onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-6">
         <div className="grid grid-cols-2 gap-4">
           <div>
             <Label>Product *</Label>
@@ -323,11 +342,11 @@ export default function ManufacturingBuildFormPage() {
                     <SelectValue placeholder="Select product" />
                   </SelectTrigger>
                   <SelectContent>
-                    {productsQuery.data
-                      ?.filter((product) => product.id && product.id.trim() !== '')
-                      .map((product) => (
-                        <SelectItem key={product.id} value={product.id}>
-                          {product.name}
+                {productsQuery.data
+                  ?.filter((product) => product.id && product.id.trim() !== '')
+                  .map((product) => (
+                    <SelectItem key={product.id} value={product.id}>
+                      {product.name}
                         </SelectItem>
                       ))}
                   </SelectContent>
@@ -578,11 +597,9 @@ export default function ManufacturingBuildFormPage() {
               {bomAvailability.unknown ? (
                 <p className="font-medium">Availability unknown (no BOM or inventory data)</p>
               ) : bomAvailability.ready ? (
-                <p className="font-medium text-green-600">All parts available – ready to build</p>
+                <p className="font-medium text-green-600">All parts available - ready to build</p>
               ) : (
-                <p className="font-medium text-orange-600">
-                  Short parts: {bomAvailability.shortages.length} BOM line{bomAvailability.shortages.length === 1 ? '' : 's'} need stock
-                </p>
+                <p className="font-medium text-orange-600">Short parts: {bomAvailability.shortages.length} BOM line{bomAvailability.shortages.length === 1 ? '' : 's'} need stock</p>
               )}
             </div>
             <Badge variant={bomAvailability.ready ? 'default' : 'secondary'}>
@@ -595,7 +612,7 @@ export default function ManufacturingBuildFormPage() {
               {bomAvailability.shortages.slice(0, 3).map((short) => (
                 <div key={short.bomItemId} className="flex items-center justify-between">
                   <span>
-                    {short.partNumber ?? short.partId} — {short.description ?? 'Part'}
+                    {short.partNumber ?? short.partId} - {short.description ?? 'Part'}
                   </span>
                   <span className="font-medium text-orange-700">Short {formatNumber(short.shortage)}</span>
                 </div>
@@ -644,20 +661,20 @@ export default function ManufacturingBuildFormPage() {
           <div className="space-y-4">
             <Label>Select Option</Label>
             <Select value={selectedOptionId} onValueChange={setSelectedOptionId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose an option" />
-                </SelectTrigger>
-                <SelectContent>
-                  {productOptionsQuery.data
-                    ?.filter((option) => option.id && option.id.trim() !== '')
-                    .map((option) => (
-                      <SelectItem key={option.id} value={option.id}>
-                        {option.name} (${formatNumber(option.price_delta)})
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
+              <SelectTrigger>
+                <SelectValue placeholder="Choose an option" />
+              </SelectTrigger>
+              <SelectContent>
+                {productOptionsQuery.data
+                  ?.filter((option) => option.id && option.id.trim() !== '')
+                  .map((option) => (
+                    <SelectItem key={option.id} value={option.id}>
+                      {option.name} (${formatNumber(option.price_delta)})
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
           <DialogFooter className="flex justify-between">
             <Button variant="outline" onClick={() => setOptionDialogOpen(false)}>
               Cancel
@@ -667,5 +684,6 @@ export default function ManufacturingBuildFormPage() {
         </DialogContent>
       </Dialog>
     </div>
+    </TooltipProvider>
   );
 }

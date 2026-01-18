@@ -36,7 +36,7 @@ export function PageHeader({ title, subtitle, actions, breadcrumbs, backTo, desc
             )}
             <div className="space-y-1 min-w-0">
               <h1 className="text-2xl font-semibold text-foreground leading-tight break-words">{title}</h1>
-              {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
+              {subtitle && <div className="text-sm text-muted-foreground">{subtitle}</div>}
               {description && <div className="text-xs text-muted-foreground">{description}</div>}
             </div>
           </div>

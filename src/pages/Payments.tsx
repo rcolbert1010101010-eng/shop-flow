@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { fetchAllPayments, type PaymentsFilter, computePaymentSummary, voidPayment } from '@/integrations/supabase/payments';
 import type { Invoice, Payment, PaymentMethod, PaymentOrderType, PaymentStatus } from '@/types';
 import { useRepos } from '@/repos';
@@ -81,7 +82,7 @@ export default function PaymentsPage() {
   const denyPayments = () =>
     toast({
       title: "You don't have permission",
-      description: 'You do not have permission to record or void payments.',
+      description: 'Payments are locked for your role. See Help > Why Is This Locked? for guidance.',
       variant: 'destructive',
     });
 
@@ -339,6 +340,9 @@ export default function PaymentsPage() {
       denyPayments();
       return;
     }
+    if (!window.confirm('Applying a payment records financial history and cannot be edited directly. Continue?')) {
+      return;
+    }
     if (!receiveOrderId) {
       toast({ title: 'Select an order', description: 'Choose a work or sales order to apply this payment.', variant: 'destructive' });
       return;
@@ -401,6 +405,9 @@ export default function PaymentsPage() {
   const handleConfirmVoid = async () => {
     if (!canRecordPayments) {
       denyPayments();
+      return;
+    }
+    if (!window.confirm('Voiding creates a correcting record without erasing history. Proceed?')) {
       return;
     }
     if (!voidPaymentId) return;
@@ -759,13 +766,22 @@ export default function PaymentsPage() {
             <Button variant="outline" onClick={() => setVoidDialogOpen(false)} disabled={voidPaymentMutation.isPending}>
               Cancel
             </Button>
-            <Button
-              variant="destructive"
-              onClick={handleConfirmVoid}
-              disabled={voidPaymentMutation.isPending}
-            >
-              {voidPaymentMutation.isPending ? 'Voiding...' : 'Confirm Void'}
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="destructive"
+                    onClick={handleConfirmVoid}
+                    disabled={voidPaymentMutation.isPending}
+                  >
+                    {voidPaymentMutation.isPending ? 'Voiding...' : 'Confirm Void'}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  This creates a correcting record. It does not erase history.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </DialogFooter>
         </DialogContent>
       </Dialog>

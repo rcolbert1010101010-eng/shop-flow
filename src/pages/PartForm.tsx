@@ -1115,7 +1115,7 @@ export default function PartForm() {
                 <div className="flex items-center justify-between mb-1">
                   <Label htmlFor="material_kind" className="flex items-center gap-1">
                     Material Type
-                    <HelpTooltip content="Select SHEET MATERIAL for parts tracked by area (like steel plates). This enables sheet-specific features like remnant creation." />
+                    <HelpTooltip content="Sheet material tracks area/remnants; discrete tracks counts. Picking wrong type skews QOH and costing." />
                   </Label>
                   </div>
                 <Select
@@ -1138,7 +1138,7 @@ export default function PartForm() {
               <div>
                 <Label htmlFor="uom" className="flex items-center gap-1">
                   Unit of Measure
-                  <HelpTooltip content="How this part is counted (ea, ft, in, sqft). Pick the real stocking unit." />
+                  <HelpTooltip content="UOM controls inventory math and pricing; wrong UOM causes bad QOH and margin calculations." />
                 </Label>
                 <Select
                   value={formData.uom}
@@ -1339,7 +1339,7 @@ export default function PartForm() {
               <div>
                 <Label htmlFor="cost" className="flex items-center gap-1">
                   Cost
-                  <HelpTooltip content="What it costs you per UOM. Used for margin and profitability." />
+                  <HelpTooltip content="Cost feeds COGS and margin; bad cost skews pricing and profitability downstream." />
                 </Label>
                 <Input
                   id="cost"
@@ -1354,7 +1354,7 @@ export default function PartForm() {
               <div>
                 <Label htmlFor="selling_price" className="flex items-center gap-1">
                   Selling Price
-                  <HelpTooltip content="What you charge per UOM. Keep it consistent with your quoting rules." />
+                  <HelpTooltip content="Sell price drives revenue and margins; changing it affects quotes, orders, and reported profitability." />
                 </Label>
                 <Input
                   id="selling_price"

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -95,9 +95,10 @@ const REPORTS: ReportTile[] = [
 ];
 
 export default function ReportsHome() {
-  const navigate = useNavigate();
   const { toast } = useToast();
-  const { can, isReady } = usePermissions();
+  const { can, loading, role } = usePermissions();
+  const isReady = !loading;
+  const isPrivileged = role === 'ADMIN' || role === 'MANAGER';
   const canViewReports = can('reports.view');
   const [query, setQuery] = useState('');
 
@@ -108,9 +109,8 @@ export default function ReportsHome() {
         title: "You don't have permission to view reports.",
         variant: 'destructive',
       });
-      navigate('/', { replace: true });
     }
-  }, [canViewReports, isReady, navigate, toast]);
+  }, [canViewReports, isReady, toast]);
 
   const filteredReports = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -122,8 +122,37 @@ export default function ReportsHome() {
 
   const categories: ReportTile['category'][] = ['Operations', 'Sales', 'Inventory', 'Financial/Quality'];
 
-  if (!isReady) return null;
-  if (isReady && !canViewReports) return null;
+  if (!isReady) {
+    return (
+      <div className="page-container space-y-6">
+        <PageHeader
+          title="Reports"
+          description="Operational, sales, and financial snapshots to keep the floor on track."
+        />
+        <div className="text-sm text-muted-foreground">Loading permissions...</div>
+      </div>
+    );
+  }
+
+  if (!canViewReports) {
+    return (
+      <div className="page-container space-y-6">
+        <PageHeader
+          title="Reports"
+          description="Operational, sales, and financial snapshots to keep the floor on track."
+        />
+        <div className="flex items-center justify-center py-10">
+          <div className="text-center space-y-2">
+            <h2 className="text-xl font-semibold text-foreground">Access denied</h2>
+            <p className="text-sm text-muted-foreground">You do not have permission to view this page.</p>
+            {isPrivileged && (
+              <p className="text-xs text-muted-foreground">Missing capability: reports.view</p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="page-container space-y-6">

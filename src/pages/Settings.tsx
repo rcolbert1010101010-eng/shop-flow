@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,8 +34,9 @@ export default function Settings() {
   const { settings, updateSettings } = useRepos().settings;
   const { listResolved, set, getResolved, listHistory } = useSystemSettings();
   const { toast } = useToast();
-  const navigate = useNavigate();
-  const { can, isReady } = usePermissions();
+  const { can, loading, role } = usePermissions();
+  const isReady = !loading;
+  const isPrivileged = role === 'ADMIN' || role === 'MANAGER';
   const canEditSettings = can('settings.edit');
   const [editing, setEditing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'synced' | 'pending'>('synced');
@@ -58,9 +58,8 @@ export default function Settings() {
         title: "You don't have permission to edit settings.",
         variant: 'destructive',
       });
-      navigate('/', { replace: true });
     }
-  }, [canEditSettings, isReady, navigate, toast]);
+  }, [canEditSettings, isReady, toast]);
 
   const hydrateForm = useCallback(() => {
     const fromResolved = listResolved().reduce<Record<string, any>>((acc, item) => {
@@ -382,8 +381,37 @@ export default function Settings() {
     return () => document.removeEventListener('click', handleClick, true);
   }, [editing, isDirty]);
 
-  if (!isReady) return null;
-  if (isReady && !canEditSettings) return null;
+  if (!isReady) {
+    return (
+      <div className="page-container">
+        <PageHeader
+          title="Settings"
+          subtitle="Configure shop settings and defaults"
+        />
+        <div className="text-sm text-muted-foreground">Loading permissions...</div>
+      </div>
+    );
+  }
+
+  if (!canEditSettings) {
+    return (
+      <div className="page-container">
+        <PageHeader
+          title="Settings"
+          subtitle="Configure shop settings and defaults"
+        />
+        <div className="flex items-center justify-center py-10">
+          <div className="text-center space-y-2">
+            <h2 className="text-xl font-semibold text-foreground">Access denied</h2>
+            <p className="text-sm text-muted-foreground">You do not have permission to view this page.</p>
+            {isPrivileged && (
+              <p className="text-xs text-muted-foreground">Missing capability: settings.edit</p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="page-container">
