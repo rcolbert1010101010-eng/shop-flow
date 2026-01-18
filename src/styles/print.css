@@ -99,4 +99,21 @@
   button {
     display: inline-flex !important;
   }
+
+  /* Invoice print pagination controls */
+  .invoice-print-table thead {
+    display: table-header-group;
+  }
+
+  .invoice-print-table tr,
+  .invoice-print-table td,
+  .invoice-print-table th {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .invoice-print-totals {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
 }

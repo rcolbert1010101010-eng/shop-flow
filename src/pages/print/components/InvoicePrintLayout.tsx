@@ -129,7 +129,7 @@ export function InvoicePrintLayout({
 
       {/* Line Items */}
       <div>
-        <table className="w-full text-sm border-collapse">
+        <table className="invoice-print-table w-full text-sm border-collapse">
           <thead>
             <tr className="border-b border-gray-300">
               <th className="text-left py-2 px-2">Description</th>
@@ -163,7 +163,7 @@ export function InvoicePrintLayout({
 
       {/* Totals */}
       <div className="flex justify-end">
-        <div className="w-full md:w-80 space-y-1">
+        <div className="invoice-print-totals w-full md:w-80 space-y-1">
           <div className="flex justify-between text-sm">
             <span className="text-gray-700">Subtotal</span>
             <span className="font-medium">{formatMoney(totals.subtotal)}</span>
