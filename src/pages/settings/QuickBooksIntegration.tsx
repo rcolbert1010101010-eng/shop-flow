@@ -124,6 +124,23 @@ export default function QuickBooksIntegration() {
     return status;
   };
 
+  const handleConnect = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke('qb-oauth-start');
+      if (error || !data?.url) {
+        toast({
+          title: 'Unable to start connect',
+          description: error?.message || 'No URL returned',
+          variant: 'destructive',
+        });
+        return;
+      }
+      window.location.href = data.url as string;
+    } catch (err: any) {
+      toast({ title: 'Unable to start connect', description: err?.message || 'Unknown error', variant: 'destructive' });
+    }
+  };
+
   if (loading || !draft) {
     return (
       <div className="page-container">
@@ -171,6 +188,16 @@ export default function QuickBooksIntegration() {
               <div className="text-xs text-muted-foreground">Status: {statusBadge}</div>
             </div>
             <div className="flex gap-2">
+              {canEdit && connectedStatus !== 'CONNECTED' && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={handleConnect}
+                  disabled={saving}
+                >
+                  Connect to QuickBooks
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
