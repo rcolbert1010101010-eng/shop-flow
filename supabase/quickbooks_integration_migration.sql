@@ -469,7 +469,7 @@ $$;
 
 grant execute on function public.queue_payment_export_v1(uuid) to authenticated;
 
--- Phase 2A.1: Tenant-level QuickBooks connection storage
+-- Phase 2A.1: Tenant-level QuickBooks connection storage (no token exposure)
 create table if not exists public.quickbooks_connections (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid not null,
@@ -486,13 +486,15 @@ create table if not exists public.quickbooks_connections (
   updated_at timestamptz not null default now(),
   unique(tenant_id)
 );
+create index if not exists quickbooks_connections_tenant_idx on public.quickbooks_connections (tenant_id);
+create index if not exists quickbooks_connections_status_idx on public.quickbooks_connections (status);
 
 create table if not exists public.quickbooks_customer_map (
   tenant_id uuid not null,
   customer_id uuid not null,
   qb_customer_id text not null,
   created_at timestamptz not null default now(),
-  unique(tenant_id, customer_id),
+  primary key (tenant_id, customer_id),
   unique(tenant_id, qb_customer_id)
 );
 
@@ -513,9 +515,13 @@ begin
   end if;
 end$$;
 
-create index if not exists accounting_exports_poll_idx on public.accounting_exports (provider, status, export_type, next_attempt_at);
+create index if not exists accounting_exports_poll_idx
+  on public.accounting_exports (provider, status, export_type, next_attempt_at);
 
--- RLS for quickbooks_connections (restrict token access)
+create index if not exists accounting_exports_provider_status_type_idx
+  on public.accounting_exports (provider, status, export_type);
+
+-- RLS for quickbooks_connections (restrict token access; columns revoked below)
 alter table public.quickbooks_connections enable row level security;
 alter table public.quickbooks_connections force row level security;
 drop policy if exists "quickbooks_connections_select_admin" on public.quickbooks_connections;
@@ -523,7 +529,11 @@ create policy "quickbooks_connections_select_admin"
 on public.quickbooks_connections
 for select
 to authenticated
-using (public.current_app_role() = 'ADMIN');
+using (
+  public.current_app_role() = 'ADMIN'
+  and (current_setting('request.jwt.claims', true)::jsonb ? 'tenant_id')
+  and tenant_id = (current_setting('request.jwt.claims', true)::jsonb ->> 'tenant_id')::uuid
+);
 drop policy if exists "quickbooks_connections_write_service_only" on public.quickbooks_connections;
 create policy "quickbooks_connections_write_service_only"
 on public.quickbooks_connections
@@ -531,6 +541,8 @@ for all
 to authenticated
 using (false)
 with check (false);
+-- Prevent authenticated role from selecting token columns
+revoke select (access_token_enc, refresh_token_enc) on public.quickbooks_connections from authenticated;
 
 -- RLS for quickbooks_customer_map
 alter table public.quickbooks_customer_map enable row level security;
@@ -540,7 +552,11 @@ create policy "quickbooks_customer_map_select_admin"
 on public.quickbooks_customer_map
 for select
 to authenticated
-using (public.current_app_role() = 'ADMIN');
+using (
+  public.current_app_role() = 'ADMIN'
+  and (current_setting('request.jwt.claims', true)::jsonb ? 'tenant_id')
+  and tenant_id = (current_setting('request.jwt.claims', true)::jsonb ->> 'tenant_id')::uuid
+);
 drop policy if exists "quickbooks_customer_map_write_service_only" on public.quickbooks_customer_map;
 create policy "quickbooks_customer_map_write_service_only"
 on public.quickbooks_customer_map
@@ -560,3 +576,4 @@ select
   connected_at,
   expires_at
 from public.quickbooks_connections;
+grant select on public.v_quickbooks_connection_status to authenticated;

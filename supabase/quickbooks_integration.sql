@@ -486,13 +486,15 @@ create table if not exists public.quickbooks_connections (
   updated_at timestamptz not null default now(),
   unique(tenant_id)
 );
+create index if not exists quickbooks_connections_tenant_idx on public.quickbooks_connections (tenant_id);
+create index if not exists quickbooks_connections_status_idx on public.quickbooks_connections (status);
 
 create table if not exists public.quickbooks_customer_map (
   tenant_id uuid not null,
   customer_id uuid not null,
   qb_customer_id text not null,
   created_at timestamptz not null default now(),
-  unique(tenant_id, customer_id),
+  primary key (tenant_id, customer_id),
   unique(tenant_id, qb_customer_id)
 );
 
@@ -513,6 +515,7 @@ begin
 end$$;
 
 create index if not exists accounting_exports_poll_idx on public.accounting_exports (provider, status, export_type, next_attempt_at);
+create index if not exists accounting_exports_provider_status_type_idx on public.accounting_exports (provider, status, export_type);
 
 -- RLS for quickbooks_connections
 alter table public.quickbooks_connections enable row level security;
@@ -522,7 +525,11 @@ create policy "quickbooks_connections_select_admin"
 on public.quickbooks_connections
 for select
 to authenticated
-using (public.current_app_role() = 'admin');
+using (
+  public.current_app_role() = 'ADMIN'
+  and (current_setting('request.jwt.claims', true)::jsonb ? 'tenant_id')
+  and tenant_id = (current_setting('request.jwt.claims', true)::jsonb ->> 'tenant_id')::uuid
+);
 drop policy if exists "quickbooks_connections_write_service_only" on public.quickbooks_connections;
 create policy "quickbooks_connections_write_service_only"
 on public.quickbooks_connections
@@ -530,6 +537,7 @@ for all
 to authenticated
 using (false)
 with check (false);
+revoke select (access_token_enc, refresh_token_enc) on public.quickbooks_connections from authenticated;
 
 -- RLS for quickbooks_customer_map
 alter table public.quickbooks_customer_map enable row level security;
@@ -539,7 +547,11 @@ create policy "quickbooks_customer_map_select_admin"
 on public.quickbooks_customer_map
 for select
 to authenticated
-using (public.current_app_role() = 'admin');
+using (
+  public.current_app_role() = 'ADMIN'
+  and (current_setting('request.jwt.claims', true)::jsonb ? 'tenant_id')
+  and tenant_id = (current_setting('request.jwt.claims', true)::jsonb ->> 'tenant_id')::uuid
+);
 drop policy if exists "quickbooks_customer_map_write_service_only" on public.quickbooks_customer_map;
 create policy "quickbooks_customer_map_write_service_only"
 on public.quickbooks_customer_map
@@ -559,3 +571,4 @@ select
   connected_at,
   expires_at
 from public.quickbooks_connections;
+grant select on public.v_quickbooks_connection_status to authenticated;
