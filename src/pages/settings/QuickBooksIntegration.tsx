@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { quickbooksIntegrationHelp } from '@/help/quickbooksIntegrationHelp';
+// Roadmap: see docs/accounting/quickbooks_roadmap.md for phased implementation details.
 import { useToast } from '@/components/ui/use-toast';
 import { useQuickBooksIntegration } from '@/hooks/useQuickBooksIntegration';
 import { usePermissions } from '@/security/usePermissions';
@@ -37,6 +39,7 @@ export default function QuickBooksIntegration() {
   const [payloadDialogOpen, setPayloadDialogOpen] = useState(false);
   const [payloadContent, setPayloadContent] = useState<string>('');
   const [payloadLoading, setPayloadLoading] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const handleSave = async () => {
     if (!draft) return;
@@ -134,7 +137,15 @@ export default function QuickBooksIntegration() {
 
   return (
     <div className="page-container space-y-4">
-      <PageHeader title="QuickBooks Integration" backTo="/settings" />
+      <PageHeader
+        title="QuickBooks Integration"
+        backTo="/settings"
+        actions={
+          <Button variant="outline" size="sm" onClick={() => setHelpOpen(true)}>
+            Help
+          </Button>
+        }
+      />
 
       {error && (
         <Alert variant="destructive">
@@ -414,6 +425,32 @@ export default function QuickBooksIntegration() {
           </div>
           <div className="border rounded-md bg-muted/40 max-h-[400px] overflow-auto p-3 font-mono text-xs whitespace-pre-wrap">
             {payloadContent || (payloadLoading ? 'Loading…' : 'No payload')}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{quickbooksIntegrationHelp.title}</DialogTitle>
+            <DialogDescription>How to set up and use the offline export queue</DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-auto space-y-4 text-sm">
+            {quickbooksIntegrationHelp.sections.map((section) => (
+              <div key={section.heading} className="space-y-1">
+                <div className="font-semibold">{section.heading}</div>
+                <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
+                  {section.bullets.map((bullet) => (
+                    <li key={bullet}>{bullet}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-end">
+            <Button variant="outline" onClick={() => setHelpOpen(false)}>
+              Close
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
