@@ -20,6 +20,7 @@ import { useRepos } from '@/repos';
 import { usePayments } from '@/hooks/usePayments';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/security/usePermissions';
+import { useQuickBooksIntegration } from '@/hooks/useQuickBooksIntegration';
 import type { Invoice, InvoiceLine } from '@/types';
 
 const toNumber = (value: number | string | null | undefined) => {
@@ -50,9 +51,11 @@ export default function InvoiceDetail() {
   const [voidReason, setVoidReason] = useState('');
   const [voidSubmitting, setVoidSubmitting] = useState(false);
   const { toast } = useToast();
-  const { can } = usePermissions();
+  const { can, role } = usePermissions();
+  const { createInvoiceExport } = useQuickBooksIntegration();
   const canVoidInvoice = can('invoices.void');
   const canRecordPayments = can('payments.record');
+  const canGenerateExport = role === 'ADMIN' || (can('invoices.create') && can('settings.edit'));
 
   const denyVoidInvoice = () =>
     toast({
@@ -212,6 +215,31 @@ export default function InvoiceDetail() {
     }
   };
 
+  const handleGenerateExport = async () => {
+    if (!canGenerateExport) {
+      toast({
+        title: "You don't have permission",
+        description: 'Admin or settings + invoice permissions required.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (!invoice) return;
+    const result = await createInvoiceExport(invoice, lines);
+    if (!result?.success) {
+      toast({
+        title: 'Export failed',
+        description:
+          result?.error === 'duplicate'
+            ? 'Export already generated.'
+            : result?.error ?? 'Unable to generate export',
+        variant: 'destructive',
+      });
+      return;
+    }
+    toast({ title: 'Export queued', description: 'Invoice export saved to accounting_exports.' });
+  };
+
   if (loading) {
     return (
       <div className="page-container">
@@ -255,6 +283,19 @@ export default function InvoiceDetail() {
             <div className="flex items-center gap-2">
               <span className="font-medium">Balance Due:</span>
               <span>{formatCurrency(invoice.balance_due)}</span>
+            </div>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleGenerateExport}
+                disabled={!canGenerateExport}
+              >
+                Generate Accounting Export
+              </Button>
+              {!canGenerateExport && (
+                <p className="text-xs text-muted-foreground">Admin or settings + invoice permissions required.</p>
+              )}
             </div>
             {!invoice.voided_at && (
               <div className="space-y-1">

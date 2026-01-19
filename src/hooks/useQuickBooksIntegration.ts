@@ -159,6 +159,115 @@ export function useQuickBooksIntegration() {
     []
   );
 
+  const getConfig = useCallback(async (): Promise<AccountingConfig | null> => {
+    if (config) return config;
+    const { data } = await supabase
+      .from('accounting_integration_config')
+      .select('*')
+      .eq('provider', PROVIDER)
+      .maybeSingle();
+    if (data) {
+      setConfig(data as AccountingConfig);
+      return data as AccountingConfig;
+    }
+    return null;
+  }, [config]);
+
+  const createInvoiceExport = useCallback(
+    async (invoice: any, invoiceLines: any[] = []) => {
+      if (!supabase) return { success: false, error: 'Supabase not configured' };
+      if (!invoice?.id) return { success: false, error: 'Invoice not found' };
+
+      const cfg = await getConfig();
+      const toNumber = (value: any) => {
+        const n = typeof value === 'number' ? value : value != null ? Number(value) : NaN;
+        return Number.isFinite(n) ? n : 0;
+      };
+
+      const classify = (line: any) => {
+        const type = (line?.line_type || line?.type || '').toString().toUpperCase();
+        if (type === 'LABOR') return 'LABOR';
+        if (type === 'PART') return 'PARTS';
+        if (type === 'FEE' || type === 'SUBLET' || type === 'CHARGE') return 'FEES_SUBLET';
+        const desc = (line?.description || '').toLowerCase();
+        if (desc.includes('labor')) return 'LABOR';
+        if (desc.includes('fee') || desc.includes('sublet') || desc.includes('charge')) return 'FEES_SUBLET';
+        return 'PARTS';
+      };
+
+      const rollups = invoiceLines?.reduce(
+        (acc, line) => {
+          const bucket = classify(line);
+          const amt = toNumber(line?.amount);
+          if (bucket === 'LABOR') acc.labor += amt;
+          else if (bucket === 'FEES_SUBLET') acc.fees += amt;
+          else acc.parts += amt;
+          return acc;
+        },
+        { labor: 0, parts: 0, fees: 0 }
+      ) ?? { labor: 0, parts: 0, fees: 0 };
+
+      const payload = {
+        schema_version: 1,
+        provider: PROVIDER,
+        source: {
+          type: 'INVOICE',
+          id: invoice.id,
+          number: invoice.invoice_number || invoice.id,
+          date: (invoice as any).invoice_date || (invoice as any).created_at || new Date().toISOString(),
+        },
+        customer: {
+          shopflow_customer_id: invoice.customer_id || invoice.customer?.id || null,
+          display_name: invoice.customer?.company_name || invoice.customer?.name || 'Unknown Customer',
+        },
+        lines: [
+          {
+            kind: 'LABOR',
+            amount: rollups.labor,
+            account_ref: cfg?.income_account_labor ?? null,
+          },
+          {
+            kind: 'PARTS',
+            amount: rollups.parts,
+            account_ref: cfg?.income_account_parts ?? null,
+          },
+          {
+            kind: 'FEES_SUBLET',
+            amount: rollups.fees,
+            account_ref: cfg?.income_account_fees ?? cfg?.income_account_sublet ?? null,
+          },
+        ],
+        tax: {
+          amount: toNumber(invoice.tax_total ?? invoice.tax_amount ?? 0),
+          liability_account_ref: cfg?.liability_account_sales_tax ?? null,
+        },
+        total: toNumber(
+          invoice.total ??
+            rollups.labor + rollups.parts + rollups.fees + toNumber(invoice.tax_total ?? invoice.tax_amount ?? 0)
+        ),
+      };
+
+      const payloadHash = await hashSha256(stableStringify(payload));
+      const { error: insertError } = await supabase.from('accounting_exports').insert({
+        provider: PROVIDER,
+        export_type: 'INVOICE',
+        source_entity_type: 'invoice',
+        source_entity_id: invoice.id,
+        payload_json: payload,
+        payload_hash: payloadHash,
+        status: 'PENDING',
+      });
+      if (insertError) {
+        if (insertError.code === '23505') {
+          return { success: false, error: 'duplicate' };
+        }
+        return { success: false, error: insertError.message };
+      }
+      return { success: true };
+    },
+    [getConfig]
+  );
+
   const listRecentExports = useCallback(async () => {
     if (!supabase) return [];
     const { data } = await supabase
@@ -179,6 +288,7 @@ export function useQuickBooksIntegration() {
     reload: load,
     saveConfig,
     createTestExport,
+    createInvoiceExport,
     listRecentExports,
   };
 }
