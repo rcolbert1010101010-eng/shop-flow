@@ -248,24 +248,67 @@ export function useQuickBooksIntegration() {
       };
 
       const payloadHash = await hashSha256(stableStringify(payload));
-      const { error: insertError } = await supabase.from('accounting_exports').insert({
+      const { data, error: rpcError } = await supabase.rpc('queue_accounting_export_v1', {
         provider: PROVIDER,
         export_type: 'INVOICE',
         source_entity_type: 'invoice',
         source_entity_id: invoice.id,
         payload_json: payload,
         payload_hash: payloadHash,
-        status: 'PENDING',
       });
-      if (insertError) {
-        if (insertError.code === '23505') {
-          return { success: false, error: 'duplicate' };
-        }
-        return { success: false, error: insertError.message };
+      if (rpcError) {
+        return { success: false, error: rpcError.message };
       }
+      const statusValue = typeof data === 'string' ? data : (data as any)?.status;
+      const errorValue = typeof data === 'object' ? (data as any)?.error : undefined;
+      const status = statusValue || 'queued';
+      if (status === 'duplicate') return { success: false, error: 'duplicate' };
+      if (status === 'failed') return { success: false, error: errorValue || 'failed' };
+      if (status !== 'queued') return { success: false, error: status };
       return { success: true };
     },
     [getConfig]
+  );
+
+  const autoExportOnFinalize = useCallback(
+    async (invoice: any, invoiceLines: any[] = []) => {
+      const cfg = await getConfig();
+      if (!cfg || !cfg.is_enabled) return { status: 'skipped', reason: 'disabled' };
+      const trigger = cfg.export_trigger || '';
+      const triggerAllows =
+        (typeof trigger === 'string' && trigger.includes('ON_INVOICE_FINALIZED')) ||
+        (Array.isArray(trigger) && trigger.includes('ON_INVOICE_FINALIZED'));
+      const modeAllows =
+        !cfg.mode || ['INVOICE_ONLY', 'INVOICE_AND_PAYMENTS', 'EXPORT_ONLY'].includes(cfg.mode);
+      if (!triggerAllows || !modeAllows) {
+        return { status: 'skipped', reason: 'trigger_disabled' };
+      }
+
+      const isPermissionError = (err?: string) =>
+        !!err &&
+        (err.toLowerCase().includes('rls') ||
+          err.toLowerCase().includes('permission') ||
+          err.toLowerCase().includes('not authorized'));
+
+      const direct = await createInvoiceExport(invoice, invoiceLines);
+      if (direct.success) return { status: 'queued' as const };
+      if (direct.error === 'duplicate') return { status: 'duplicate' as const };
+
+      if (isPermissionError(direct.error)) {
+        const { data, error } = await supabase.rpc('queue_invoice_export', {
+          invoice_id: invoice.id,
+        });
+        if (error) return { status: 'failed', error: error.message };
+        const status = (data as string) || 'queued';
+        if (status === 'duplicate') return { status: 'duplicate' as const };
+        if (status === 'skipped') return { status: 'skipped' as const, reason: 'trigger_disabled' };
+        if (status !== 'queued') return { status: 'failed', error: status };
+        return { status: 'queued' as const };
+      }
+
+      return { status: 'failed', error: direct.error };
+    },
+    [createInvoiceExport, getConfig]
   );
 
   const listRecentExports = useCallback(async () => {
@@ -332,6 +375,7 @@ export function useQuickBooksIntegration() {
     saveConfig,
     createTestExport,
     createInvoiceExport,
+    autoExportOnFinalize,
     listRecentExports,
     getExportPayload,
     retryExport,

@@ -50,9 +50,10 @@ export default function InvoiceDetail() {
   const [voidDialogOpen, setVoidDialogOpen] = useState(false);
   const [voidReason, setVoidReason] = useState('');
   const [voidSubmitting, setVoidSubmitting] = useState(false);
+  const [autoExportAttempted, setAutoExportAttempted] = useState(false);
   const { toast } = useToast();
   const { can, role } = usePermissions();
-  const { createInvoiceExport } = useQuickBooksIntegration();
+  const { createInvoiceExport, autoExportOnFinalize } = useQuickBooksIntegration();
   const canVoidInvoice = can('invoices.void');
   const canRecordPayments = can('payments.record');
   const canGenerateExport = role === 'ADMIN' || (can('invoices.create') && can('settings.edit'));
@@ -102,6 +103,10 @@ export default function InvoiceDetail() {
     loadInvoice();
   }, [invoiceId, repos.invoices]);
 
+  useEffect(() => {
+    setAutoExportAttempted(false);
+  }, [invoice?.id]);
+
   const orderTotal = toNumber(invoice?.total);
   const payments = usePayments('INVOICE', invoice?.id, orderTotal);
   const summaryTotalPaid = invoice?.voided_at ? 0 : payments.summary.totalPaid;
@@ -130,6 +135,34 @@ export default function InvoiceDetail() {
       setPaymentAmount(summaryBalanceDue.toFixed(2));
     }
   }, [invoice, paymentAmount, summaryBalanceDue]);
+
+  const isFinalizedInvoice = useMemo(() => {
+    if (!invoice) return false;
+    const status = invoice.status;
+    if (!status) return false;
+    if (status !== 'ISSUED') return false;
+    if (invoice.voided_at) return false;
+    return true;
+  }, [invoice]);
+
+  useEffect(() => {
+    if (!invoice || autoExportAttempted || !isFinalizedInvoice || !canGenerateExport) return;
+    setAutoExportAttempted(true);
+    void (async () => {
+      const result = await autoExportOnFinalize(invoice, lines);
+      if (result.status === 'queued') {
+        toast({ title: 'Export queued', description: 'Invoice export saved to accounting_exports.' });
+      } else if (result.status === 'duplicate') {
+        toast({ title: 'Export already generated', description: 'Duplicate invoice export detected.' });
+      } else if (result.status === 'failed') {
+        toast({
+          title: 'Export failed',
+          description: result.error ?? 'Unable to generate export',
+          variant: 'destructive',
+        });
+      }
+    })();
+  }, [autoExportAttempted, autoExportOnFinalize, canGenerateExport, invoice, isFinalizedInvoice, lines, toast]);
 
   const handleAddPayment = async () => {
     if (!canRecordPayments) {

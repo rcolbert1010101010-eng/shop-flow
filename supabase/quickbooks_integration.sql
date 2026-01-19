@@ -156,3 +156,205 @@ for all
 to authenticated
 using (public.current_app_role() = 'admin')
 with check (public.current_app_role() = 'admin');
+
+-- Helper RPC to queue invoice export without relaxing RLS on accounting_exports
+drop function if exists public.queue_invoice_export(uuid);
+create or replace function public.queue_invoice_export(invoice_id uuid)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  cfg record;
+  inv record;
+  payload jsonb;
+  payload_hash text;
+  status_text text := 'queued';
+begin
+  if auth.uid() is null then
+    return 'unauthenticated';
+  end if;
+
+  select *
+  into cfg
+  from public.accounting_integration_config
+  where provider = 'quickbooks'
+  limit 1;
+
+  if cfg is null or cfg.is_enabled is not true then
+    return 'skipped';
+  end if;
+
+  if coalesce(cfg.export_trigger, '') not like '%ON_INVOICE_FINALIZED%' then
+    return 'skipped';
+  end if;
+
+  select
+    i.id,
+    i.invoice_number,
+    i.created_at,
+    i.issued_at,
+    i.invoice_date,
+    i.customer_id,
+    i.status,
+    i.voided_at,
+    i.subtotal_parts,
+    i.subtotal_labor,
+    i.subtotal_fees,
+    i.tax_amount,
+    i.total,
+    c.company_name,
+    c.name,
+    c.full_name
+  into inv
+  from public.invoices i
+  left join public.customers c on c.id = i.customer_id
+  where i.id = invoice_id;
+
+  if inv is null then
+    raise exception 'Invoice not found';
+  end if;
+  if inv.status is distinct from 'ISSUED' or inv.voided_at is not null then
+    return 'skipped';
+  end if;
+
+  payload := jsonb_build_object(
+    'schema_version', 1,
+    'provider', 'quickbooks',
+    'source', jsonb_build_object(
+      'type', 'INVOICE',
+      'id', inv.id,
+      'number', coalesce(inv.invoice_number, inv.id::text),
+      'date', coalesce(inv.invoice_date, inv.issued_at, inv.created_at)
+    ),
+    'customer', jsonb_build_object(
+      'shopflow_customer_id', inv.customer_id,
+      'display_name', coalesce(inv.company_name, inv.name, inv.full_name, 'Unknown Customer')
+    ),
+    'lines', jsonb_build_array(
+      jsonb_build_object(
+        'kind', 'LABOR',
+        'amount', coalesce(inv.subtotal_labor, 0),
+        'account_ref', cfg.income_account_labor
+      ),
+      jsonb_build_object(
+        'kind', 'PARTS',
+        'amount', coalesce(inv.subtotal_parts, 0),
+        'account_ref', cfg.income_account_parts
+      ),
+      jsonb_build_object(
+        'kind', 'FEES_SUBLET',
+        'amount', coalesce(inv.subtotal_fees, 0),
+        'account_ref', coalesce(cfg.income_account_fees, cfg.income_account_sublet)
+      )
+    ),
+    'tax', jsonb_build_object(
+      'amount', coalesce(inv.tax_amount, 0),
+      'liability_account_ref', cfg.liability_account_sales_tax
+    ),
+    'total', coalesce(inv.total, coalesce(inv.subtotal_labor,0) + coalesce(inv.subtotal_parts,0) + coalesce(inv.subtotal_fees,0) + coalesce(inv.tax_amount,0))
+  );
+
+  payload_hash := encode(digest(convert_to(payload::text, 'UTF8'), 'sha256'), 'hex');
+
+  begin
+    insert into public.accounting_exports (
+      provider,
+      export_type,
+      source_entity_type,
+      source_entity_id,
+      payload_json,
+      payload_hash,
+      status
+    ) values (
+      'quickbooks',
+      'INVOICE',
+      'invoice',
+      invoice_id,
+      payload,
+      payload_hash,
+      'PENDING'
+    );
+  exception
+    when unique_violation then
+      status_text := 'duplicate';
+  end;
+
+  return status_text;
+end;
+$$;
+
+grant execute on function public.queue_invoice_export(uuid) to authenticated;
+
+-- Generic RPC to queue accounting export without widening table RLS
+drop function if exists public.queue_accounting_export_v1(text, text, text, uuid, jsonb, text);
+create or replace function public.queue_accounting_export_v1(
+  provider text,
+  export_type text,
+  source_entity_type text,
+  source_entity_id uuid,
+  payload_json jsonb,
+  payload_hash text
+) returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  cfg record;
+begin
+  if auth.uid() is null then
+    return jsonb_build_object('status', 'unauthenticated');
+  end if;
+
+  select *
+  into cfg
+  from public.accounting_integration_config
+  where provider = queue_accounting_export_v1.provider
+  limit 1;
+
+  if cfg is null or cfg.is_enabled is not true then
+    return jsonb_build_object('status', 'skipped');
+  end if;
+
+  if coalesce(cfg.export_trigger, '') not like '%ON_INVOICE_FINALIZED%' then
+    return jsonb_build_object('status', 'skipped');
+  end if;
+
+  if cfg.mode is not null and cfg.mode not in ('INVOICE_ONLY','INVOICE_AND_PAYMENTS','EXPORT_ONLY') then
+    return jsonb_build_object('status', 'skipped', 'reason', 'mode_disabled');
+  end if;
+
+  begin
+    insert into public.accounting_exports (
+      provider,
+      export_type,
+      source_entity_type,
+      source_entity_id,
+      payload_json,
+      payload_hash,
+      status,
+      attempt_count
+    ) values (
+      queue_accounting_export_v1.provider,
+      queue_accounting_export_v1.export_type,
+      queue_accounting_export_v1.source_entity_type,
+      queue_accounting_export_v1.source_entity_id,
+      queue_accounting_export_v1.payload_json,
+      queue_accounting_export_v1.payload_hash,
+      'PENDING',
+      0
+    );
+  exception
+    when unique_violation then
+      return jsonb_build_object('status', 'duplicate');
+    when others then
+      return jsonb_build_object('status', 'failed', 'error', SQLERRM);
+  end;
+
+  return jsonb_build_object('status', 'queued');
+end;
+$$;
+
+grant execute on function public.queue_accounting_export_v1(text, text, text, uuid, jsonb, text) to authenticated;
