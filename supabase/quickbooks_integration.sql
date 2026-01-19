@@ -539,6 +539,27 @@ using (false)
 with check (false);
 revoke select (access_token_enc, refresh_token_enc) on public.quickbooks_connections from authenticated;
 
+-- OAuth state storage (service-only)
+create table if not exists public.quickbooks_oauth_states (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null,
+  user_id uuid not null,
+  nonce text not null,
+  expires_at timestamptz not null,
+  consumed_at timestamptz null,
+  created_at timestamptz not null default now(),
+  unique(nonce)
+);
+alter table public.quickbooks_oauth_states enable row level security;
+alter table public.quickbooks_oauth_states force row level security;
+drop policy if exists "quickbooks_oauth_states_service_only" on public.quickbooks_oauth_states;
+create policy "quickbooks_oauth_states_service_only"
+on public.quickbooks_oauth_states
+for all
+to authenticated
+using (false)
+with check (false);
+
 -- RLS for quickbooks_customer_map
 alter table public.quickbooks_customer_map enable row level security;
 alter table public.quickbooks_customer_map force row level security;
