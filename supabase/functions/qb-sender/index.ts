@@ -2,6 +2,7 @@
 // Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, QUICKBOOKS_ENV, QUICKBOOKS_TOKEN_ENC_KEY
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { decryptToken } from '../_shared/qb_crypto.ts';
+import { refreshQuickBooksAccessToken } from '../_shared/qb_refresh.ts';
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -96,6 +97,26 @@ async function loadConnection(tenantId?: string) {
   return { conn: data };
 }
 
+async function ensureAccessToken(conn: any) {
+  const expiresAt = conn.expires_at ? new Date(conn.expires_at).getTime() : null;
+  const needsRefresh = expiresAt !== null && expiresAt - Date.now() <= 2 * 60 * 1000;
+  if (!needsRefresh) {
+    return { accessToken: await decryptToken(tokenKey, conn.access_token_enc), connUpdated: false };
+  }
+  if (!conn.refresh_token_enc) throw new Error('Refresh token missing');
+  const refreshed = await refreshQuickBooksAccessToken(conn.refresh_token_enc);
+  await supabase
+    .from('quickbooks_connections')
+    .update({
+      access_token_enc: refreshed.accessEnc,
+      refresh_token_enc: refreshed.refreshEnc,
+      expires_at: refreshed.expiresAt,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('tenant_id', conn.tenant_id);
+  return { accessToken: await decryptToken(tokenKey, refreshed.accessEnc), connUpdated: true };
+}
+
 function buildInvoiceBody(payload: any) {
   if (!payload) throw new Error('Missing payload');
   const customerRef =
@@ -135,22 +156,12 @@ async function processRow(row: ExportRow) {
     return;
   }
 
-  const expiresAt = conn.expires_at ? new Date(conn.expires_at).getTime() : null;
-  if (expiresAt && expiresAt - Date.now() <= 2 * 60 * 1000) {
-    await markResult(row, 'FAILED', {}, 'Token refresh not implemented');
-    return;
-  }
-
-  const accessTokenEnc = conn.access_token_enc as string;
-  if (!accessTokenEnc) {
-    await markResult(row, 'FAILED', {}, 'Access token missing');
-    return;
-  }
   let accessToken: string;
   try {
-    accessToken = await decryptToken(tokenKey, accessTokenEnc);
+    const { accessToken: token } = await ensureAccessToken(conn);
+    accessToken = token;
   } catch (err: any) {
-    await markResult(row, 'FAILED', {}, 'Token decrypt failed');
+    await markResult(row, 'FAILED', {}, err?.message || 'Token error');
     return;
   }
 
