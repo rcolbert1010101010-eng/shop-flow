@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,6 +30,7 @@ import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 import { usePermissions } from '@/security/usePermissions';
 
 export default function Settings() {
+  const navigate = useNavigate();
   const env = (import.meta as any).env ?? {};
   const settingsPreviewEnabled = import.meta.env.DEV || env.VITE_SETTINGS_PREVIEW === 'true';
   const { settings, updateSettings } = useRepos().settings;
@@ -640,6 +642,21 @@ export default function Settings() {
             })}
           </div>
         )}
+      </div>
+
+      <div className="form-section max-w-xl mt-6">
+        <h2 className="text-lg font-semibold mb-4">Integrations</h2>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between rounded-md border border-border p-3">
+            <div>
+              <p className="font-medium">QuickBooks</p>
+              <p className="text-xs text-muted-foreground">Configure accounting export settings.</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => navigate('/settings/integrations/quickbooks')}>
+              Open
+            </Button>
+          </div>
+        </div>
       </div>
 
       {/* Cancel confirmation dialog */}

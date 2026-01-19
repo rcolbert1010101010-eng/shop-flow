@@ -59,6 +59,7 @@ import WorkOrderPrintOverview from "@/pages/print/WorkOrderPrintOverview";
 import PlannerHome from "@/modules/planner/PlannerHome";
 import PlannerTasks from "@/modules/planner/PlannerTasks";
 import PlannerCalendar from "@/modules/planner/PlannerCalendar";
+import QuickBooksIntegration from "@/pages/settings/QuickBooksIntegration";
 import Login from "@/pages/Login";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { LoginRedirect } from "@/components/auth/LoginRedirect";
@@ -139,6 +140,7 @@ const App = () => (
                 <Route path="/technicians" element={<Technicians />} />
                 <Route path="/technicians/:id" element={<TechnicianDetail />} />
                 <Route path="/settings" element={<Settings />} />
+                <Route path="/settings/integrations/quickbooks" element={<QuickBooksIntegration />} />
               </Route>
             </Route>
             <Route path="*" element={<NotFound />} />
