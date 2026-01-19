@@ -272,12 +272,55 @@ export function useQuickBooksIntegration() {
     if (!supabase) return [];
     const { data } = await supabase
       .from('accounting_exports')
-      .select('id,status,created_at,export_type,source_entity_type')
+      .select('id,status,created_at,export_type,source_entity_type,source_entity_id,attempt_count,last_error')
       .eq('provider', PROVIDER)
       .order('created_at', { ascending: false })
       .limit(10);
     return data ?? [];
   }, []);
+
+  const getExportPayload = useCallback(async (exportId: string) => {
+    if (!supabase) return null;
+    const { data } = await supabase
+      .from('accounting_exports')
+      .select('payload_json')
+      .eq('provider', PROVIDER)
+      .eq('id', exportId)
+      .maybeSingle();
+    return data?.payload_json ?? null;
+  }, []);
+
+  const retryExport = useCallback(
+    async (exportId: string) => {
+      if (!supabase) return { success: false, error: 'Supabase not configured' };
+      const { data: existing, error: fetchError } = await supabase
+        .from('accounting_exports')
+        .select('attempt_count')
+        .eq('provider', PROVIDER)
+        .eq('id', exportId)
+        .maybeSingle();
+      if (fetchError) return { success: false, error: fetchError.message };
+      const nextAttempt = (existing?.attempt_count ?? 0) + 1;
+
+      const { error: updateError } = await supabase
+        .from('accounting_exports')
+        .update({
+          status: 'PENDING',
+          attempt_count: nextAttempt,
+          last_attempt_at: new Date().toISOString(),
+          last_error: null,
+        })
+        .eq('provider', PROVIDER)
+        .eq('id', exportId);
+
+      // attempt_count++ without RPC: read current value and update
+      if (updateError) {
+        return { success: false, error: updateError.message };
+      }
+      return { success: true };
+    },
+    []
+  );
 
   return {
     connection,
@@ -290,5 +333,7 @@ export function useQuickBooksIntegration() {
     createTestExport,
     createInvoiceExport,
     listRecentExports,
+    getExportPayload,
+    retryExport,
   };
 }

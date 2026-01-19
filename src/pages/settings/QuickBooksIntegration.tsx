@@ -8,6 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/use-toast';
 import { useQuickBooksIntegration } from '@/hooks/useQuickBooksIntegration';
 import { usePermissions } from '@/security/usePermissions';
@@ -18,10 +19,24 @@ export default function QuickBooksIntegration() {
   const { toast } = useToast();
   const { can, role } = usePermissions();
   const canEdit = can('settings.edit') || role === 'ADMIN';
-  const { connection, config, loading, saving, error, saveConfig, createTestExport, listRecentExports } = useQuickBooksIntegration();
+  const {
+    connection,
+    config,
+    loading,
+    saving,
+    error,
+    saveConfig,
+    createTestExport,
+    listRecentExports,
+    getExportPayload,
+    retryExport,
+  } = useQuickBooksIntegration();
   const [connectedStatus, setConnectedStatus] = useState(connection?.status ?? 'DISCONNECTED');
   const [draft, setDraft] = useState(config);
   const [exports, setExports] = useState<any[]>([]);
+  const [payloadDialogOpen, setPayloadDialogOpen] = useState(false);
+  const [payloadContent, setPayloadContent] = useState<string>('');
+  const [payloadLoading, setPayloadLoading] = useState(false);
 
   const handleSave = async () => {
     if (!draft) return;
@@ -75,6 +90,29 @@ export default function QuickBooksIntegration() {
       status === 'CONNECTED' ? 'bg-green-100 text-green-700' : status === 'EXPIRED' || status === 'ERROR' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700';
     return <span className={`px-2 py-1 rounded-md text-xs font-semibold ${color}`}>{status}</span>;
   }, [connectedStatus]);
+
+  const handleViewPayload = async (exportId: string) => {
+    setPayloadLoading(true);
+    const payload = await getExportPayload(exportId);
+    setPayloadLoading(false);
+    setPayloadContent(payload ? JSON.stringify(payload, null, 2) : 'No payload found.');
+    setPayloadDialogOpen(true);
+  };
+
+  const handleRetry = async (exportId: string) => {
+    if (!canEdit) {
+      toast({ title: 'Admin required', variant: 'destructive' });
+      return;
+    }
+    const result = await retryExport(exportId);
+    if (!result?.success) {
+      toast({ title: 'Retry failed', description: result?.error ?? 'Unable to retry', variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Export reset', description: 'Status set to PENDING.' });
+    const rows = await listRecentExports();
+    setExports(rows);
+  };
 
   if (loading || !draft) {
     return (
@@ -299,15 +337,34 @@ export default function QuickBooksIntegration() {
                 <tr>
                   <th className="text-left py-1">Status</th>
                   <th className="text-left py-1">Type</th>
+                  <th className="text-left py-1">Source</th>
+                  <th className="text-left py-1">Attempts</th>
                   <th className="text-left py-1">Created</th>
+                  <th className="text-left py-1">Error</th>
+                  <th className="text-left py-1 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {exports.map((exp) => (
-                  <tr key={exp.id}>
+                  <tr key={exp.id} className="align-top">
                     <td className="py-1">{exp.status}</td>
                     <td className="py-1">{exp.export_type}</td>
+                    <td className="py-1">
+                      {exp.source_entity_type ?? ''} {exp.source_entity_id ?? ''}
+                    </td>
+                    <td className="py-1">{exp.attempt_count ?? 0}</td>
                     <td className="py-1">{exp.created_at ? new Date(exp.created_at).toLocaleString() : ''}</td>
+                    <td className="py-1 max-w-[180px] truncate">{exp.last_error ?? ''}</td>
+                    <td className="py-1">
+                      <div className="flex justify-end gap-2">
+                        <Button size="xs" variant="outline" onClick={() => handleViewPayload(exp.id)}>
+                          View JSON
+                        </Button>
+                        <Button size="xs" variant="secondary" onClick={() => handleRetry(exp.id)} disabled={!canEdit}>
+                          Retry
+                        </Button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -315,6 +372,34 @@ export default function QuickBooksIntegration() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={payloadDialogOpen} onOpenChange={setPayloadDialogOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Export Payload</DialogTitle>
+            <DialogDescription>JSON payload saved to accounting_exports</DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-between items-center pb-2">
+            <span className="text-xs text-muted-foreground">{payloadLoading ? 'Loading…' : ''}</span>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                if (payloadContent) {
+                  void navigator.clipboard.writeText(payloadContent);
+                  toast({ title: 'Copied' });
+                }
+              }}
+              disabled={!payloadContent}
+            >
+              Copy
+            </Button>
+          </div>
+          <div className="border rounded-md bg-muted/40 max-h-[400px] overflow-auto p-3 font-mono text-xs whitespace-pre-wrap">
+            {payloadContent || (payloadLoading ? 'Loading…' : 'No payload')}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
