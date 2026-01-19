@@ -40,6 +40,7 @@ export default function QuickBooksIntegration() {
   const [payloadContent, setPayloadContent] = useState<string>('');
   const [payloadLoading, setPayloadLoading] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [senderRunning, setSenderRunning] = useState(false);
 
   const handleSave = async () => {
     if (!draft) return;
@@ -124,6 +125,25 @@ export default function QuickBooksIntegration() {
     return status;
   };
 
+  const handleRunSender = async () => {
+    setSenderRunning(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('qb-sender');
+      if (error) {
+        toast({ title: 'Sender failed', description: error.message, variant: 'destructive' });
+      } else {
+        toast({
+          title: 'Sender ran',
+          description: `Processed ${data?.processed ?? 0} (claimed ${data?.claimed ?? 0} / scanned ${data?.scanned ?? 0})`,
+        });
+      }
+    } catch (err: any) {
+      toast({ title: 'Sender failed', description: err?.message || 'Unknown error', variant: 'destructive' });
+    } finally {
+      setSenderRunning(false);
+    }
+  };
+
   const handleConnect = async () => {
     try {
       const { data, error } = await supabase.functions.invoke('qb-oauth-start');
@@ -181,43 +201,53 @@ export default function QuickBooksIntegration() {
         <CardHeader>
           <CardTitle>Connection</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-sm font-semibold">{providerName}</div>
-              <div className="text-xs text-muted-foreground">Status: {statusBadge}</div>
-            </div>
-            <div className="flex gap-2">
-              {canEdit && connectedStatus !== 'CONNECTED' && (
+          <CardContent className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-semibold">{providerName}</div>
+                <div className="text-xs text-muted-foreground">Status: {statusBadge}</div>
+              </div>
+              <div className="flex gap-2">
+                {canEdit && connectedStatus !== 'CONNECTED' && (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleConnect}
+                    disabled={saving}
+                  >
+                    Connect to QuickBooks
+                  </Button>
+                )}
                 <Button
-                  variant="default"
+                  variant="outline"
                   size="sm"
-                  onClick={handleConnect}
-                  disabled={saving}
+                  onClick={() => setConnectedStatus('CONNECTED')}
+                  disabled={saving || !canEdit}
                 >
-                  Connect to QuickBooks
+                  Simulate Connect
                 </Button>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setConnectedStatus('CONNECTED')}
-                disabled={saving || !canEdit}
-              >
-                Simulate Connect
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setConnectedStatus('DISCONNECTED')}
-                disabled={saving || !canEdit}
-              >
-                Disconnect
-              </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setConnectedStatus('DISCONNECTED')}
+                  disabled={saving || !canEdit}
+                >
+                  Disconnect
+                </Button>
+                {canEdit && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleRunSender}
+                    disabled={senderRunning}
+                  >
+                    {senderRunning ? 'Running...' : 'Run Sender Now'}
+                  </Button>
+                )}
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
 
       <Card>
         <CardHeader>
