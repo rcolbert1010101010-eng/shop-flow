@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -38,6 +38,7 @@ const PAYMENT_METHOD_OPTIONS = [
 
 export default function InvoiceDetail() {
   const { id: invoiceId } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const repos = useRepos();
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [lines, setLines] = useState<InvoiceLine[]>([]);
@@ -159,10 +160,14 @@ export default function InvoiceDetail() {
           title: 'Export failed',
           description: result.error ?? 'Unable to generate export',
           variant: 'destructive',
+          action: {
+            label: 'View Exports',
+            onClick: () => navigate('/settings/integrations/quickbooks'),
+          },
         });
       }
     })();
-  }, [autoExportAttempted, autoExportOnFinalize, canGenerateExport, invoice, isFinalizedInvoice, lines, toast]);
+  }, [autoExportAttempted, autoExportOnFinalize, canGenerateExport, invoice, isFinalizedInvoice, lines, navigate, toast]);
 
   const handleAddPayment = async () => {
     if (!canRecordPayments) {

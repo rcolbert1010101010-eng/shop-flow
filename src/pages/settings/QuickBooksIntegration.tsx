@@ -114,6 +114,13 @@ export default function QuickBooksIntegration() {
     setExports(rows);
   };
 
+  const renderStatus = (status?: string) => {
+    if (!status) return '';
+    if (status === 'skipped') return 'Skipped (disabled)';
+    if (status === 'failed') return 'Failed';
+    return status;
+  };
+
   if (loading || !draft) {
     return (
       <div className="page-container">
@@ -179,6 +186,9 @@ export default function QuickBooksIntegration() {
           <CardTitle>Configuration</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
+          <p className="text-xs text-muted-foreground">
+            When an invoice is issued, ShopFlow automatically queues an export (no QuickBooks connection needed).
+          </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Mode</Label>
@@ -329,6 +339,12 @@ export default function QuickBooksIntegration() {
           <CardTitle>Recent Exports</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
+          {draft?.is_enabled === false && (
+            <Alert variant="default" className="text-xs">
+              <AlertTitle>Exports are currently disabled</AlertTitle>
+              <AlertDescription>Enable the integration to queue new exports.</AlertDescription>
+            </Alert>
+          )}
           {exports.length === 0 ? (
             <div className="text-muted-foreground text-sm">No exports yet.</div>
           ) : (
@@ -347,7 +363,7 @@ export default function QuickBooksIntegration() {
               <tbody>
                 {exports.map((exp) => (
                   <tr key={exp.id} className="align-top">
-                    <td className="py-1">{exp.status}</td>
+                    <td className="py-1">{renderStatus(exp.status)}</td>
                     <td className="py-1">{exp.export_type}</td>
                     <td className="py-1">
                       {exp.source_entity_type ?? ''} {exp.source_entity_id ?? ''}
