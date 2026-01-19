@@ -71,6 +71,7 @@ import { normalizeQty, formatQtyWithUom } from '@/lib/utils';
 import { HelpTooltip } from '@/components/help/HelpTooltip';
 import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 import { usePermissions } from '@/security/usePermissions';
+import { ProfitabilityPanel } from '@/components/orders/ProfitabilityPanel';
 import type {
   FabJobLine,
   PlasmaJobLine,
@@ -877,53 +878,6 @@ const jobReadinessValues = Object.values(jobReadinessById);
   }, [currentOrder, poLinesByPo, purchaseOrders]);
 
   const chargeLines = currentOrder ? workOrderRepo.getWorkOrderChargeLines(currentOrder.id) : [];
-  const profitability = useMemo(() => {
-    const partsRevenue = partLines.reduce((sum, line) => sum + (line.is_warranty ? 0 : toNumeric(line.line_total)), 0);
-    const partsCostEntries = partLines
-      .map((line) => {
-        const part = parts.find((p) => p.id === line.part_id);
-        return part?.cost != null ? toNumeric(part.cost) * toNumeric(line.quantity) : null;
-      })
-      .filter((v) => v != null) as number[];
-    const partsHasCost = partsCostEntries.length > 0;
-    const partsCost = partsCostEntries.reduce((sum, value) => sum + value, 0);
-
-    const laborRevenue = laborLines.reduce((sum, line) => sum + (line.is_warranty ? 0 : toNumeric(line.line_total)), 0);
-    const laborHasCost = false;
-
-    const feesRevenue = chargeLines.reduce((sum, line) => sum + toNumeric(line.total_price), 0);
-    const feesHasCost = false;
-
-    const categories = [
-      { label: 'Parts', revenue: partsRevenue, hasCost: partsHasCost, cost: partsHasCost ? partsCost : null },
-      { label: 'Labor', revenue: laborRevenue, hasCost: laborHasCost, cost: null },
-      { label: 'Fees/Sublet', revenue: feesRevenue, hasCost: feesHasCost, cost: null },
-    ].map((cat) => ({
-      ...cat,
-      gp: cat.hasCost && cat.cost != null ? cat.revenue - cat.cost : null,
-      gpPct: cat.hasCost && cat.cost != null && cat.revenue > 0 ? ((cat.revenue - cat.cost) / cat.revenue) * 100 : null,
-    }));
-
-    const overallRevenue = categories.reduce((sum, c) => sum + c.revenue, 0);
-    const allCostsKnown = categories.every((c) => c.hasCost && c.cost != null);
-    const overallCost = allCostsKnown
-      ? categories.reduce((sum, c) => sum + (c.cost ?? 0), 0)
-      : null;
-    const overallGp = allCostsKnown && overallCost != null ? overallRevenue - overallCost : null;
-    const overallGpPct =
-      allCostsKnown && overallCost != null && overallRevenue > 0 ? (overallGp! / overallRevenue) * 100 : null;
-
-    return {
-      categories,
-      overall: {
-        revenue: overallRevenue,
-        hasCost: allCostsKnown,
-        cost: overallCost,
-        gp: overallGp,
-        gpPct: overallGpPct,
-      },
-    };
-  }, [chargeLines, laborLines, partLines, parts, toNumeric]);
   const fabData = currentOrder ? fabricationRepo.getByWorkOrder(currentOrder.id) : null;
   const fabJob = fabData?.job;
   const fabLines = useMemo(() => fabData?.lines ?? [], [fabData?.lines]);
@@ -989,6 +943,108 @@ const jobReadinessValues = Object.values(jobReadinessById);
   const plasmaAttachments = plasmaJob ? plasmaRepo.attachments.list(plasmaJob.id) : [];
   const [dxfAssistOpen, setDxfAssistOpen] = useState(false);
   const [showPlasmaDetails, setShowPlasmaDetails] = useState(false);
+
+  const fabHasData = Boolean(fabJob);
+  const plasmaHasData = Boolean(plasmaJob);
+
+  const profitability = useMemo(() => {
+    const partsRevenue = partLines.reduce((sum, line) => sum + (line.is_warranty ? 0 : toNumeric(line.line_total)), 0);
+    const partsCostEntries = partLines
+      .map((line) => {
+        const part = parts.find((p) => p.id === line.part_id);
+        return part?.cost != null ? toNumeric(part.cost) * toNumeric(line.quantity) : null;
+      })
+      .filter((v) => v != null) as number[];
+    const partsHasCost = partsCostEntries.length > 0;
+    const partsCost = partsCostEntries.reduce((sum, value) => sum + value, 0);
+
+    const laborRevenue = laborLines.reduce((sum, line) => sum + (line.is_warranty ? 0 : toNumeric(line.line_total)), 0);
+    const laborHasCost = false;
+
+    const otherCharges = chargeLines.filter(
+      (line) => line.source_ref_type !== 'PLASMA_JOB' && line.source_ref_type !== 'FAB_JOB'
+    );
+    const feesRevenue = otherCharges.reduce((sum, line) => sum + toNumeric(line.total_price), 0);
+    const feesHasCost = false;
+
+    const plasmaCostEntries = plasmaLines
+      .map((line) => {
+        const costs = [line.material_cost, line.consumables_cost, line.labor_cost, line.overhead_cost].filter(
+          (v) => v != null
+        ) as (number | string)[];
+        if (costs.length === 0) return null;
+        return costs.reduce((sum, val) => sum + toNumeric(val), 0);
+      })
+      .filter((v) => v != null) as number[];
+    const plasmaHasCost = plasmaCostEntries.length > 0;
+    const plasmaCost = plasmaCostEntries.reduce((sum, val) => sum + val, 0);
+
+    const fabHasCost = fabHasData && fabSummary.total_cost != null;
+    const fabCost = fabHasCost ? fabSummary.total_cost : null;
+
+    const categories = [
+      { label: 'Parts', revenue: partsRevenue, hasCost: partsHasCost, cost: partsHasCost ? partsCost : null },
+      { label: 'Labor', revenue: laborRevenue, hasCost: laborHasCost, cost: null },
+      { label: 'Fees/Sublet', revenue: feesRevenue, hasCost: feesHasCost, cost: null },
+      ...(plasmaHasData
+        ? [
+            {
+              label: 'Plasma',
+              revenue: plasmaTotal,
+              hasCost: plasmaHasCost,
+              cost: plasmaHasCost ? plasmaCost : null,
+            },
+          ]
+        : []),
+      ...(fabHasData
+        ? [
+            {
+              label: 'Fabrication',
+              revenue: fabTotal,
+              hasCost: fabHasCost,
+              cost: fabHasCost ? fabCost : null,
+            },
+          ]
+        : []),
+    ].map((cat) => ({
+      ...cat,
+      gp: cat.hasCost && cat.cost != null ? cat.revenue - cat.cost : null,
+      gpPct: cat.hasCost && cat.cost != null && cat.revenue > 0 ? ((cat.revenue - cat.cost) / cat.revenue) * 100 : null,
+    }));
+
+    const overallRevenue = categories.reduce((sum, c) => sum + c.revenue, 0);
+    const allCostsKnown = categories.every((c) => c.hasCost && c.cost != null);
+    const overallCost = allCostsKnown
+      ? categories.reduce((sum, c) => sum + (c.cost ?? 0), 0)
+      : null;
+    const overallGp = allCostsKnown && overallCost != null ? overallRevenue - overallCost : null;
+    const overallGpPct =
+      allCostsKnown && overallCost != null && overallRevenue > 0 ? (overallGp! / overallRevenue) * 100 : null;
+
+    return {
+      categories,
+      overall: {
+        revenue: overallRevenue,
+        hasCost: allCostsKnown,
+        cost: overallCost,
+        gp: overallGp,
+        gpPct: overallGpPct,
+      },
+    };
+  }, [
+    chargeLines,
+    fabHasData,
+    fabLines,
+    fabSummary.total_cost,
+    fabTotal,
+    laborLines,
+    partLines,
+    parts,
+    plasmaHasData,
+    plasmaLines,
+    plasmaTotal,
+    toNumeric,
+  ]);
 
   // Lines
   const otherChargeLines = chargeLines.filter(
@@ -2005,80 +2061,27 @@ const jobReadinessValues = Object.values(jobReadinessById);
                 <p className="font-medium">{new Date(currentOrder.invoiced_at).toLocaleString()}</p>
               </div>
             )}
-            <div className="pt-2 border-t border-border space-y-2">
-              <p className="text-sm font-medium">Profitability (read-only)</p>
-              <div className="text-xs text-muted-foreground">
-                <table className="w-full text-xs">
-                  <thead className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                    <tr>
-                      <th className="text-left py-1">Category</th>
-                      <th className="text-right py-1">Revenue</th>
-                      <th className="text-right py-1">Cost</th>
-                      <th className="text-right py-1">GP</th>
-                      <th className="text-right py-1">Margin %</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {profitability.categories.map((cat, idx) => (
-                      <tr key={cat.label} className={idx % 2 === 0 ? 'bg-muted/30' : ''}>
-                        <td className="py-1 text-foreground">{cat.label}</td>
-                        <td className="py-1 text-right text-foreground">${formatMoney(cat.revenue)}</td>
-                        <td className="py-1 text-right">
-                          {cat.hasCost && cat.cost != null ? `$${formatMoney(cat.cost)}` : '—'}
-                        </td>
-                        <td className="py-1 text-right">{cat.gp != null ? `$${formatMoney(cat.gp)}` : '—'}</td>
-                        <td className="py-1 text-right">
-                          {cat.gpPct != null ? (
-                            <span
-                              className={
-                                cat.gpPct >= 30
-                                  ? 'text-green-700 font-semibold'
-                                  : cat.gpPct >= 15
-                                  ? 'text-amber-700 font-semibold'
-                                  : 'text-red-700 font-semibold'
-                              }
-                            >
-                              {cat.gpPct.toFixed(1)}%
-                            </span>
-                          ) : (
-                            '—'
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                    <tr className="bg-muted/50 font-semibold">
-                      <td className="py-1 text-foreground">Overall</td>
-                      <td className="py-1 text-right text-foreground">${formatMoney(profitability.overall.revenue)}</td>
-                      <td className="py-1 text-right">
-                        {profitability.overall.hasCost && profitability.overall.cost != null
-                          ? `$${formatMoney(profitability.overall.cost)}`
-                          : '—'}
-                      </td>
-                      <td className="py-1 text-right">
-                        {profitability.overall.gp != null ? `$${formatMoney(profitability.overall.gp)}` : '—'}
-                      </td>
-                      <td className="py-1 text-right">
-                        {profitability.overall.gpPct != null ? (
-                          <span
-                            className={
-                              profitability.overall.gpPct >= 30
-                                ? 'text-green-700 font-semibold'
-                                : profitability.overall.gpPct >= 15
-                                ? 'text-amber-700 font-semibold'
-                                : 'text-red-700 font-semibold'
-                            }
-                          >
-                            {profitability.overall.gpPct.toFixed(1)}%
-                          </span>
-                        ) : (
-                          '—'
-                        )}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+            <div className="pt-2 border-t border-border">
+              <ProfitabilityPanel summary={profitability} formatCurrency={formatMoney} />
             </div>
+            {fabJob && fabLines.length === 0 && (
+              <div className="pt-2 border-t border-border space-y-2">
+                <p className="text-sm font-medium">Fabrication</p>
+                <p className="text-xs text-muted-foreground">No fabrication lines yet. Add a line to start pricing fabrication.</p>
+                <Button size="sm" variant="outline" onClick={() => setActiveTab('fabrication')}>
+                  Add Fabrication Line
+                </Button>
+              </div>
+            )}
+            {plasmaJob && plasmaLines.length === 0 && (
+              <div className="pt-2 border-t border-border space-y-2">
+                <p className="text-sm font-medium">Plasma</p>
+                <p className="text-xs text-muted-foreground">No plasma lines yet. Add a line to start pricing plasma.</p>
+                <Button size="sm" variant="outline" onClick={() => setActiveTab('plasma')}>
+                  Add Plasma Line
+                </Button>
+              </div>
+            )}
             <div className="pt-2 border-t border-border space-y-2">
               <p className="text-sm font-medium">Purchase Orders</p>
               {linkedPurchaseOrders.length === 0 ? (
@@ -2408,7 +2411,25 @@ const jobReadinessValues = Object.values(jobReadinessById);
                       <TableBody>
                         {fabLines.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={5} className="text-center text-muted-foreground py-6">No fabrication lines</TableCell>
+                            <TableCell colSpan={5} className="text-center text-muted-foreground py-6">
+                              <div className="space-y-3">
+                                <div className="text-sm">{fabJob ? 'Job created — add your first line to begin pricing.' : 'No fabrication job yet.'}</div>
+                                <div className="text-xs text-muted-foreground">Add a fabrication line to begin pricing.</div>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    if (currentOrder && !fabJob) {
+                                      const newJob = fabricationRepo.createForWorkOrder(currentOrder.id);
+                                      // newJob is captured for future starter-line insertion if needed
+                                    }
+                                    setActiveTab('fabrication');
+                                  }}
+                                >
+                                  Add Fabrication Line
+                                </Button>
+                              </div>
+                            </TableCell>
                           </TableRow>
                         ) : (
                           fabLines.map((line) => (
@@ -2444,7 +2465,24 @@ const jobReadinessValues = Object.values(jobReadinessById);
                       <TableBody>
                         {plasmaLines.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={5} className="text-center text-muted-foreground py-6">No plasma lines</TableCell>
+                            <TableCell colSpan={5} className="text-center text-muted-foreground py-6">
+                              <div className="space-y-3">
+                                <div className="text-sm">{plasmaJob ? 'Job created — add your first line to begin pricing.' : 'No plasma job yet.'}</div>
+                                <div className="text-xs text-muted-foreground">Add a plasma line to begin pricing.</div>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    if (currentOrder && !plasmaJob) {
+                                      plasmaRepo.createForWorkOrder(currentOrder.id);
+                                    }
+                                    setActiveTab('plasma');
+                                  }}
+                                >
+                                  Add Plasma Line
+                                </Button>
+                              </div>
+                            </TableCell>
                           </TableRow>
                         ) : (
                           plasmaLines.map((line) => (
@@ -2469,22 +2507,20 @@ const jobReadinessValues = Object.values(jobReadinessById);
                   <div className="table-container p-4">
                     <Table>
                       <TableHeader>
-                        <TableRow>
-                          <TableHead>Description</TableHead>
-                          <TableHead className="text-right">Qty</TableHead>
-                          <TableHead className="text-right">Unit Price</TableHead>
-                          <TableHead className="text-right">Total</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {chargeLines.filter((c) => c.source_ref_type !== 'PLASMA_JOB' && c.source_ref_type !== 'FAB_JOB').length === 0 ? (
+                      <TableRow>
+                        <TableHead>Description</TableHead>
+                        <TableHead className="text-right">Qty</TableHead>
+                        <TableHead className="text-right">Unit Price</TableHead>
+                        <TableHead className="text-right">Total</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {otherChargeLines.length === 0 ? (
                           <TableRow>
                             <TableCell colSpan={4} className="text-center text-muted-foreground py-6">No other charges</TableCell>
                           </TableRow>
                         ) : (
-                          chargeLines
-                                .filter((c) => c.source_ref_type !== 'PLASMA_JOB' && c.source_ref_type !== 'FAB_JOB')
-                                .map((line) => (
+                          otherChargeLines.map((line) => (
                                   <TableRow key={line.id}>
                                     <TableCell>{line.description}</TableCell>
                                     <TableCell className="text-right">{line.qty}</TableCell>
