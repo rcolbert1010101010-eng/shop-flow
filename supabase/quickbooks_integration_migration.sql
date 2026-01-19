@@ -358,3 +358,113 @@ end;
 $$;
 
 grant execute on function public.queue_accounting_export_v1(text, text, text, uuid, jsonb, text) to authenticated;
+
+-- Payment export RPC (v1) with config gating
+drop function if exists public.queue_payment_export_v1(uuid);
+create or replace function public.queue_payment_export_v1(payment_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  cfg record;
+  p record;
+  inv record;
+  payload jsonb;
+  payload_hash text;
+begin
+  if auth.uid() is null then
+    return jsonb_build_object('status', 'unauthenticated');
+  end if;
+
+  select *
+  into cfg
+  from public.accounting_integration_config
+  where provider = 'quickbooks'
+  limit 1;
+
+  if cfg is null or cfg.is_enabled is not true then
+    return jsonb_build_object('status', 'skipped');
+  end if;
+
+  if coalesce(cfg.export_trigger, '') not like '%ON_PAYMENT_RECORDED%' then
+    return jsonb_build_object('status', 'skipped');
+  end if;
+
+  if cfg.mode is distinct from 'INVOICE_AND_PAYMENTS' then
+    return jsonb_build_object('status', 'skipped', 'reason', 'mode_disabled');
+  end if;
+
+  select *
+  into p
+  from public.payments
+  where id = payment_id;
+
+  if p is null then
+    return jsonb_build_object('status', 'failed', 'error', 'payment_not_found');
+  end if;
+
+  -- attempt to load linked invoice if column exists
+  begin
+    select *
+    into inv
+    from public.invoices i
+    where i.id = (p).invoice_id;
+  exception
+    when undefined_column then
+      inv := null;
+  end;
+
+  payload := jsonb_build_object(
+    'schema_version', 1,
+    'provider', 'quickbooks',
+    'source', jsonb_build_object(
+      'type', 'PAYMENT',
+      'id', p.id,
+      'date', coalesce((p).created_at, now()),
+      'reference', (p).reference
+    ),
+    'invoice', jsonb_build_object(
+      'id', coalesce((p).invoice_id, inv.id),
+      'number', coalesce(inv.invoice_number, inv.id::text, (p).invoice_id::text)
+    ),
+    'amount', coalesce((p).amount, 0),
+    'method', (p).method,
+    'clearing_account_ref', cfg.clearing_account_undeposited_funds
+  );
+
+  payload_hash := encode(digest(convert_to(payload::text, 'UTF8'), 'sha256'), 'hex');
+
+  begin
+    insert into public.accounting_exports (
+      provider,
+      export_type,
+      source_entity_type,
+      source_entity_id,
+      payload_json,
+      payload_hash,
+      status,
+      attempt_count
+    ) values (
+      'quickbooks',
+      'PAYMENT',
+      'payment',
+      payment_id,
+      payload,
+      payload_hash,
+      'PENDING',
+      0
+    );
+  exception
+    when unique_violation then
+      return jsonb_build_object('status', 'duplicate');
+    when others then
+      return jsonb_build_object('status', 'failed', 'error', SQLERRM);
+  end;
+
+  return jsonb_build_object('status', 'queued');
+end;
+$$;
+
+grant execute on function public.queue_payment_export_v1(uuid) to authenticated;

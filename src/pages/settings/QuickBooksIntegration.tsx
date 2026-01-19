@@ -188,6 +188,7 @@ export default function QuickBooksIntegration() {
         <CardContent className="space-y-4 text-sm">
           <p className="text-xs text-muted-foreground">
             When an invoice is issued, ShopFlow automatically queues an export (no QuickBooks connection needed).
+            Payments queue when recorded if mode is set to Invoice + Payments.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">

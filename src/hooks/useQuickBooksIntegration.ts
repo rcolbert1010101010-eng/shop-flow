@@ -270,6 +270,22 @@ export function useQuickBooksIntegration() {
     [getConfig]
   );
 
+  const createPaymentExport = useCallback(
+    async (paymentId: string) => {
+      if (!supabase) return { success: false, error: 'Supabase not configured' };
+      const { data, error } = await supabase.rpc('queue_payment_export_v1', { payment_id: paymentId });
+      if (error) return { success: false, error: error.message };
+      const statusValue = typeof data === 'string' ? data : (data as any)?.status;
+      const errorValue = typeof data === 'object' ? (data as any)?.error : undefined;
+      const status = statusValue || 'queued';
+      if (status === 'duplicate') return { success: false, error: 'duplicate' };
+      if (status === 'failed') return { success: false, error: errorValue || 'failed' };
+      if (status !== 'queued') return { success: false, error: status };
+      return { success: true };
+    },
+    []
+  );
+
   const autoExportOnFinalize = useCallback(
     async (invoice: any, invoiceLines: any[] = []) => {
       const cfg = await getConfig();
@@ -375,6 +391,7 @@ export function useQuickBooksIntegration() {
     saveConfig,
     createTestExport,
     createInvoiceExport,
+    createPaymentExport,
     autoExportOnFinalize,
     listRecentExports,
     getExportPayload,
