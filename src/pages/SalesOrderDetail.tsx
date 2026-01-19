@@ -67,6 +67,7 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 import { normalizeQty, formatQtyWithUom } from '@/lib/utils';
 import { HelpTooltip } from '@/components/help/HelpTooltip';
 import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
+import { ProfitabilityPanel } from '@/components/orders/ProfitabilityPanel';
 import { usePermissions } from '@/security/usePermissions';
 
 const BROWSE_PARTS_PAGE_SIZE = 25;
@@ -1205,81 +1206,8 @@ export default function SalesOrderDetail() {
               <p className="font-medium">{new Date(currentOrder.invoiced_at).toLocaleString()}</p>
             </div>
             )}
-            <div className="pt-2 border-t border-border space-y-2">
-              <p className="text-sm font-medium">Profitability (read-only)</p>
-              <div className="text-xs text-muted-foreground">
-                <table className="w-full text-xs">
-                  <thead className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                    <tr>
-                      <th className="text-left py-1">Category</th>
-                      <th className="text-right py-1">Revenue</th>
-                      <th className="text-right py-1">Cost</th>
-                      <th className="text-right py-1">GP</th>
-                      <th className="text-right py-1">Margin %</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {profitability.categories.map((cat, idx) => (
-                      <tr key={cat.label} className={idx % 2 === 0 ? 'bg-muted/30' : ''}>
-                        <td className="py-1 text-foreground">{cat.label}</td>
-                        <td className="py-1 text-right text-foreground">${formatMoney(cat.revenue)}</td>
-                        <td className="py-1 text-right">
-                          {cat.hasCost && cat.cost != null ? `$${formatMoney(cat.cost)}` : '—'}
-                        </td>
-                        <td className="py-1 text-right">
-                          {cat.gp != null ? `$${formatMoney(cat.gp)}` : '—'}
-                        </td>
-                        <td className="py-1 text-right">
-                          {cat.gpPct != null ? (
-                            <span
-                              className={
-                                cat.gpPct >= 30
-                                  ? 'text-green-700 font-semibold'
-                                  : cat.gpPct >= 15
-                                  ? 'text-amber-700 font-semibold'
-                                  : 'text-red-700 font-semibold'
-                              }
-                            >
-                              {cat.gpPct.toFixed(1)}%
-                            </span>
-                          ) : (
-                            '—'
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                    <tr className="bg-muted/50 font-semibold">
-                      <td className="py-1 text-foreground">Overall</td>
-                      <td className="py-1 text-right text-foreground">${formatMoney(profitability.overall.revenue)}</td>
-                      <td className="py-1 text-right">
-                        {profitability.overall.hasCost && profitability.overall.cost != null
-                          ? `$${formatMoney(profitability.overall.cost)}`
-                          : '—'}
-                      </td>
-                      <td className="py-1 text-right">
-                        {profitability.overall.gp != null ? `$${formatMoney(profitability.overall.gp)}` : '—'}
-                      </td>
-                      <td className="py-1 text-right">
-                        {profitability.overall.gpPct != null ? (
-                          <span
-                            className={
-                              profitability.overall.gpPct >= 30
-                                ? 'text-green-700 font-semibold'
-                                : profitability.overall.gpPct >= 15
-                                ? 'text-amber-700 font-semibold'
-                                : 'text-red-700 font-semibold'
-                            }
-                          >
-                            {profitability.overall.gpPct.toFixed(1)}%
-                          </span>
-                        ) : (
-                          '—'
-                        )}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+            <div className="pt-2 border-t border-border">
+              <ProfitabilityPanel summary={profitability} formatCurrency={formatMoney} />
             </div>
             <div className="pt-2 border-t border-border space-y-2">
               <p className="text-sm font-medium">Purchase Orders</p>
