@@ -28,6 +28,7 @@ import { useSystemSettings } from '@/hooks/useSystemSettings';
 import { SYSTEM_SETTINGS_REGISTRY, type SystemSettingKey } from '@/config/systemSettingsRegistry';
 import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 import { usePermissions } from '@/security/usePermissions';
+import { useTheme, type ThemeOption } from '@/hooks/useTheme';
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -37,6 +38,7 @@ export default function Settings() {
   const { listResolved, set, getResolved, listHistory } = useSystemSettings();
   const { toast } = useToast();
   const { can, loading, role } = usePermissions();
+  const { theme, setTheme } = useTheme();
   const isReady = !loading;
   const isPrivileged = role === 'ADMIN' || role === 'MANAGER';
   const canEditSettings = can('settings.edit');
@@ -466,6 +468,24 @@ export default function Settings() {
       <div className="flex items-center justify-between mb-4 text-sm text-muted-foreground">
         <span>Status: {syncStatus === 'synced' ? 'Synced' : 'Pending sync'}</span>
         <span className="text-xs">Values update immediately; background sync is offline-friendly.</span>
+      </div>
+
+      <div className="form-section max-w-xl">
+        <h2 className="text-lg font-semibold mb-4">Appearance</h2>
+        <div className="space-y-2">
+          <Label>Theme</Label>
+          <Select value={theme} onValueChange={(val) => setTheme(val as ThemeOption)}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Theme" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="light">Light</SelectItem>
+              <SelectItem value="dark">Dark</SelectItem>
+              <SelectItem value="system">System</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">Choose your preferred theme or follow your system setting.</p>
+        </div>
       </div>
 
       <div className="form-section max-w-xl">

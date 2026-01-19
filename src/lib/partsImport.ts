@@ -448,7 +448,6 @@ if (process.env.NODE_ENV === 'development') {
   try {
     runParserSelfTest();
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.warn('Import parser self-test failed', err);
   }
 }

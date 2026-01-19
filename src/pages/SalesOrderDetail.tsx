@@ -72,6 +72,11 @@ import { usePermissions } from '@/security/usePermissions';
 
 const BROWSE_PARTS_PAGE_SIZE = 25;
 
+const toNumber = (value: number | string | null | undefined) => {
+  const numeric = typeof value === 'number' ? value : value != null ? Number(value) : NaN;
+  return Number.isFinite(numeric) ? numeric : 0;
+};
+
 const PAYMENT_METHOD_OPTIONS = [
   { value: 'cash', label: 'Cash' },
   { value: 'check', label: 'Check' },
@@ -147,10 +152,6 @@ export default function SalesOrderDetail() {
   const [priceDraft, setPriceDraft] = useState<string>('');
   const [aiAssistOpen, setAiAssistOpen] = useState(false);
   
-  const toNumber = (value: number | string | null | undefined) => {
-    const numeric = typeof value === 'number' ? value : value != null ? Number(value) : NaN;
-    return Number.isFinite(numeric) ? numeric : 0;
-  };
   const formatMoney = (value: number | string | null | undefined) => toNumber(value).toFixed(2);
   const env = (import.meta as any).env || {};
   const aiAssistEnabled = import.meta.env.DEV || env.VITE_AI_ASSIST_PREVIEW === 'true';
@@ -374,11 +375,11 @@ export default function SalesOrderDetail() {
 
   const orderLines = useMemo(
     () => (currentOrder ? getSalesOrderLines(currentOrder.id) : []),
-    [currentOrder, currentOrderId, currentOrderUpdatedAt, getSalesOrderLines]
+    [currentOrder, getSalesOrderLines]
   );
   const chargeLines = useMemo(
     () => (currentOrder ? getSalesOrderChargeLines(currentOrder.id) : []),
-    [currentOrder, currentOrderId, currentOrderUpdatedAt, getSalesOrderChargeLines]
+    [currentOrder, getSalesOrderChargeLines]
   );
   const profitability = useMemo(() => {
     const partsRevenue = orderLines.reduce((sum, line) => sum + toNumber(line.line_total), 0);
@@ -441,7 +442,7 @@ export default function SalesOrderDetail() {
         gpPct: overallGpPct,
       },
     };
-  }, [chargeLines, orderLines, parts, toNumber]);
+  }, [chargeLines, orderLines, parts]);
   const orderTotal = toNumber(currentOrder?.total);
   const payments = usePayments('SALES_ORDER', currentOrder?.id, orderTotal);
   const paymentStatusClass = useMemo(() => {

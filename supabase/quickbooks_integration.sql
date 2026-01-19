@@ -106,8 +106,8 @@ create policy "integration_connections_write_admin_only"
 on public.integration_connections
 for all
 to authenticated
-using (public.current_app_role() = 'admin')
-with check (public.current_app_role() = 'admin');
+using (public.current_app_role() = 'ADMIN')
+with check (public.current_app_role() = 'ADMIN');
 
 alter table public.accounting_integration_config enable row level security;
 alter table public.accounting_integration_config force row level security;
@@ -122,8 +122,8 @@ create policy "accounting_integration_config_write_admin_only"
 on public.accounting_integration_config
 for all
 to authenticated
-using (public.current_app_role() = 'admin')
-with check (public.current_app_role() = 'admin');
+using (public.current_app_role() = 'ADMIN')
+with check (public.current_app_role() = 'ADMIN');
 
 alter table public.external_references enable row level security;
 alter table public.external_references force row level security;
@@ -138,8 +138,8 @@ create policy "external_references_write_admin_only"
 on public.external_references
 for all
 to authenticated
-using (public.current_app_role() = 'admin')
-with check (public.current_app_role() = 'admin');
+using (public.current_app_role() = 'ADMIN')
+with check (public.current_app_role() = 'ADMIN');
 
 alter table public.accounting_exports enable row level security;
 alter table public.accounting_exports force row level security;
@@ -154,8 +154,8 @@ create policy "accounting_exports_write_admin_only"
 on public.accounting_exports
 for all
 to authenticated
-using (public.current_app_role() = 'admin')
-with check (public.current_app_role() = 'admin');
+using (public.current_app_role() = 'ADMIN')
+with check (public.current_app_role() = 'ADMIN');
 
 -- Helper RPC to queue invoice export without relaxing RLS on accounting_exports
 drop function if exists public.queue_invoice_export(uuid);

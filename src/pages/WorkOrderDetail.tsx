@@ -70,6 +70,15 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 import { normalizeQty, formatQtyWithUom } from '@/lib/utils';
 import { HelpTooltip } from '@/components/help/HelpTooltip';
 import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
+
+const toNumeric = (value: number | string | null | undefined) => {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const parsed = parseFloat(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+  return 0;
+};
 import { usePermissions } from '@/security/usePermissions';
 import { ProfitabilityPanel } from '@/components/orders/ProfitabilityPanel';
 import type {
@@ -266,14 +275,6 @@ export default function WorkOrderDetail() {
   const plasmaRepo = repos.plasma;
   const workOrderRepo = repos.workOrders;
   const schedulingRepo = repos.scheduling;
-  const toNumeric = (value: number | string | null | undefined) => {
-    if (typeof value === 'number') return value;
-    if (typeof value === 'string') {
-      const parsed = parseFloat(value);
-      return Number.isNaN(parsed) ? 0 : parsed;
-    }
-    return 0;
-  };
   const formatNumber = (value: number | string | null | undefined, digits = 2) =>
     toNumeric(value).toFixed(digits);
   const formatMoney = (value: number | string | null | undefined) => toNumeric(value).toFixed(2);
@@ -399,7 +400,10 @@ export default function WorkOrderDetail() {
     () => (aiAssistEnabled ? suggestParts(aiPartsQuery, parts) : []),
     [aiAssistEnabled, aiPartsQuery, parts]
   );
-  const jobLines: WorkOrderJobLine[] = currentOrder ? getWorkOrderJobLines(currentOrder.id) : [];
+  const jobLines: WorkOrderJobLine[] = useMemo(
+    () => (currentOrder ? getWorkOrderJobLines(currentOrder.id) : []),
+    [currentOrder, getWorkOrderJobLines]
+  );
   const activityEvents = currentOrder ? getWorkOrderActivity(currentOrder.id) : [];
   const jobMap = useMemo(
     () => {
@@ -421,7 +425,7 @@ export default function WorkOrderDetail() {
   const allPartLines = currentOrder ? getWorkOrderPartLines(currentOrder.id) : [];
   const laborLines = useMemo(
     () => (currentOrder ? getWorkOrderLaborLines(currentOrder.id) : []),
-    [currentOrder, currentOrderId, currentOrderUpdatedAt, getWorkOrderLaborLines]
+    [currentOrder, getWorkOrderLaborLines]
   );
   const partLines = allPartLines.filter((l) => !l.is_core_refund_line);
   const activeJobTimers = currentOrder ? getActiveJobTimers(currentOrder.id) : [];
@@ -507,7 +511,7 @@ export default function WorkOrderDetail() {
       ...totals,
       marginPercent: revenue > 0 ? (totals.margin / revenue) * 100 : 0,
     };
-  }, [jobProfitSummaries, laborRate]);
+  }, [jobProfitSummaries]);
 const jobReadinessValues = Object.values(jobReadinessById);
   const hasWaitingPartsStatus = jobLines.some((job) => job.status === 'WAITING_PARTS');
   const hasWaitingApprovalStatus = jobLines.some((job) => job.status === 'WAITING_APPROVAL');
@@ -877,7 +881,10 @@ const jobReadinessValues = Object.values(jobReadinessById);
       }));
   }, [currentOrder, poLinesByPo, purchaseOrders]);
 
-  const chargeLines = currentOrder ? workOrderRepo.getWorkOrderChargeLines(currentOrder.id) : [];
+  const chargeLines = useMemo(
+    () => (currentOrder ? workOrderRepo.getWorkOrderChargeLines(currentOrder.id) : []),
+    [currentOrder, workOrderRepo]
+  );
   const fabData = currentOrder ? fabricationRepo.getByWorkOrder(currentOrder.id) : null;
   const fabJob = fabData?.job;
   const fabLines = useMemo(() => fabData?.lines ?? [], [fabData?.lines]);
@@ -932,7 +939,7 @@ const jobReadinessValues = Object.values(jobReadinessById);
   }, [fabLines, fabWarnings, showFabValidation]);
   const plasmaData = currentOrder ? plasmaRepo.getByWorkOrder(currentOrder.id) : null;
   const plasmaJob = plasmaData?.job;
-  const plasmaLines = plasmaData?.lines ?? [];
+  const plasmaLines = useMemo(() => plasmaData?.lines ?? [], [plasmaData?.lines]);
   const plasmaTotal = plasmaLines.reduce((sum, line) => sum + toNumeric(line.sell_price_total), 0);
   const plasmaChargeLine = chargeLines.find(
     (line) => line.source_ref_type === 'PLASMA_JOB' && line.source_ref_id === plasmaJob?.id
@@ -1034,7 +1041,6 @@ const jobReadinessValues = Object.values(jobReadinessById);
   }, [
     chargeLines,
     fabHasData,
-    fabLines,
     fabSummary.total_cost,
     fabTotal,
     laborLines,
@@ -1043,7 +1049,6 @@ const jobReadinessValues = Object.values(jobReadinessById);
     plasmaHasData,
     plasmaLines,
     plasmaTotal,
-    toNumeric,
   ]);
 
   // Lines

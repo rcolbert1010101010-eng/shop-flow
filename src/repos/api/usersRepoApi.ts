@@ -1,126 +1,72 @@
 import { supabase } from '@/integrations/supabase/client';
 
-export type AdminUser = {
+export type ProfileRow = {
   id: string;
   email: string;
-  full_name: string | null;
-  is_active: boolean;
-  role_key: string | null;
-  role_name?: string | null;
+  full_name?: string | null;
+  role?: string | null;
+  is_active?: boolean | null;
+  created_at?: string | null;
 };
 
-export type AdminRole = {
-  key: string;
-  name: string;
-  description: string | null;
-};
+export type UserRow = ProfileRow;
 
-const mapUserRow = (row: any): AdminUser => {
-  const roleRelation = Array.isArray(row.user_roles) ? row.user_roles[0] : row.user_roles;
-  const role = roleRelation?.roles ?? roleRelation?.role ?? {};
+export async function listUsers(): Promise<UserRow[]> {
+  const [{ data: profiles, error: profilesError }, { data: userRoles, error: rolesError }] = await Promise.all([
+    supabase
+      .from('user_profiles')
+      .select('id,email,full_name,is_active,created_at')
+      .order('created_at', { ascending: false }),
+    supabase.from('user_roles').select('user_id, role:roles(key)'),
+  ]);
 
-  return {
-    id: row.id,
-    email: row.email,
-    full_name: row.full_name ?? null,
-    is_active: row.is_active ?? true,
-    role_key: role?.key ?? null,
-    role_name: role?.name ?? null,
+  if (profilesError) throw new Error(profilesError.message);
+  if (rolesError) throw new Error(rolesError.message);
+
+  const roleByUser: Record<string, string> = {};
+  (userRoles ?? []).forEach((row: any) => {
+    const roleKey = row?.role?.key ? row.role.key.toString().toUpperCase() : null;
+    if (row?.user_id && roleKey) {
+      roleByUser[row.user_id] = roleKey;
+    }
+  });
+
+  return (profiles ?? []).map((p) => ({
+    ...p,
+    role: roleByUser[p.id] ?? 'TECHNICIAN',
+  }));
+}
+
+export async function updateUserProfile(id: string, fields: Partial<UserRow>) {
+  const payload: Partial<UserRow> = {
+    full_name: fields.full_name,
+    is_active: fields.is_active,
   };
-};
-
-export async function listRoles(): Promise<AdminRole[]> {
-  if (!supabase) return [];
-
-  const { data, error } = await supabase
-    .from('roles')
-    .select('key, name, description')
-    .eq('is_active', true)
-    .order('name', { ascending: true });
-
-  if (error) {
-    console.error('Error fetching roles', error);
-    throw new Error(error.message ?? 'Failed to fetch roles');
-  }
-
-  return data?.map((row) => ({
-    key: row.key,
-    name: row.name,
-    description: row.description ?? null,
-  })) ?? [];
+  const { error } = await supabase.from('user_profiles').update(payload).eq('id', id);
+  if (error) throw new Error(error.message);
 }
 
-export async function listUsers(): Promise<AdminUser[]> {
-  if (!supabase) return [];
-
-  const { data, error } = await supabase
-    .from('user_profiles')
-    .select('id, email, full_name, is_active, user_roles(role_id, roles(key, name))')
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    console.error('Error fetching users', error);
-    throw new Error(error.message ?? 'Failed to fetch users');
-  }
-
-  return (data ?? []).map(mapUserRow);
-}
-
-export async function assignRole(userId: string, roleKey: string): Promise<void> {
-  if (!supabase) return;
-
-  const { data: role, error: roleError } = await supabase
+export async function setUserRole(userId: string, roleKeyUpper: string) {
+  const roleKey = roleKeyUpper.toString().toLowerCase();
+  const { data: roleRow, error: roleError } = await supabase
     .from('roles')
     .select('id')
     .eq('key', roleKey)
     .eq('is_active', true)
     .maybeSingle();
+  if (roleError) throw new Error(roleError.message);
+  if (!roleRow?.id) throw new Error('Role not found or inactive');
 
-  if (roleError || !role?.id) {
-    throw new Error(roleError?.message ?? 'Role not found or inactive');
-  }
-
-  const { error } = await supabase
+  const { error: upsertError } = await supabase
     .from('user_roles')
-    .upsert({ user_id: userId, role_id: role.id });
-
-  if (error) {
-    console.error('Error assigning role', error);
-    throw new Error(error.message ?? 'Failed to assign role');
-  }
+    .upsert({ user_id: userId, role_id: roleRow.id }, { onConflict: 'user_id' });
+  if (upsertError) throw new Error(upsertError.message);
 }
 
-export async function setUserActive(userId: string, isActive: boolean): Promise<void> {
-  if (!supabase) return;
-
-  const { error } = await supabase
-    .from('user_profiles')
-    .update({ is_active: isActive })
-    .eq('id', userId);
-
-  if (error) {
-    console.error('Error updating user active state', error);
-    throw new Error(error.message ?? 'Failed to update user');
-  }
-}
-
-export async function createUser(payload: { email: string; full_name?: string; role_key: string }): Promise<{
-  user_id: string;
-  email: string;
-  role_key: string;
-}> {
-  if (!supabase) {
-    throw new Error('Supabase not configured');
-  }
-
-  const { data, error } = await supabase.functions.invoke('admin-create-user', {
-    body: payload,
+export async function inviteUser(payload: { email: string; role: string; full_name?: string | null }) {
+  const { data, error } = await supabase.functions.invoke('admin-invite-user', {
+    body: { ...payload, role: payload.role.toString().toUpperCase() },
   });
-
-  if (error) {
-    console.error('Error creating user via function', error);
-    throw new Error(error.message ?? 'Failed to create user');
-  }
-
-  return data as { user_id: string; email: string; role_key: string };
+  if (error) throw new Error(error.message);
+  return data;
 }
