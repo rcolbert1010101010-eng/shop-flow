@@ -35,3 +35,26 @@ export async function encryptToken(secret: string, token: string) {
   const tag = bytes.slice(bytes.length - tagLen);
   return `${b64url(iv)}.${b64url(cipher)}.${b64url(tag)}`;
 }
+
+export async function decryptToken(secret: string, tokenEnc: string) {
+  const [ivPart, cipherPart, tagPart] = tokenEnc.split('.');
+  if (!ivPart || !cipherPart || !tagPart) throw new Error('invalid token enc');
+  const key = await importKey(secret);
+  const iv = ((): Uint8Array => {
+    const padded = ivPart.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(ivPart.length / 4) * 4, '=');
+    const bin = atob(padded);
+    return Uint8Array.from(bin, (c) => c.charCodeAt(0));
+  })();
+  const decode = (part: string) => {
+    const padded = part.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(part.length / 4) * 4, '=');
+    const bin = atob(padded);
+    return Uint8Array.from(bin, (c) => c.charCodeAt(0));
+  };
+  const cipher = decode(cipherPart);
+  const tag = decode(tagPart);
+  const combined = new Uint8Array(cipher.length + tag.length);
+  combined.set(cipher);
+  combined.set(tag, cipher.length);
+  const plainBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, combined);
+  return new TextDecoder().decode(new Uint8Array(plainBuf));
+}
