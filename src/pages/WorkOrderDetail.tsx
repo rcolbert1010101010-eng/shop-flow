@@ -292,6 +292,7 @@ export default function WorkOrderDetail() {
   const env = (import.meta as any).env || {};
   const aiAssistEnabled = import.meta.env.DEV || env.VITE_AI_ASSIST_PREVIEW === 'true';
   const isMobile = useIsMobile();
+  const workOrderJobLines = useShopStore((state) => state.workOrderJobLines);
 
   const isNew = id === 'new';
   const unitFromQuery = searchParams.get('unit_id') || '';
@@ -412,7 +413,7 @@ export default function WorkOrderDetail() {
   );
   const jobLines: WorkOrderJobLine[] = useMemo(
     () => (currentOrder ? getWorkOrderJobLines(currentOrder.id) : []),
-    [currentOrder, getWorkOrderJobLines]
+    [currentOrder, getWorkOrderJobLines, workOrderJobLines]
   );
   const activityEvents = currentOrder ? getWorkOrderActivity(currentOrder.id) : [];
   const jobMap = useMemo(
@@ -522,7 +523,7 @@ export default function WorkOrderDetail() {
       marginPercent: revenue > 0 ? (totals.margin / revenue) * 100 : 0,
     };
   }, [jobProfitSummaries]);
-const jobReadinessValues = Object.values(jobReadinessById);
+  const jobReadinessValues = Object.values(jobReadinessById);
   const hasWaitingPartsStatus = jobLines.some((job) => job.status === 'WAITING_PARTS');
   const hasWaitingApprovalStatus = jobLines.some((job) => job.status === 'WAITING_APPROVAL');
   const hasQAStatus = jobLines.some((job) => job.status === 'QA');
@@ -535,6 +536,10 @@ const jobReadinessValues = Object.values(jobReadinessById);
     hasPartsMissingReadiness && { label: 'Parts Missing', variant: 'destructive' },
     hasPartsRiskReadiness && { label: 'Parts Risk', variant: 'secondary' },
   ].filter((chip): chip is BlockerChip => Boolean(chip));
+  const addJobDisabled =
+    !currentOrder ||
+    jobLines.length === 0 ||
+    (jobLines.length === 1 && (jobEditingMode[jobLines[0].id] ?? false));
 
   useEffect(() => {
     setWorkOrderDraft({
@@ -612,7 +617,7 @@ const jobReadinessValues = Object.values(jobReadinessById);
     }));
   };
 
- const handleSaveJob = async (jobId: string) => {
+  const handleSaveJob = async (jobId: string) => {
     const draft = jobDrafts[jobId];
     if (!draft) return;
     const job = jobLines.find((j) => j.id === jobId);
@@ -622,23 +627,9 @@ const jobReadinessValues = Object.values(jobReadinessById);
     const complaint = workOrderDraft.complaint || null;
     const cause = workOrderDraft.cause || null;
     const correction = workOrderDraft.correction || null;
-    const payload = {
-      description: draft.title.trim() || job?.title || 'Job',
-      status: draft.status,
-      work_order_id: workOrderId,
-    };
+    const title = draft.title.trim() || job?.title || 'Job';
+    const status = draft.status;
     try {
-      const { data, error } = await supabase
-        .from('work_order_labor_lines')
-        .update(payload)
-        .eq('id', jobId)
-        .select()
-        .single();
-      if (error) {
-        toast({ title: 'Save failed', description: error.message, variant: 'destructive' });
-        return;
-      }
-      const updated = data ?? payload;
       const { error: woError } = await supabase
         .from('work_orders')
         .update({
@@ -652,14 +643,14 @@ const jobReadinessValues = Object.values(jobReadinessById);
         return;
       }
       woUpdateJobLine(jobId, {
-        title: updated.description,
-        status: updated.status,
+        title,
+        status,
       });
       setJobDrafts((prev) => ({
         ...prev,
         [jobId]: {
-          title: updated.description ?? '',
-          status: updated.status as WorkOrderJobStatus,
+          title,
+          status: status as WorkOrderJobStatus,
         },
       }));
       setWorkOrderDraft({
@@ -690,7 +681,7 @@ const jobReadinessValues = Object.values(jobReadinessById);
         ),
       }));
       setJobEditingMode((prev) => ({ ...prev, [jobId]: false }));
-      toast({ title: 'Job Saved', description: `${updated.description || 'Job'} has been saved` });
+      toast({ title: 'Job Saved', description: `${title || 'Job'} has been saved` });
     } finally {
       setJobSaving((prev) => ({ ...prev, [jobId]: false }));
     }
@@ -771,6 +762,7 @@ const jobReadinessValues = Object.values(jobReadinessById);
     // New jobs start in editing mode
     setJobEditingMode((prev) => ({ ...prev, [job.id]: true }));
     setActiveTab('jobs');
+    setSelectedJobId(job.id);
   };
   const handleJobClockIn = (jobId: string) => {
     if (!currentOrder) return;
@@ -2625,14 +2617,50 @@ const jobReadinessValues = Object.values(jobReadinessById);
 
             <TabsContent value="jobs">
               <div className="space-y-4">
+                <Card>
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-semibold">Work Order Intake (Complaint / Cause / Correction)</h4>
+                      <span className="text-xs text-muted-foreground">Applies to the whole work order.</span>
+                    </div>
+                    <div className="grid gap-2 md:grid-cols-3">
+                      <Textarea
+                        value={workOrderDraft.complaint ?? ''}
+                        onChange={(event) =>
+                          setWorkOrderDraft((prev) => ({ ...prev, complaint: event.target.value }))
+                        }
+                        placeholder="Complaint"
+                        className="h-24"
+                      />
+                      <Textarea
+                        value={workOrderDraft.cause ?? ''}
+                        onChange={(event) =>
+                          setWorkOrderDraft((prev) => ({ ...prev, cause: event.target.value }))
+                        }
+                        placeholder="Cause"
+                        className="h-24"
+                      />
+                      <Textarea
+                        value={workOrderDraft.correction ?? ''}
+                        onChange={(event) =>
+                          setWorkOrderDraft((prev) => ({ ...prev, correction: event.target.value }))
+                        }
+                        placeholder="Correction"
+                        className="h-24"
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+
                 <div className="flex flex-wrap gap-2">
                   <Input
                     placeholder="New job title"
                     value={newJobTitle}
                     onChange={(event) => setNewJobTitle(event.target.value)}
+                    disabled={addJobDisabled}
                     className="flex-1 min-w-[200px]"
                   />
-                  <Button size="sm" onClick={handleAddJob} disabled={!newJobTitle.trim() || !currentOrder}>
+                  <Button size="sm" onClick={handleAddJob} disabled={addJobDisabled || !newJobTitle.trim()}>
                     Add Job
                   </Button>
                 </div>
@@ -2739,34 +2767,6 @@ const jobReadinessValues = Object.values(jobReadinessById);
                                 </>
                               )}
                             </div>
-                            {isEditing && (
-                              <div className="grid gap-2 md:grid-cols-3">
-                                <Textarea
-                                  value={workOrderDraft.complaint ?? ''}
-                                  onChange={(event) =>
-                                    setWorkOrderDraft((prev) => ({ ...prev, complaint: event.target.value }))
-                                  }
-                                  placeholder="Complaint"
-                                  className="h-24"
-                                />
-                                <Textarea
-                                  value={workOrderDraft.cause ?? ''}
-                                  onChange={(event) =>
-                                    setWorkOrderDraft((prev) => ({ ...prev, cause: event.target.value }))
-                                  }
-                                  placeholder="Cause"
-                                  className="h-24"
-                                />
-                                <Textarea
-                                  value={workOrderDraft.correction ?? ''}
-                                  onChange={(event) =>
-                                    setWorkOrderDraft((prev) => ({ ...prev, correction: event.target.value }))
-                                  }
-                                  placeholder="Correction"
-                                  className="h-24"
-                                />
-                              </div>
-                            )}
                             {!isEditing && (
                               <div className="border rounded-md p-3 bg-muted/30 space-y-2">
                                 <div className="grid gap-x-4 gap-y-2 sm:grid-cols-2 text-sm">
@@ -2779,20 +2779,6 @@ const jobReadinessValues = Object.values(jobReadinessById);
                                     <span className="font-medium">
                                       {JOB_STATUS_OPTIONS.find((o) => o.value === job.status)?.label || job.status}
                                     </span>
-                                  </div>
-                                </div>
-                                <div className="grid gap-2 md:grid-cols-3 text-sm">
-                                  <div>
-                                    <span className="text-muted-foreground">Complaint:</span>{' '}
-                                    <span>{currentOrder?.complaint || '—'}</span>
-                                  </div>
-                                  <div>
-                                    <span className="text-muted-foreground">Cause:</span>{' '}
-                                    <span>{currentOrder?.cause || '—'}</span>
-                                  </div>
-                                  <div>
-                                    <span className="text-muted-foreground">Correction:</span>{' '}
-                                    <span>{currentOrder?.correction || '—'}</span>
                                   </div>
                                 </div>
                               </div>
