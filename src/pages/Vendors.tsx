@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { DataTable, Column } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
-import { Plus } from 'lucide-react';
+import { Plus, Upload } from 'lucide-react';
 import { useRepos } from '@/repos';
 import type { Vendor } from '@/types';
 import { QuickAddDialog } from '@/components/ui/quick-add-dialog';
@@ -12,12 +12,14 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
+import { ImportVendorsDialog } from '@/components/vendors/ImportVendorsDialog';
 
 export default function Vendors() {
   const navigate = useNavigate();
   const { vendors, addVendor } = useRepos().vendors;
   const { toast } = useToast();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
     vendor_name: '',
     phone: '',
@@ -66,6 +68,10 @@ export default function Vendors() {
         actions={
           <div className="flex items-center gap-2">
             <ModuleHelpButton moduleKey="vendors" context={{ isEmpty: !hasAnyVendors }} />
+            <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
+              <Upload className="w-4 h-4 mr-2" />
+              Import
+            </Button>
             <Button onClick={() => setDialogOpen(true)}>
               <Plus className="w-4 h-4 mr-2" />
               Add Vendor
@@ -81,6 +87,12 @@ export default function Vendors() {
         searchPlaceholder="Search vendors..."
         onRowClick={(vendor) => navigate(`/vendors/${vendor.id}`)}
         emptyMessage="No vendors found. Add your first vendor to get started."
+      />
+
+      <ImportVendorsDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
+        vendors={vendors}
       />
 
       <QuickAddDialog

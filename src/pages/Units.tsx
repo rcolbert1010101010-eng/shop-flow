@@ -12,11 +12,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Plus, MoreHorizontal, Wrench, CalendarClock, ShoppingCart } from 'lucide-react';
+import { Plus, MoreHorizontal, Wrench, CalendarClock, ShoppingCart, Upload } from 'lucide-react';
 import { useRepos } from '@/repos';
 import { useToast } from '@/hooks/use-toast';
 import type { Unit } from '@/types';
 import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
+import { ImportUnitsDialog } from '@/components/units/ImportUnitsDialog';
 
 const OPEN_WO_STATUSES = ['OPEN', 'IN_PROGRESS', 'SCHEDULED', 'ESTIMATE', 'HOLD'];
 const OPEN_SO_STATUSES = ['OPEN', 'APPROVED', 'ESTIMATE', 'QUOTE', 'PARTIAL'];
@@ -34,6 +35,7 @@ export default function Units() {
   const { createSalesOrder } = repos.salesOrders;
   const [customerFilter, setCustomerFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ACTIVE' | 'INACTIVE' | 'ALL'>('ACTIVE');
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
 
   const unitActivity = useMemo(() => {
     const map: Record<
@@ -215,6 +217,10 @@ export default function Units() {
         actions={
           <div className="flex items-center gap-2">
             <ModuleHelpButton moduleKey="units" context={{ isEmpty: !hasAnyUnits }} />
+            <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
+              <Upload className="w-4 h-4 mr-2" />
+              Import
+            </Button>
             <Button onClick={() => navigate('/units/new')}>
               <Plus className="w-4 h-4 mr-2" />
               Add Unit
@@ -265,6 +271,13 @@ export default function Units() {
         searchPlaceholder="Search units..."
         onRowClick={(unit) => navigate(`/units/${unit.id}`)}
         emptyMessage="No units found. Add your first unit to get started."
+      />
+
+      <ImportUnitsDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
+        units={units}
+        customers={customers}
       />
     </div>
   );
