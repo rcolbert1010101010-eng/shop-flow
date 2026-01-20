@@ -106,8 +106,8 @@ create policy "integration_connections_write_admin_only"
 on public.integration_connections
 for all
 to authenticated
-using (public.current_app_role() = 'admin')
-with check (public.current_app_role() = 'admin');
+using (public.current_app_role() = 'ADMIN')
+with check (public.current_app_role() = 'ADMIN');
 
 alter table public.accounting_integration_config enable row level security;
 alter table public.accounting_integration_config force row level security;
@@ -122,8 +122,8 @@ create policy "accounting_integration_config_write_admin_only"
 on public.accounting_integration_config
 for all
 to authenticated
-using (public.current_app_role() = 'admin')
-with check (public.current_app_role() = 'admin');
+using (public.current_app_role() = 'ADMIN')
+with check (public.current_app_role() = 'ADMIN');
 
 alter table public.external_references enable row level security;
 alter table public.external_references force row level security;
@@ -138,8 +138,8 @@ create policy "external_references_write_admin_only"
 on public.external_references
 for all
 to authenticated
-using (public.current_app_role() = 'admin')
-with check (public.current_app_role() = 'admin');
+using (public.current_app_role() = 'ADMIN')
+with check (public.current_app_role() = 'ADMIN');
 
 alter table public.accounting_exports enable row level security;
 alter table public.accounting_exports force row level security;
@@ -154,8 +154,8 @@ create policy "accounting_exports_write_admin_only"
 on public.accounting_exports
 for all
 to authenticated
-using (public.current_app_role() = 'admin')
-with check (public.current_app_role() = 'admin');
+using (public.current_app_role() = 'ADMIN')
+with check (public.current_app_role() = 'ADMIN');
 
 -- Helper RPC to queue invoice export without relaxing RLS on accounting_exports
 drop function if exists public.queue_invoice_export(uuid);
@@ -468,3 +468,128 @@ end;
 $$;
 
 grant execute on function public.queue_payment_export_v1(uuid) to authenticated;
+
+-- Phase 2A.1: Tenant-level QuickBooks connection storage
+create table if not exists public.quickbooks_connections (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null,
+  realm_id text null,
+  status text not null default 'DISCONNECTED',
+  access_token_enc text null,
+  refresh_token_enc text null,
+  expires_at timestamptz null,
+  scope text null,
+  company_name text null,
+  connected_by uuid null,
+  connected_at timestamptz null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(tenant_id)
+);
+create index if not exists quickbooks_connections_tenant_idx on public.quickbooks_connections (tenant_id);
+create index if not exists quickbooks_connections_status_idx on public.quickbooks_connections (status);
+
+create table if not exists public.quickbooks_customer_map (
+  tenant_id uuid not null,
+  customer_id uuid not null,
+  qb_customer_id text not null,
+  created_at timestamptz not null default now(),
+  primary key (tenant_id, customer_id),
+  unique(tenant_id, qb_customer_id)
+);
+
+do $$
+begin
+  if not exists (select 1 from information_schema.columns where table_name='accounting_exports' and column_name='remote_id') then
+    alter table public.accounting_exports add column remote_id text null;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='accounting_exports' and column_name='provider_meta_json') then
+    alter table public.accounting_exports add column provider_meta_json jsonb null;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='accounting_exports' and column_name='sent_at') then
+    alter table public.accounting_exports add column sent_at timestamptz null;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='accounting_exports' and column_name='next_attempt_at') then
+    alter table public.accounting_exports add column next_attempt_at timestamptz null;
+  end if;
+end$$;
+
+create index if not exists accounting_exports_poll_idx on public.accounting_exports (provider, status, export_type, next_attempt_at);
+create index if not exists accounting_exports_provider_status_type_idx on public.accounting_exports (provider, status, export_type);
+
+-- RLS for quickbooks_connections
+alter table public.quickbooks_connections enable row level security;
+alter table public.quickbooks_connections force row level security;
+drop policy if exists "quickbooks_connections_select_admin" on public.quickbooks_connections;
+create policy "quickbooks_connections_select_admin"
+on public.quickbooks_connections
+for select
+to authenticated
+using (
+  public.current_app_role() = 'ADMIN'
+  and (current_setting('request.jwt.claims', true)::jsonb ? 'tenant_id')
+  and tenant_id = (current_setting('request.jwt.claims', true)::jsonb ->> 'tenant_id')::uuid
+);
+drop policy if exists "quickbooks_connections_write_service_only" on public.quickbooks_connections;
+create policy "quickbooks_connections_write_service_only"
+on public.quickbooks_connections
+for all
+to authenticated
+using (false)
+with check (false);
+revoke select (access_token_enc, refresh_token_enc) on public.quickbooks_connections from authenticated;
+
+-- OAuth state storage (service-only)
+create table if not exists public.quickbooks_oauth_states (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null,
+  user_id uuid not null,
+  nonce text not null,
+  expires_at timestamptz not null,
+  consumed_at timestamptz null,
+  created_at timestamptz not null default now(),
+  unique(nonce)
+);
+alter table public.quickbooks_oauth_states enable row level security;
+alter table public.quickbooks_oauth_states force row level security;
+drop policy if exists "quickbooks_oauth_states_service_only" on public.quickbooks_oauth_states;
+create policy "quickbooks_oauth_states_service_only"
+on public.quickbooks_oauth_states
+for all
+to authenticated
+using (false)
+with check (false);
+
+-- RLS for quickbooks_customer_map
+alter table public.quickbooks_customer_map enable row level security;
+alter table public.quickbooks_customer_map force row level security;
+drop policy if exists "quickbooks_customer_map_select_admin" on public.quickbooks_customer_map;
+create policy "quickbooks_customer_map_select_admin"
+on public.quickbooks_customer_map
+for select
+to authenticated
+using (
+  public.current_app_role() = 'ADMIN'
+  and (current_setting('request.jwt.claims', true)::jsonb ? 'tenant_id')
+  and tenant_id = (current_setting('request.jwt.claims', true)::jsonb ->> 'tenant_id')::uuid
+);
+drop policy if exists "quickbooks_customer_map_write_service_only" on public.quickbooks_customer_map;
+create policy "quickbooks_customer_map_write_service_only"
+on public.quickbooks_customer_map
+for all
+to authenticated
+using (false)
+with check (false);
+
+-- UI-safe view for connection status (no tokens)
+drop view if exists public.v_quickbooks_connection_status;
+create view public.v_quickbooks_connection_status as
+select
+  tenant_id,
+  status,
+  realm_id,
+  company_name,
+  connected_at,
+  expires_at
+from public.quickbooks_connections;
+grant select on public.v_quickbooks_connection_status to authenticated;

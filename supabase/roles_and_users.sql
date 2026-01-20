@@ -54,7 +54,7 @@ stable
 security definer
 set search_path = public
 as $$
-  select coalesce(
+  select upper(coalesce(
     (
       select r.key
       from public.user_roles ur
@@ -63,8 +63,8 @@ as $$
       limit 1
     ),
     (select role::text from public.profiles where id = auth.uid()),
-    'TECH'
-  );
+    'TECHNICIAN'
+  ));
 $$;
 
 create or replace function public.is_admin(uid uuid)
@@ -152,3 +152,29 @@ using (public.is_admin(auth.uid()))
 with check (public.is_admin(auth.uid()));
 alter table public.user_roles enable row level security;
 alter table public.user_roles force row level security;
+
+-- legacy profiles table (Admin manage, users see self)
+alter table public.profiles enable row level security;
+alter table public.profiles force row level security;
+
+drop policy if exists "profiles_select_self" on public.profiles;
+create policy "profiles_select_self"
+on public.profiles
+for select
+to authenticated
+using (id = auth.uid());
+
+drop policy if exists "profiles_select_admin" on public.profiles;
+create policy "profiles_select_admin"
+on public.profiles
+for select
+to authenticated
+using (public.current_app_role() = 'ADMIN');
+
+drop policy if exists "profiles_update_admin_only" on public.profiles;
+create policy "profiles_update_admin_only"
+on public.profiles
+for update
+to authenticated
+using (public.current_app_role() = 'ADMIN')
+with check (public.current_app_role() = 'ADMIN');

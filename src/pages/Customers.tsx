@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { DataTable, Column } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
-import { Plus } from 'lucide-react';
+import { Plus, Upload } from 'lucide-react';
 import { useRepos } from '@/repos';
 import type { Customer } from '@/types';
 import { QuickAddDialog } from '@/components/ui/quick-add-dialog';
@@ -14,6 +14,7 @@ import { HelpTooltip } from '@/components/help/HelpTooltip';
 import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
+import { ImportCustomersDialog } from '@/components/customers/ImportCustomersDialog';
 
 export default function Customers() {
   const navigate = useNavigate();
@@ -22,6 +23,7 @@ export default function Customers() {
   const { customerContacts } = repos.customerContacts;
   const { toast } = useToast();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
     company_name: '',
     contact_name: '',
@@ -128,6 +130,10 @@ export default function Customers() {
           actions={
             <>
               <ModuleHelpButton moduleKey="customers" context={{ isEmpty: !hasAnyCustomers }} />
+              <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
+                <Upload className="w-4 h-4 mr-2" />
+                Import
+              </Button>
               <Button
                 onClick={() => setDialogOpen(true)}
                 title="Create a new customer record for estimates, orders, and work orders."
@@ -152,6 +158,12 @@ export default function Customers() {
         searchPlaceholder="Search customers..."
         onRowClick={(customer) => navigate(`/customers/${customer.id}`)}
         emptyMessage="No customers found. Add your first customer to get started."
+      />
+
+      <ImportCustomersDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
+        customers={customers}
       />
 
       <QuickAddDialog

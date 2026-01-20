@@ -37,4 +37,10 @@ export default tseslint.config(
       "@typescript-eslint/no-require-imports": "off",
     },
   },
+  {
+    files: ["src/components/ui/**/*.tsx", "src/components/help/AutoHelp.tsx"],
+    rules: {
+      "react-refresh/only-export-components": "off",
+    },
+  },
 );

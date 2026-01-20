@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { quickbooksIntegrationHelp } from '@/help/quickbooksIntegrationHelp';
+// Roadmap: see docs/accounting/quickbooks_roadmap.md for phased implementation details.
 import { useToast } from '@/components/ui/use-toast';
 import { useQuickBooksIntegration } from '@/hooks/useQuickBooksIntegration';
 import { usePermissions } from '@/security/usePermissions';
@@ -37,6 +39,8 @@ export default function QuickBooksIntegration() {
   const [payloadDialogOpen, setPayloadDialogOpen] = useState(false);
   const [payloadContent, setPayloadContent] = useState<string>('');
   const [payloadLoading, setPayloadLoading] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [senderRunning, setSenderRunning] = useState(false);
 
   const handleSave = async () => {
     if (!draft) return;
@@ -121,6 +125,42 @@ export default function QuickBooksIntegration() {
     return status;
   };
 
+  const handleRunSender = async () => {
+    setSenderRunning(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('qb-sender');
+      if (error) {
+        toast({ title: 'Sender failed', description: error.message, variant: 'destructive' });
+      } else {
+        toast({
+          title: 'Sender ran',
+          description: `Processed ${data?.processed ?? 0} (claimed ${data?.claimed ?? 0} / scanned ${data?.scanned ?? 0})`,
+        });
+      }
+    } catch (err: any) {
+      toast({ title: 'Sender failed', description: err?.message || 'Unknown error', variant: 'destructive' });
+    } finally {
+      setSenderRunning(false);
+    }
+  };
+
+  const handleConnect = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke('qb-oauth-start');
+      if (error || !data?.url) {
+        toast({
+          title: 'Unable to start connect',
+          description: error?.message || 'No URL returned',
+          variant: 'destructive',
+        });
+        return;
+      }
+      window.location.href = data.url as string;
+    } catch (err: any) {
+      toast({ title: 'Unable to start connect', description: err?.message || 'Unknown error', variant: 'destructive' });
+    }
+  };
+
   if (loading || !draft) {
     return (
       <div className="page-container">
@@ -134,7 +174,15 @@ export default function QuickBooksIntegration() {
 
   return (
     <div className="page-container space-y-4">
-      <PageHeader title="QuickBooks Integration" backTo="/settings" />
+      <PageHeader
+        title="QuickBooks Integration"
+        backTo="/settings"
+        actions={
+          <Button variant="outline" size="sm" onClick={() => setHelpOpen(true)}>
+            Help
+          </Button>
+        }
+      />
 
       {error && (
         <Alert variant="destructive">
@@ -153,33 +201,53 @@ export default function QuickBooksIntegration() {
         <CardHeader>
           <CardTitle>Connection</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-sm font-semibold">{providerName}</div>
-              <div className="text-xs text-muted-foreground">Status: {statusBadge}</div>
+          <CardContent className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-semibold">{providerName}</div>
+                <div className="text-xs text-muted-foreground">Status: {statusBadge}</div>
+              </div>
+              <div className="flex gap-2">
+                {canEdit && connectedStatus !== 'CONNECTED' && (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleConnect}
+                    disabled={saving}
+                  >
+                    Connect to QuickBooks
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setConnectedStatus('CONNECTED')}
+                  disabled={saving || !canEdit}
+                >
+                  Simulate Connect
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setConnectedStatus('DISCONNECTED')}
+                  disabled={saving || !canEdit}
+                >
+                  Disconnect
+                </Button>
+                {canEdit && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleRunSender}
+                    disabled={senderRunning}
+                  >
+                    {senderRunning ? 'Running...' : 'Run Sender Now'}
+                  </Button>
+                )}
+              </div>
             </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setConnectedStatus('CONNECTED')}
-                disabled={saving || !canEdit}
-              >
-                Simulate Connect
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setConnectedStatus('DISCONNECTED')}
-                disabled={saving || !canEdit}
-              >
-                Disconnect
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
 
       <Card>
         <CardHeader>
@@ -414,6 +482,32 @@ export default function QuickBooksIntegration() {
           </div>
           <div className="border rounded-md bg-muted/40 max-h-[400px] overflow-auto p-3 font-mono text-xs whitespace-pre-wrap">
             {payloadContent || (payloadLoading ? 'Loading…' : 'No payload')}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{quickbooksIntegrationHelp.title}</DialogTitle>
+            <DialogDescription>How to set up and use the offline export queue</DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-auto space-y-4 text-sm">
+            {quickbooksIntegrationHelp.sections.map((section) => (
+              <div key={section.heading} className="space-y-1">
+                <div className="font-semibold">{section.heading}</div>
+                <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
+                  {section.bullets.map((bullet) => (
+                    <li key={bullet}>{bullet}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-end">
+            <Button variant="outline" onClick={() => setHelpOpen(false)}>
+              Close
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

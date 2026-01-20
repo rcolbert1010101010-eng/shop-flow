@@ -18,13 +18,12 @@ export function useSystemSettings() {
         await ensureDefaultSettings((missing) => settingsRepo.updateSettings(missing));
       } catch (err) {
         if (settingsPreviewEnabled) {
-          // eslint-disable-next-line no-console
           console.warn('ensureDefaultSettings failed', err);
         }
       }
     };
     void runSeed();
-  }, [settingsRepo]);
+  }, [settingsRepo, settingsPreviewEnabled]);
 
   const get = (key: SystemSettingKey) => systemSettingsRepo.getResolvedSetting(key).value;
   const getResolved = (key: SystemSettingKey) => systemSettingsRepo.getResolvedSetting(key);

@@ -452,7 +452,7 @@ export default function Dashboard() {
       parts: partsResults,
     });
     setIsGlobalSearching(false);
-  }, [customers, customersMap, globalSearchQuery, navigate, openWorkOrders, parts, units, unitsMap]);
+  }, [customers, customersMap, globalSearchQuery, openWorkOrders, parts, units, unitsMap]);
 
   const managerKpiCards = useMemo(() => {
     const overdueCount = openWorkOrders.filter((wo) => {
@@ -749,13 +749,14 @@ export default function Dashboard() {
       return valueA - valueB;
     });
   }, [
+    activeView.id,
     activeView.alertOrder,
     waitingPartsWorkOrders,
     waitingApprovalWorkOrders,
     negativeInventoryParts,
     openPurchaseOrders,
-    navigate,
     customersMap,
+    navigate,
   ]);
 
   const techSnapshot = useMemo(() => {
