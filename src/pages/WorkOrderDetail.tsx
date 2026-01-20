@@ -70,6 +70,20 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 import { normalizeQty, formatQtyWithUom } from '@/lib/utils';
 import { HelpTooltip } from '@/components/help/HelpTooltip';
 import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
+import { supabase } from '@/integrations/supabase/client';
+import { usePermissions } from '@/security/usePermissions';
+import { ProfitabilityPanel } from '@/components/orders/ProfitabilityPanel';
+import type {
+  FabJobLine,
+  PlasmaJobLine,
+  WorkOrder,
+  WorkOrderJobLine,
+  WorkOrderJobPartsStatus,
+  WorkOrderJobStatus,
+  WorkOrderPartLine,
+  WorkOrderLaborLine,
+  WorkOrderTimeEntry,
+} from '@/types';
 
 const toNumeric = (value: number | string | null | undefined) => {
   if (typeof value === 'number') return value;
@@ -79,25 +93,22 @@ const toNumeric = (value: number | string | null | undefined) => {
   }
   return 0;
 };
-import { usePermissions } from '@/security/usePermissions';
-import { ProfitabilityPanel } from '@/components/orders/ProfitabilityPanel';
-import type {
-  FabJobLine,
-  PlasmaJobLine,
-  WorkOrderJobLine,
-  WorkOrderJobPartsStatus,
-  WorkOrderJobStatus,
-  WorkOrderPartLine,
-  WorkOrderLaborLine,
-  WorkOrderTimeEntry,
-} from '@/types';
 
 type JobDraft = {
   title: string;
+  status: WorkOrderJobStatus;
+};
+
+type WorkOrderCccDraft = {
   complaint: string;
   cause: string;
   correction: string;
-  status: WorkOrderJobStatus;
+};
+
+type WorkOrderWithCcc = WorkOrder & {
+  complaint?: string | null;
+  cause?: string | null;
+  correction?: string | null;
 };
 
 type JobProfitSummary = {
@@ -286,8 +297,8 @@ export default function WorkOrderDetail() {
   const unitFromQuery = searchParams.get('unit_id') || '';
   const [selectedCustomerId, setSelectedCustomerId] = useState(searchParams.get('customer_id') || '');
   const [selectedUnitId, setSelectedUnitId] = useState(unitFromQuery);
-  const [order, setOrder] = useState(() => {
-    if (!isNew) return workOrders.find((o) => o.id === id);
+  const [order, setOrder] = useState<WorkOrderWithCcc | null>(() => {
+    if (!isNew) return (workOrders.find((o) => o.id === id) as WorkOrderWithCcc | undefined) ?? null;
     return null;
   });
 
@@ -331,18 +342,7 @@ export default function WorkOrderDetail() {
   const [coreReturnLineId, setCoreReturnLineId] = useState<string | null>(null);
   const [createClaimOpen, setCreateClaimOpen] = useState(false);
   const [selectedClaimVendor, setSelectedClaimVendor] = useState('');
-  const [jobDrafts, setJobDrafts] = useState<
-    Record<
-      string,
-      {
-        title: string;
-        complaint: string;
-        cause: string;
-        correction: string;
-        status: WorkOrderJobStatus;
-      }
-    >
-  >({});
+  const [jobDrafts, setJobDrafts] = useState<Record<string, JobDraft>>({});
   const [jobEditingMode, setJobEditingMode] = useState<Record<string, boolean>>({});
   const [jobSaving, setJobSaving] = useState<Record<string, boolean>>({});
   const [paymentAmount, setPaymentAmount] = useState('');
@@ -363,11 +363,21 @@ export default function WorkOrderDetail() {
   const [isBrowseCustomersOpen, setIsBrowseCustomersOpen] = useState(false);
   const [browseCustomersActiveOnly, setBrowseCustomersActiveOnly] = useState(true);
   const [browseCustomersPage, setBrowseCustomersPage] = useState(0);
+  const prevOrderIdRef = useRef<string | undefined>(undefined);
+  const [activeTab, setActiveTab] = useState<
+    'overview' | 'jobs' | 'activity' | 'parts' | 'labor' | 'fabrication' | 'plasma' | 'time'
+  >('overview');
   const { get: getSystemSetting } = useSystemSettings();
-  const currentOrder = workOrders.find((o) => o.id === id) || order;
+  const currentOrder =
+    (workOrders.find((o) => o.id === id) as WorkOrderWithCcc | undefined) || order;
   const currentOrderId = currentOrder?.id ?? null;
   const currentOrderUpdatedAt =
     (currentOrder as any)?.updated_at ?? (currentOrder as any)?.updatedAt ?? null;
+  const [workOrderDraft, setWorkOrderDraft] = useState<WorkOrderCccDraft>(() => ({
+    complaint: currentOrder?.complaint ?? '',
+    cause: currentOrder?.cause ?? '',
+    correction: currentOrder?.correction ?? '',
+  }));
   const scheduleItems = schedulingRepo.list();
   const isScheduled =
     !!currentOrder &&
@@ -527,6 +537,14 @@ const jobReadinessValues = Object.values(jobReadinessById);
   ].filter((chip): chip is BlockerChip => Boolean(chip));
 
   useEffect(() => {
+    setWorkOrderDraft({
+      complaint: currentOrder?.complaint ?? '',
+      cause: currentOrder?.cause ?? '',
+      correction: currentOrder?.correction ?? '',
+    });
+  }, [currentOrder?.complaint, currentOrder?.cause, currentOrder?.correction, currentOrder?.id]);
+
+  useEffect(() => {
     if (!isNew && currentOrder?.id) {
       woEnsureDefaultJobLine(currentOrder.id);
     }
@@ -541,9 +559,6 @@ const jobReadinessValues = Object.values(jobReadinessById);
         if (!next[job.id]) {
           next[job.id] = {
             title: job.title,
-            complaint: job.complaint ?? '',
-            cause: job.cause ?? '',
-            correction: job.correction ?? '',
             status: job.status,
           };
           updated = true;
@@ -567,11 +582,7 @@ const jobReadinessValues = Object.values(jobReadinessById);
     if (!draft) return;
 
     // Only auto-edit if the draft still matches the pristine job state
-    const isPristine =
-      draft.title === generalJob.title &&
-      draft.complaint === (generalJob.complaint ?? '') &&
-      draft.cause === (generalJob.cause ?? '') &&
-      draft.correction === (generalJob.correction ?? '');
+    const isPristine = draft.title === generalJob.title && draft.status === generalJob.status;
 
     if (!isPristine) return;
 
@@ -601,22 +612,88 @@ const jobReadinessValues = Object.values(jobReadinessById);
     }));
   };
 
-  const handleSaveJob = (jobId: string) => {
+ const handleSaveJob = async (jobId: string) => {
     const draft = jobDrafts[jobId];
     if (!draft) return;
     const job = jobLines.find((j) => j.id === jobId);
+    const workOrderId = job?.work_order_id ?? currentOrder?.id ?? order?.id;
+    if (!workOrderId) return;
     setJobSaving((prev) => ({ ...prev, [jobId]: true }));
-    woUpdateJobLine(jobId, {
-      title: draft.title.trim() || job?.title || 'Job',
-      complaint: draft.complaint || null,
-      cause: draft.cause || null,
-      correction: draft.correction || null,
+    const complaint = workOrderDraft.complaint || null;
+    const cause = workOrderDraft.cause || null;
+    const correction = workOrderDraft.correction || null;
+    const payload = {
+      description: draft.title.trim() || job?.title || 'Job',
       status: draft.status,
-    });
-    // Switch to read-only mode after save
-    setJobEditingMode((prev) => ({ ...prev, [jobId]: false }));
-    setJobSaving((prev) => ({ ...prev, [jobId]: false }));
-    toast({ title: 'Job Saved', description: `${draft.title.trim() || job?.title || 'Job'} has been saved` });
+      work_order_id: workOrderId,
+    };
+    try {
+      const { data, error } = await supabase
+        .from('work_order_labor_lines')
+        .update(payload)
+        .eq('id', jobId)
+        .select()
+        .single();
+      if (error) {
+        toast({ title: 'Save failed', description: error.message, variant: 'destructive' });
+        return;
+      }
+      const updated = data ?? payload;
+      const { error: woError } = await supabase
+        .from('work_orders')
+        .update({
+          complaint,
+          cause,
+          correction,
+        })
+        .eq('id', workOrderId);
+      if (woError) {
+        toast({ title: 'Save failed', description: woError.message, variant: 'destructive' });
+        return;
+      }
+      woUpdateJobLine(jobId, {
+        title: updated.description,
+        status: updated.status,
+      });
+      setJobDrafts((prev) => ({
+        ...prev,
+        [jobId]: {
+          title: updated.description ?? '',
+          status: updated.status as WorkOrderJobStatus,
+        },
+      }));
+      setWorkOrderDraft({
+        complaint: complaint ?? '',
+        cause: cause ?? '',
+        correction: correction ?? '',
+      });
+      setOrder((prev) =>
+        prev && prev.id === workOrderId
+          ? {
+              ...prev,
+              complaint,
+              cause,
+              correction,
+            }
+          : prev
+      );
+      useShopStore.setState((state) => ({
+        workOrders: state.workOrders.map((wo) =>
+          wo.id === workOrderId
+            ? {
+                ...wo,
+                complaint,
+                cause,
+                correction,
+              }
+            : wo
+        ),
+      }));
+      setJobEditingMode((prev) => ({ ...prev, [jobId]: false }));
+      toast({ title: 'Job Saved', description: `${updated.description || 'Job'} has been saved` });
+    } finally {
+      setJobSaving((prev) => ({ ...prev, [jobId]: false }));
+    }
   };
 
   const handleEditJob = (jobId: string) => {
@@ -627,9 +704,6 @@ const jobReadinessValues = Object.values(jobReadinessById);
       ...prev,
       [jobId]: prev[jobId] ?? {
         title: job.title,
-        complaint: job.complaint ?? '',
-        cause: job.cause ?? '',
-        correction: job.correction ?? '',
         status: job.status,
       },
     }));
@@ -644,12 +718,14 @@ const jobReadinessValues = Object.values(jobReadinessById);
       ...prev,
       [jobId]: {
         title: job.title,
-        complaint: job.complaint ?? '',
-        cause: job.cause ?? '',
-        correction: job.correction ?? '',
         status: job.status,
       },
     }));
+    setWorkOrderDraft({
+      complaint: currentOrder?.complaint ?? '',
+      cause: currentOrder?.cause ?? '',
+      correction: currentOrder?.correction ?? '',
+    });
     setJobEditingMode((prev) => ({ ...prev, [jobId]: false }));
   };
 
@@ -659,6 +735,18 @@ const jobReadinessValues = Object.values(jobReadinessById);
       toast({ title: 'Job Deleted', description: 'The job has been removed' });
       setDeleteJobDialog({ open: false, jobId: null, jobTitle: '' });
       setDeleteJobConfirmText('');
+      setJobDrafts((prev) => {
+        const next = { ...prev };
+        delete next[jobId];
+        return next;
+      });
+      useShopStore.setState((state) => ({
+        workOrderJobLines: state.workOrderJobLines.filter((j) => j.id !== jobId),
+      }));
+      const remaining = jobLines.filter((j) => j.id !== jobId);
+      if (selectedJobId === jobId) {
+        setSelectedJobId(remaining[0]?.id ?? null);
+      }
     } else {
       toast({ title: 'Cannot Delete Job', description: result.error, variant: 'destructive' });
     }
@@ -677,9 +765,6 @@ const jobReadinessValues = Object.values(jobReadinessById);
       ...prev,
       [job.id]: {
         title: job.title,
-        complaint: job.complaint ?? '',
-        cause: job.cause ?? '',
-        correction: job.correction ?? '',
         status: job.status,
       },
     }));
@@ -1651,10 +1736,6 @@ const jobReadinessValues = Object.values(jobReadinessById);
   const otherCharges = otherChargeLines.reduce((sum, line) => sum + toNumeric(line.total_price), 0);
   const fabricationTotal = fabTotal;
   const overviewGrandTotal = partsSubtotal + laborSubtotal + fabricationTotal + plasmaTotal + otherCharges;
-  const prevOrderIdRef = useRef<string | undefined>(undefined);
-  const [activeTab, setActiveTab] = useState<
-    'overview' | 'jobs' | 'activity' | 'parts' | 'labor' | 'fabrication' | 'plasma' | 'time'
-  >('overview');
   useEffect(() => {
     if (sheetPrintMode && sheetPrintMode !== 'NONE') {
       document.body.setAttribute('data-print-mode', sheetPrintMode);
@@ -2661,20 +2742,26 @@ const jobReadinessValues = Object.values(jobReadinessById);
                             {isEditing && (
                               <div className="grid gap-2 md:grid-cols-3">
                                 <Textarea
-                                  value={draft?.complaint ?? job.complaint ?? ''}
-                                  onChange={(event) => handleJobDraftChange(job.id, 'complaint', event.target.value)}
+                                  value={workOrderDraft.complaint ?? ''}
+                                  onChange={(event) =>
+                                    setWorkOrderDraft((prev) => ({ ...prev, complaint: event.target.value }))
+                                  }
                                   placeholder="Complaint"
                                   className="h-24"
                                 />
                                 <Textarea
-                                  value={draft?.cause ?? job.cause ?? ''}
-                                  onChange={(event) => handleJobDraftChange(job.id, 'cause', event.target.value)}
+                                  value={workOrderDraft.cause ?? ''}
+                                  onChange={(event) =>
+                                    setWorkOrderDraft((prev) => ({ ...prev, cause: event.target.value }))
+                                  }
                                   placeholder="Cause"
                                   className="h-24"
                                 />
                                 <Textarea
-                                  value={draft?.correction ?? job.correction ?? ''}
-                                  onChange={(event) => handleJobDraftChange(job.id, 'correction', event.target.value)}
+                                  value={workOrderDraft.correction ?? ''}
+                                  onChange={(event) =>
+                                    setWorkOrderDraft((prev) => ({ ...prev, correction: event.target.value }))
+                                  }
                                   placeholder="Correction"
                                   className="h-24"
                                 />
@@ -2697,15 +2784,15 @@ const jobReadinessValues = Object.values(jobReadinessById);
                                 <div className="grid gap-2 md:grid-cols-3 text-sm">
                                   <div>
                                     <span className="text-muted-foreground">Complaint:</span>{' '}
-                                    <span>{job.complaint || '—'}</span>
+                                    <span>{currentOrder?.complaint || '—'}</span>
                                   </div>
                                   <div>
                                     <span className="text-muted-foreground">Cause:</span>{' '}
-                                    <span>{job.cause || '—'}</span>
+                                    <span>{currentOrder?.cause || '—'}</span>
                                   </div>
                                   <div>
                                     <span className="text-muted-foreground">Correction:</span>{' '}
-                                    <span>{job.correction || '—'}</span>
+                                    <span>{currentOrder?.correction || '—'}</span>
                                   </div>
                                 </div>
                               </div>
