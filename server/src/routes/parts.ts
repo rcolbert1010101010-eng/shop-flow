@@ -6,6 +6,18 @@ let partsStore: Part[] = [];
 
 export const partsRouter = Router();
 
+const coerceBoolean = (value: unknown): boolean | undefined => {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "1", "yes", "y"].includes(normalized)) return true;
+    if (["false", "0", "no", "n"].includes(normalized)) return false;
+  }
+  return undefined;
+};
+
 /**
  * GET /parts
  * Returns all parts in memory.
@@ -30,6 +42,8 @@ partsRouter.post("/parts", (req: Request, res: Response) => {
     return res.status(400).json({ error: "Request body must be an object" });
   }
 
+  const isConsumable = coerceBoolean((body as any).is_consumable);
+  const includeInValuation = coerceBoolean((body as any).include_in_valuation);
   const now = new Date().toISOString();
   const id = (body as any).id ?? Date.now().toString();
 
@@ -52,11 +66,17 @@ partsRouter.post("/parts", (req: Request, res: Response) => {
     return res.status(409).json({ error: "PART_NUMBER_NOT_UNIQUE" });
   }
 
+  const isConsumableValue = isConsumable ?? false;
+  const includeInValuationValue =
+    includeInValuation ?? (isConsumableValue ? false : true);
+
   const part: Part = {
     ...body,
     id,
     created_at: (body as any).created_at ?? now,
     updated_at: now,
+    is_consumable: isConsumableValue,
+    include_in_valuation: includeInValuationValue,
   };
 
   partsStore.push(part);
@@ -116,10 +136,25 @@ partsRouter.put("/parts/:id", (req: Request, res: Response) => {
   }
 
   const now = new Date().toISOString();
+  const isConsumable = coerceBoolean((body as any).is_consumable);
+  const includeInValuation = coerceBoolean((body as any).include_in_valuation);
+  const sanitized: Part = { ...body };
+
+  if (isConsumable !== undefined) {
+    sanitized.is_consumable = isConsumable;
+  } else {
+    delete sanitized.is_consumable;
+  }
+
+  if (includeInValuation !== undefined) {
+    sanitized.include_in_valuation = includeInValuation;
+  } else {
+    delete sanitized.include_in_valuation;
+  }
 
   const updated: Part = {
     ...existing,
-    ...body,
+    ...sanitized,
     id: (existing as any).id, // never change id
     updated_at: now,
   };
