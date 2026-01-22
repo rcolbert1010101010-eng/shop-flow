@@ -123,6 +123,8 @@ export interface Part {
   category_id: string;
   cost: number;
   selling_price: number;
+  is_consumable: boolean;
+  include_in_valuation: boolean;
   quantity_on_hand: number;
   core_required: boolean;
   core_charge: number;
