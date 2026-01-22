@@ -29,6 +29,14 @@ import { SYSTEM_SETTINGS_REGISTRY, type SystemSettingKey } from '@/config/system
 import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 import { usePermissions } from '@/security/usePermissions';
 import { useTheme, type ThemeOption } from '@/hooks/useTheme';
+import { supabase } from '@/integrations/supabase/client';
+
+type TenantMembership = {
+  tenant_id: string;
+  role: string | null;
+  created_at: string | null;
+  tenants?: { name?: string | null } | null;
+};
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -54,6 +62,11 @@ export default function Settings() {
   const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyFilter, setHistoryFilter] = useState<'all' | SystemSettingKey>('all');
+  const [tenantMemberships, setTenantMemberships] = useState<TenantMembership[]>([]);
+  const [activeTenantId, setActiveTenantId] = useState<string | null>(null);
+  const [tenantLoading, setTenantLoading] = useState(false);
+  const [tenantName, setTenantName] = useState('');
+  const [tenantCreating, setTenantCreating] = useState(false);
 
   useEffect(() => {
     if (!isReady) return;
@@ -114,6 +127,52 @@ export default function Settings() {
     };
     void loadHistory();
   }, [historyFilter, listHistory]);
+
+  useEffect(() => {
+    const loadTenants = async () => {
+      if (!supabase) return;
+      setTenantLoading(true);
+      try {
+        const { data: userData, error: userError } = await supabase.auth.getUser();
+        const user = userData?.user;
+        if (userError || !user) {
+          setTenantMemberships([]);
+          setActiveTenantId(null);
+          return;
+        }
+
+        const [membershipResult, profileResult] = await Promise.all([
+          supabase
+            .from('tenant_users')
+            .select('tenant_id, role, created_at, tenants(name)')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: true }),
+          supabase.from('profiles').select('active_tenant_id').eq('id', user.id).maybeSingle(),
+        ]);
+
+        if (membershipResult.error) {
+          toast({
+            title: 'Unable to load tenants',
+            description: membershipResult.error.message,
+            variant: 'destructive',
+          });
+          setTenantMemberships([]);
+        } else {
+          setTenantMemberships((membershipResult.data as TenantMembership[]) ?? []);
+        }
+
+        if (profileResult.error) {
+          setActiveTenantId(null);
+        } else {
+          setActiveTenantId(profileResult.data?.active_tenant_id ?? null);
+        }
+      } finally {
+        setTenantLoading(false);
+      }
+    };
+
+    void loadTenants();
+  }, [toast]);
 
   const applySetting = async (key: SystemSettingKey, newValue: any, reason?: string) => {
     const actorLabel = (draft as any).session_user_name || undefined;
@@ -303,6 +362,84 @@ export default function Settings() {
     }
   };
 
+  const effectiveActiveTenantId =
+    activeTenantId ?? (tenantMemberships.length > 0 ? tenantMemberships[0].tenant_id : null);
+
+  const handleActiveTenantChange = async (tenantId: string) => {
+    if (!supabase) return;
+    try {
+      const { error } = await supabase.rpc('set_active_tenant', { p_tenant_id: tenantId });
+      if (error) {
+        toast({
+          title: 'Unable to set active tenant',
+          description: error.message || 'Permission denied',
+          variant: 'destructive',
+        });
+        return;
+      }
+      window.location.reload();
+    } catch (err: any) {
+      toast({
+        title: 'Unable to set active tenant',
+        description: err?.message || 'Permission denied',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleCreateTenant = async () => {
+    if (!supabase) return;
+    const name = tenantName.trim();
+    if (!name) {
+      toast({
+        title: 'Validation Error',
+        description: 'Tenant name is required',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (name.length > 120) {
+      toast({
+        title: 'Validation Error',
+        description: 'Tenant name is too long',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setTenantCreating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('tenant-create', {
+        body: { name },
+      });
+      if (error) {
+        toast({
+          title: 'Unable to create tenant',
+          description: error.message,
+          variant: 'destructive',
+        });
+        return;
+      }
+      if (!data?.tenant_id) {
+        toast({
+          title: 'Unable to create tenant',
+          description: 'No tenant id returned',
+          variant: 'destructive',
+        });
+        return;
+      }
+      setTenantName('');
+      window.location.reload();
+    } catch (err: any) {
+      toast({
+        title: 'Unable to create tenant',
+        description: err?.message || 'Unknown error',
+        variant: 'destructive',
+      });
+    } finally {
+      setTenantCreating(false);
+    }
+  };
+
   const handleCancel = () => {
     if (isDirty) {
       setShowCancelDialog(true);
@@ -485,6 +622,63 @@ export default function Settings() {
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">Choose your preferred theme or follow your system setting.</p>
+        </div>
+      </div>
+
+      <div className="form-section max-w-xl mt-6">
+        <h2 className="text-lg font-semibold mb-4">Tenants</h2>
+        {!supabase ? (
+          <p className="text-sm text-muted-foreground">Supabase is not configured.</p>
+        ) : tenantLoading ? (
+          <p className="text-sm text-muted-foreground">Loading tenants…</p>
+        ) : tenantMemberships.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No tenant memberships found. Create a tenant to get started.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            <Label>Active tenant</Label>
+            <Select
+              value={effectiveActiveTenantId ?? ''}
+              onValueChange={(value) => handleActiveTenantChange(value)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select tenant" />
+              </SelectTrigger>
+              <SelectContent>
+                {tenantMemberships.map((membership) => (
+                  <SelectItem key={membership.tenant_id} value={membership.tenant_id}>
+                    {membership.tenants?.name || membership.tenant_id}
+                    {membership.role ? ` (${membership.role})` : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {!activeTenantId && tenantMemberships.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                No active tenant selected. Defaulting to your oldest membership.
+              </p>
+            )}
+          </div>
+        )}
+
+        <div className="mt-4 space-y-2">
+          <Label htmlFor="tenant_name">Create tenant</Label>
+          <div className="flex gap-2">
+            <Input
+              id="tenant_name"
+              value={tenantName}
+              onChange={(e) => setTenantName(e.target.value)}
+              placeholder="New tenant name"
+            />
+            <Button
+              variant="outline"
+              onClick={handleCreateTenant}
+              disabled={tenantCreating || !supabase}
+            >
+              {tenantCreating ? 'Creating...' : 'Create tenant'}
+            </Button>
+          </div>
         </div>
       </div>
 
