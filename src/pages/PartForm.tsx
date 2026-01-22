@@ -101,6 +101,8 @@ export default function PartForm() {
     core_charge: part?.core_charge?.toString() || '0',
     barcode: part?.barcode || '',
     is_kit: part?.is_kit ?? false,
+    is_consumable: part?.is_consumable ?? false,
+    include_in_valuation: part?.include_in_valuation ?? true,
     min_qty: part?.min_qty?.toString() || '',
     max_qty: part?.max_qty?.toString() || '',
     bin_location: part?.bin_location ?? '',
@@ -154,6 +156,8 @@ export default function PartForm() {
     category_id: formData.category_id,
     cost: parseFloat(formData.cost) || 0,
     selling_price: parseFloat(formData.selling_price) || 0,
+    is_consumable: formData.is_consumable,
+    include_in_valuation: formData.include_in_valuation,
     quantity_on_hand: 0,
     core_required: part?.core_required ?? false,
     core_charge: parseFloat(formData.core_charge) || 0,
@@ -274,6 +278,8 @@ export default function PartForm() {
       core_charge: part?.core_charge?.toString() || '0',
       barcode: part?.barcode || '',
       is_kit: part?.is_kit ?? false,
+      is_consumable: part?.is_consumable ?? false,
+      include_in_valuation: part?.include_in_valuation ?? true,
       min_qty: part?.min_qty?.toString() || '',
       max_qty: part?.max_qty?.toString() || '',
       bin_location: part?.bin_location ?? '',
@@ -364,6 +370,12 @@ export default function PartForm() {
     }
   }, [remnantDialogOpen, subtractFromParent, remnantWidth, remnantLength, usedSqft]);
 
+  useEffect(() => {
+    if (formData.is_consumable && formData.include_in_valuation) {
+      setFormData((prev) => ({ ...prev, include_in_valuation: false }));
+    }
+  }, [formData.include_in_valuation, formData.is_consumable]);
+
   const handleSave = () => {
     if (!formData.part_number.trim()) {
       toast({ title: 'Validation Error', description: 'Part number is required', variant: 'destructive' });
@@ -445,6 +457,8 @@ export default function PartForm() {
       core_charge: parseFloat(formData.core_charge) || 0,
       barcode: formData.barcode.trim() ? formData.barcode.trim() : null,
       is_kit: formData.is_kit,
+      is_consumable: formData.is_consumable,
+      include_in_valuation: formData.include_in_valuation,
       min_qty: formData.min_qty === '' ? null : (Number.isFinite(parseInt(formData.min_qty)) ? parseInt(formData.min_qty) : null),
       max_qty: formData.max_qty === '' ? null : (Number.isFinite(parseInt(formData.max_qty)) ? parseInt(formData.max_qty) : null),
       bin_location: formData.bin_location.trim() || null,
@@ -619,6 +633,8 @@ export default function PartForm() {
       core_charge: part.core_charge || 0,
       barcode: part.barcode?.trim() ? part.barcode.trim() : null,
       is_kit: part.is_kit,
+      is_consumable: part.is_consumable ?? false,
+      include_in_valuation: part.include_in_valuation ?? true,
       min_qty: part.min_qty ?? null,
       max_qty: part.max_qty ?? null,
       bin_location: part.bin_location?.trim() || null,
@@ -1303,6 +1319,56 @@ export default function PartForm() {
                   disabled={!editing}
                 />
               </div>
+            </div>
+
+            <div className="border border-border rounded-lg p-4 space-y-2">
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="is_consumable"
+                  checked={formData.is_consumable}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setFormData({
+                      ...formData,
+                      is_consumable: checked,
+                      include_in_valuation: !checked,
+                    });
+                  }}
+                  disabled={!editing}
+                  className="h-4 w-4 rounded border-input"
+                />
+                <Label htmlFor="is_consumable" className="font-medium">
+                  Consumable (track QOH, exclude from valuation)
+                </Label>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Use for shop supplies you still want to reorder.
+              </p>
+            </div>
+
+            <div className="border border-border rounded-lg p-4 space-y-2">
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="include_in_valuation"
+                  checked={formData.include_in_valuation}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      include_in_valuation: e.target.checked,
+                    })
+                  }
+                  disabled={!editing || formData.is_consumable}
+                  className="h-4 w-4 rounded border-input"
+                />
+                <Label htmlFor="include_in_valuation" className="font-medium">
+                  Include in inventory valuation
+                </Label>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Consumables are excluded from valuation.
+              </p>
             </div>
 
             <div className="border border-border rounded-lg p-4 space-y-4">
