@@ -1,4 +1,11 @@
 import { useShopStore } from '@/stores/shopStore';
+import {
+  listUnitTypes,
+  createUnitType,
+  updateUnitType,
+  setUnitTypeActive,
+  ensureUnitTypesSeeded,
+} from '@/integrations/supabase/units';
 import type { ScheduleItem, WorkOrder } from '@/types';
 
 const SCHEDULABLE_WORK_ORDER_STATUSES: WorkOrder['status'][] = ['OPEN', 'IN_PROGRESS'];
@@ -248,6 +255,21 @@ export const zustandRepos: Omit<Repos, 'invoices'> = {
     },
     getUnitsByCustomer(customerId) {
       return useShopStore.getState().getUnitsByCustomer(customerId);
+    },
+    listUnitTypes(options) {
+      return listUnitTypes(options);
+    },
+    createUnitType(name) {
+      return createUnitType(name);
+    },
+    updateUnitType(id, name) {
+      return updateUnitType(id, name);
+    },
+    setUnitTypeActive(id, is_active) {
+      return setUnitTypeActive(id, is_active);
+    },
+    ensureUnitTypesSeeded() {
+      return ensureUnitTypesSeeded();
     },
   },
   unitAttachments: {

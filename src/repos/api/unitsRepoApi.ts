@@ -3,6 +3,13 @@ import { useShopStore } from '@/stores/shopStore';
 
 import type { UnitsRepo } from '../repos';
 import type { Unit } from '@/types';
+import {
+  listUnitTypes,
+  createUnitType,
+  updateUnitType,
+  setUnitTypeActive,
+  ensureUnitTypesSeeded,
+} from '@/integrations/supabase/units';
 
 export const unitsRepoApi: UnitsRepo = {
   get units() {
@@ -30,5 +37,20 @@ export const unitsRepoApi: UnitsRepo = {
   },
   getUnitsByCustomer(customerId) {
     return useShopStore.getState().getUnitsByCustomer(customerId);
+  },
+  listUnitTypes(options) {
+    return listUnitTypes(options);
+  },
+  createUnitType(name) {
+    return createUnitType(name);
+  },
+  updateUnitType(id, name) {
+    return updateUnitType(id, name);
+  },
+  setUnitTypeActive(id, is_active) {
+    return setUnitTypeActive(id, is_active);
+  },
+  ensureUnitTypesSeeded() {
+    return ensureUnitTypesSeeded();
   },
 };

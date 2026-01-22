@@ -45,6 +45,7 @@ const serviceGroup: NavGroup = {
   children: [
     { type: 'link', path: '/work-orders', label: 'Work Orders', icon: Wrench },
     { type: 'link', path: '/units', label: 'Units', icon: Truck },
+    { type: 'link', path: '/unit-types', label: 'Unit Types', icon: Tags },
     { type: 'link', path: '/technicians', label: 'Technicians', icon: HardHat },
     { type: 'link', path: '/plasma', label: 'Plasma Projects', icon: Flame },
     { type: 'link', path: '/plasma/templates', label: 'Plasma Templates', icon: Flame },

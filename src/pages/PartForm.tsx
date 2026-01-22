@@ -604,6 +604,8 @@ export default function PartForm() {
       toast({ title: 'Validation Error', description: 'Reason is required', variant: 'destructive' });
       return;
     }
+
+    const sessionUser = useShopStore.getState().getSessionUserName();
     
     const partData = {
       part_number: part.part_number.trim().toUpperCase(),
@@ -623,7 +625,7 @@ export default function PartForm() {
     };
     const result = updatePartWithQohAdjustment(id!, partData, {
       reason: finalReason,
-      adjusted_by: '',
+      adjusted_by: sessionUser || 'Unknown',
     });
     if (result?.error) {
       toast({ title: 'Adjustment blocked', description: result.error, variant: 'destructive' });
@@ -642,6 +644,8 @@ export default function PartForm() {
     setQtyError(null);
     setEditing(false);
   };
+
+  const adjustReasonMissing = adjustReason === 'Other' ? !adjustReasonOther.trim() : !adjustReason;
 
   const handleCreateRemnant = () => {
     if (!part) return;
@@ -797,6 +801,8 @@ export default function PartForm() {
                   variant="outline"
                   onClick={() => {
                     setNewQoh(part?.quantity_on_hand?.toString() || '');
+                    setAdjustReason('');
+                    setAdjustReasonOther('');
                     setAdjustDialogOpen(true);
                   }}
                 >
@@ -893,6 +899,8 @@ export default function PartForm() {
                   variant="outline"
                   onClick={() => {
                     setNewQoh(part?.quantity_on_hand?.toString() || '');
+                    setAdjustReason('');
+                    setAdjustReasonOther('');
                     setAdjustDialogOpen(true);
                   }}
                 >
@@ -1867,6 +1875,7 @@ export default function PartForm() {
         }}
         title="Inventory Adjustment"
         onSave={handleConfirmAdjustment}
+        saveDisabled={adjustReasonMissing}
         onCancel={() => {
           setAdjustDialogOpen(false);
           setAdjustReason('Cycle Count');

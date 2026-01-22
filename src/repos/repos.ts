@@ -83,12 +83,25 @@ export interface CustomerContactsRepo {
   setPrimaryCustomerContact: (customerId: string, contactId: string) => void;
 }
 
+export interface UnitType {
+  id: string;
+  tenant_id: string;
+  name: string;
+  is_active: boolean;
+  created_at: string;
+}
+
 export interface UnitsRepo {
   units: Unit[];
   addUnit: (unit: Omit<Unit, 'id' | 'is_active' | 'created_at' | 'updated_at'>) => Unit;
   updateUnit: (id: string, unit: Partial<Unit>) => void;
   deactivateUnit: (id: string) => void;
   getUnitsByCustomer: (customerId: string) => Unit[];
+  listUnitTypes: (options?: { includeInactive?: boolean }) => Promise<UnitType[]>;
+  createUnitType: (name: string) => Promise<UnitType>;
+  updateUnitType: (id: string, name: string) => Promise<UnitType>;
+  setUnitTypeActive: (id: string, is_active: boolean) => Promise<UnitType>;
+  ensureUnitTypesSeeded: () => Promise<UnitType[]>;
 }
 
 export interface UnitAttachmentsRepo {

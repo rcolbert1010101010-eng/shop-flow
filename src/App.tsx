@@ -10,6 +10,7 @@ import Customers from "@/pages/Customers";
 import CustomerDetail from "@/pages/CustomerDetail";
 import Units from "@/pages/Units";
 import UnitForm from "@/pages/UnitForm";
+import UnitTypes from "@/pages/UnitTypes";
 import Vendors from "@/pages/Vendors";
 import VendorDetail from "@/pages/VendorDetail";
 import Categories from "@/pages/Categories";
@@ -96,6 +97,7 @@ const App = () => {
                   <Route path="/customers/:id" element={<CustomerDetail />} />
                   <Route path="/units" element={<Units />} />
                   <Route path="/units/:id" element={<UnitForm />} />
+                  <Route path="/unit-types" element={<UnitTypes />} />
                   <Route path="/vendors" element={<Vendors />} />
                   <Route path="/vendors/:id" element={<VendorDetail />} />
                   <Route path="/categories" element={<Categories />} />

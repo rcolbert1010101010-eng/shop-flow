@@ -33,6 +33,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { QuickAddDialog } from '@/components/ui/quick-add-dialog';
 import { StatCard } from '@/components/ui/stat-card';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { useRepos } from '@/repos';
@@ -45,6 +46,7 @@ import { useShopStore } from '@/stores/shopStore';
 import { SmartSearchSelect } from '@/components/common/SmartSearchSelect';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { MobileActionBar, MobileActionBarSpacer } from '@/components/common/MobileActionBar';
+import type { UnitType } from '@/integrations/supabase/units';
 
 const toNumber = (value: number | string | null | undefined) => {
   const numeric = typeof value === 'number' ? value : value != null ? Number(value) : NaN;
@@ -57,7 +59,15 @@ export default function UnitForm() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const repos = useRepos();
-  const { units, addUnit, updateUnit, deactivateUnit } = repos.units;
+  const {
+    units,
+    addUnit,
+    updateUnit,
+    deactivateUnit,
+    listUnitTypes,
+    createUnitType,
+    ensureUnitTypesSeeded,
+  } = repos.units;
   const { customers } = repos.customers;
   const { workOrders, createWorkOrder } = repos.workOrders;
   const { salesOrders, createSalesOrder } = repos.salesOrders;
@@ -70,11 +80,13 @@ export default function UnitForm() {
 
   const isNew = id === 'new';
   const unit = !isNew ? units.find((u) => u.id === id) : null;
+  const unitTypeId = (unit as { unit_type_id?: string | null } | null)?.unit_type_id ?? '';
   const preselectedCustomer = searchParams.get('customer');
 
   const [editing, setEditing] = useState(isNew);
   const [formData, setFormData] = useState({
     customer_id: unit?.customer_id || preselectedCustomer || '',
+    unit_type_id: unitTypeId,
     unit_name: unit?.unit_name || '',
     vin: unit?.vin || '',
     year: unit?.year?.toString() || '',
@@ -87,6 +99,9 @@ export default function UnitForm() {
   const [isBrowseCustomersOpen, setIsBrowseCustomersOpen] = useState(false);
   const [browseCustomersActiveOnly, setBrowseCustomersActiveOnly] = useState(true);
   const [browseCustomersPage, setBrowseCustomersPage] = useState(0);
+  const [unitTypes, setUnitTypes] = useState<UnitType[]>([]);
+  const [unitTypeDialogOpen, setUnitTypeDialogOpen] = useState(false);
+  const [newUnitTypeName, setNewUnitTypeName] = useState('');
 
   const activeCustomers = useMemo(
     () => customers.filter((c) => c.is_active && c.id !== 'walkin'),
@@ -148,6 +163,61 @@ export default function UnitForm() {
     () => (unit ? pmHistory?.filter((h) => h.unit_id === unit.id) || [] : []),
     [pmHistory, unit]
   );
+  const getDefaultUnitTypeId = (types: UnitType[]) => {
+    const activeTypes = types.filter((type) => type.is_active !== false);
+    if (activeTypes.length === 0) return '';
+    const truckMatch = activeTypes.find((type) => type.name.trim().toLowerCase() === 'truck');
+    return truckMatch?.id ?? activeTypes[0].id;
+  };
+  useEffect(() => {
+    let isActive = true;
+    const loadTypes = async () => {
+      try {
+        await ensureUnitTypesSeeded();
+        const list = await listUnitTypes({ includeInactive: true });
+        if (isActive) {
+          setUnitTypes(list);
+          const defaultId = getDefaultUnitTypeId(list);
+          if (defaultId) {
+            setFormData((prev) =>
+              prev.unit_type_id
+                ? prev
+                : {
+                    ...prev,
+                    unit_type_id: defaultId,
+                  }
+            );
+          }
+        }
+      } catch (error: any) {
+        if (isActive) {
+          toast({
+            title: 'Unable to load unit types',
+            description: error?.message ?? 'Please try again',
+            variant: 'destructive',
+          });
+        }
+      }
+    };
+    void loadTypes();
+    return () => {
+      isActive = false;
+    };
+  }, [ensureUnitTypesSeeded, listUnitTypes, toast]);
+
+  const unitTypesForTenant = useMemo(() => unitTypes, [unitTypes]);
+  const selectableUnitTypes = useMemo(() => {
+    const active = unitTypesForTenant.filter((type) => type.is_active !== false);
+    const selected = unitTypesForTenant.find((type) => type.id === formData.unit_type_id);
+    if (selected && selected.is_active === false) {
+      return [selected, ...active.filter((type) => type.id !== selected.id)];
+    }
+    return active;
+  }, [formData.unit_type_id, unitTypesForTenant]);
+  const unitTypeLabel = useMemo(() => {
+    if (!unitTypeId) return unknownValue;
+    return unitTypesForTenant.find((type) => type.id === unitTypeId)?.name || unknownValue;
+  }, [unitTypeId, unitTypesForTenant, unknownValue]);
 
   const pmStatusCounts = useMemo(() => {
     const counts = { overdue: 0, dueSoon: 0, ok: 0, notConfigured: 0 };
@@ -194,6 +264,46 @@ export default function UnitForm() {
   const overduePmCount = pmSchedulesForUnit.length === 0 ? null : pmStatusCounts.overdue;
   const dueSoonPmCount = pmSchedulesForUnit.length === 0 ? 0 : pmStatusCounts.dueSoon;
 
+  const isDuplicateUnitTypeName = (name: string, excludeId?: string) =>
+    unitTypesForTenant.some(
+      (type) =>
+        type.id !== excludeId && type.name.trim().toLowerCase() === name.trim().toLowerCase()
+    );
+
+  const handleCreateUnitType = async () => {
+    const trimmedName = newUnitTypeName.trim();
+    if (!trimmedName) {
+      toast({
+        title: 'Validation Error',
+        description: 'Unit type name is required',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (isDuplicateUnitTypeName(trimmedName)) {
+      toast({
+        title: 'Duplicate Unit Type',
+        description: 'A unit type with this name already exists',
+        variant: 'destructive',
+      });
+      return;
+    }
+    try {
+      const created = await createUnitType(trimmedName);
+      const updatedList = await listUnitTypes({ includeInactive: true });
+      setUnitTypes(updatedList);
+      setFormData((prev) => ({ ...prev, unit_type_id: created.id }));
+      setNewUnitTypeName('');
+      setUnitTypeDialogOpen(false);
+    } catch (error: any) {
+      toast({
+        title: 'Unable to add unit type',
+        description: error?.message ?? 'Please try again',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const handleSave = () => {
     const trimmedName = formData.unit_name.trim();
     const trimmedVin = formData.vin.trim();
@@ -202,6 +312,15 @@ export default function UnitForm() {
       toast({
         title: 'Validation Error',
         description: 'Customer is required',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!formData.unit_type_id) {
+      toast({
+        title: 'Validation Error',
+        description: 'Unit type is required',
         variant: 'destructive',
       });
       return;
@@ -249,6 +368,7 @@ export default function UnitForm() {
 
     const unitData = {
       customer_id: formData.customer_id,
+      unit_type_id: formData.unit_type_id,
       unit_name: trimmedName,
       vin: trimmedVin || null,
       year: formData.year ? parseInt(formData.year) : null,
@@ -260,14 +380,14 @@ export default function UnitForm() {
     };
 
     if (isNew) {
-      const newUnit = addUnit(unitData);
+      const newUnit = addUnit(unitData as typeof unitData & { unit_type_id: string });
       toast({
         title: 'Unit Created',
         description: `${formData.unit_name} has been added`,
       });
       navigate(`/units/${newUnit.id}`);
     } else {
-      updateUnit(id!, unitData);
+      updateUnit(id!, unitData as typeof unitData & { unit_type_id: string });
       toast({
         title: 'Unit Updated',
         description: 'Changes have been saved',
@@ -287,8 +407,10 @@ export default function UnitForm() {
 
   const resetForm = () => {
     if (!unit) return;
+    const fallbackUnitTypeId = getDefaultUnitTypeId(unitTypesForTenant);
     setFormData({
       customer_id: unit.customer_id || '',
+      unit_type_id: unitTypeId || fallbackUnitTypeId,
       unit_name: unit.unit_name || '',
       vin: unit.vin || '',
       year: unit.year?.toString() || '',
@@ -742,6 +864,41 @@ export default function UnitForm() {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
+                  <Label htmlFor="unit_type_id">Unit Type *</Label>
+                  <div className="flex items-center gap-2">
+                    <Select
+                      value={formData.unit_type_id}
+                      onValueChange={(value) => setFormData({ ...formData, unit_type_id: value })}
+                    >
+                      <SelectTrigger id="unit_type_id">
+                        <SelectValue placeholder="Select unit type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {selectableUnitTypes.length === 0 ? (
+                          <SelectItem value="__none__" disabled>
+                            No unit types available
+                          </SelectItem>
+                        ) : (
+                          selectableUnitTypes.map((type) => (
+                            <SelectItem key={type.id} value={type.id}>
+                              {type.name}
+                              {type.is_active === false ? ' (Inactive)' : ''}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="flex-shrink-0"
+                      onClick={() => setUnitTypeDialogOpen(true)}
+                    >
+                      Quick Add
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="vin">VIN</Label>
                   <Input
                     id="vin"
@@ -751,35 +908,36 @@ export default function UnitForm() {
                     className="font-mono"
                   />
                 </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="year">Year</Label>
-                    <Input
-                      id="year"
-                      type="number"
-                      value={formData.year}
-                      onChange={(e) => setFormData({ ...formData, year: e.target.value })}
-                      placeholder="2024"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="make">Make</Label>
-                    <Input
-                      id="make"
-                      value={formData.make}
-                      onChange={(e) => setFormData({ ...formData, make: e.target.value })}
-                      placeholder="e.g., Peterbilt"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="model">Model</Label>
-                    <Input
-                      id="model"
-                      value={formData.model}
-                      onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-                      placeholder="e.g., 389"
-                    />
-                  </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="year">Year</Label>
+                  <Input
+                    id="year"
+                    type="number"
+                    value={formData.year}
+                    onChange={(e) => setFormData({ ...formData, year: e.target.value })}
+                    placeholder="2024"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="make">Make</Label>
+                  <Input
+                    id="make"
+                    value={formData.make}
+                    onChange={(e) => setFormData({ ...formData, make: e.target.value })}
+                    placeholder="e.g., Peterbilt"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="model">Model</Label>
+                  <Input
+                    id="model"
+                    value={formData.model}
+                    onChange={(e) => setFormData({ ...formData, model: e.target.value })}
+                    placeholder="e.g., 389"
+                  />
                 </div>
               </div>
 
@@ -832,22 +990,27 @@ export default function UnitForm() {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-1">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Unit Type</p>
+                  <p className="text-base font-semibold">{unitTypeLabel}</p>
+                </div>
+                <div className="space-y-1">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">VIN</p>
                   <p className="font-mono text-sm text-muted-foreground">{unit?.vin || unknownValue}</p>
                 </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="space-y-1">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Year</p>
-                    <p className="font-medium">{unit?.year ?? unknownValue}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Make</p>
-                    <p className="font-medium">{unit?.make || unknownValue}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Model</p>
-                    <p className="font-medium">{unit?.model || unknownValue}</p>
-                  </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Year</p>
+                  <p className="font-medium">{unit?.year ?? unknownValue}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Make</p>
+                  <p className="font-medium">{unit?.make || unknownValue}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Model</p>
+                  <p className="font-medium">{unit?.model || unknownValue}</p>
                 </div>
               </div>
 
@@ -1184,6 +1347,26 @@ export default function UnitForm() {
           <MobileActionBarSpacer />
         </div>
       )}
+
+      <QuickAddDialog
+        open={unitTypeDialogOpen}
+        onOpenChange={setUnitTypeDialogOpen}
+        title="Quick Add Unit Type"
+        onSave={handleCreateUnitType}
+        onCancel={() => setUnitTypeDialogOpen(false)}
+      >
+        <div className="space-y-3">
+          <div>
+            <Label htmlFor="unit_type_quick_add">Unit Type Name *</Label>
+            <Input
+              id="unit_type_quick_add"
+              value={newUnitTypeName}
+              onChange={(e) => setNewUnitTypeName(e.target.value)}
+              placeholder="e.g., Truck"
+            />
+          </div>
+        </div>
+      </QuickAddDialog>
 
       <Dialog open={isBrowseCustomersOpen} onOpenChange={setIsBrowseCustomersOpen}>
         <DialogContent className="max-w-4xl w-full">
