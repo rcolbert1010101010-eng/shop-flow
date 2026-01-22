@@ -83,6 +83,7 @@ export default function PartForm() {
   const { settings } = repos.settings;
   const { toast } = useToast();
   const sessionUserName = (settings.session_user_name || 'system').trim() || 'system';
+  const enableConsumables = settings.inventory_enable_consumables === true;
   const isMobile = useIsMobile();
 
   const isNew = id === 'new';
@@ -201,6 +202,8 @@ export default function PartForm() {
   const poLinesSorted = poLinesWithOutstanding.sort(
     (a, b) => new Date(b.po.created_at).getTime() - new Date(a.po.created_at).getTime()
   );
+  const showConsumablesBlock = enableConsumables || formData.is_consumable;
+  const consumablesReadOnly = !enableConsumables && formData.is_consumable;
   const kitComponentsForPart = part
     ? kitComponents.filter((component) => component.kit_part_id === part.id && component.is_active)
     : [];
@@ -1321,55 +1324,64 @@ export default function PartForm() {
               </div>
             </div>
 
-            <div className="border border-border rounded-lg p-4 space-y-2">
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="is_consumable"
-                  checked={formData.is_consumable}
-                  onChange={(e) => {
-                    const checked = e.target.checked;
-                    setFormData({
-                      ...formData,
-                      is_consumable: checked,
-                      include_in_valuation: !checked,
-                    });
-                  }}
-                  disabled={!editing}
-                  className="h-4 w-4 rounded border-input"
-                />
-                <Label htmlFor="is_consumable" className="font-medium">
-                  Consumable (track QOH, exclude from valuation)
-                </Label>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Use for shop supplies you still want to reorder.
-              </p>
-            </div>
+            {showConsumablesBlock && (
+              <>
+                <div className="border border-border rounded-lg p-4 space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="is_consumable"
+                      checked={formData.is_consumable}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setFormData({
+                          ...formData,
+                          is_consumable: checked,
+                          include_in_valuation: !checked,
+                        });
+                      }}
+                      disabled={!editing || consumablesReadOnly}
+                      className="h-4 w-4 rounded border-input"
+                    />
+                    <Label htmlFor="is_consumable" className="font-medium">
+                      Consumable (track QOH, exclude from valuation)
+                    </Label>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Use for shop supplies you still want to reorder.
+                  </p>
+                  {consumablesReadOnly && (
+                    <p className="text-xs text-destructive">
+                      Consumables are disabled in system settings.
+                    </p>
+                  )}
+                </div>
 
-            <div className="border border-border rounded-lg p-4 space-y-2">
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="include_in_valuation"
-                  checked={formData.include_in_valuation}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      include_in_valuation: e.target.checked,
-                    })
-                  }
-                  disabled={!editing || formData.is_consumable}
-                  className="h-4 w-4 rounded border-input"
-                />
-                <Label htmlFor="include_in_valuation" className="font-medium">
-                  Include in inventory valuation
-                </Label>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Consumables are excluded from valuation.
-              </p>
-            </div>
+                <div className="border border-border rounded-lg p-4 space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="include_in_valuation"
+                      checked={formData.include_in_valuation}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          include_in_valuation: e.target.checked,
+                        })
+                      }
+                      disabled={!editing || formData.is_consumable || consumablesReadOnly}
+                      className="h-4 w-4 rounded border-input"
+                    />
+                    <Label htmlFor="include_in_valuation" className="font-medium">
+                      Include in inventory valuation
+                    </Label>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Consumables are excluded from valuation.
+                  </p>
+                </div>
+              </>
+            )}
 
             <div className="border border-border rounded-lg p-4 space-y-4">
               <div className="flex items-center space-x-2">

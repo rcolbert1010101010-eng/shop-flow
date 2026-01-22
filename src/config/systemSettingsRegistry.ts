@@ -29,6 +29,15 @@ export const SYSTEM_SETTINGS_REGISTRY = {
     requiresReason: true,
     constraints: { allowedValues: ['warn', 'block', 'allow'], allowed: ['warn', 'block', 'allow'] as const },
   },
+  inventory_enable_consumables: {
+    label: 'Enable Consumables',
+    description: 'Allow marking parts as consumables (tracked QOH, excluded from valuation).',
+    valueType: 'boolean',
+    defaultValue: false,
+    category: 'inventory',
+    sensitivity: 'protected' as const,
+    requiresReason: false,
+  },
   default_price_level: {
     label: 'Default Price Level',
     description: 'Pricing level applied when none is specified',
