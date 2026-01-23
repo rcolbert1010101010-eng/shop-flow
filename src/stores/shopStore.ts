@@ -297,6 +297,7 @@ interface ShopState {
   postPlasmaJobToWorkOrder: (plasmaJobId: string) => { success: boolean; error?: string };
   updateWorkOrderTechnician?: (orderId: string, technicianId: string | null) => void;
   postFabJobToWorkOrder: (fabJobId: string) => { success: boolean; error?: string };
+  resetWorkOrdersForTenant: () => void;
 
   // Fabrication
   fabJobs: FabJob[];
@@ -3899,6 +3900,17 @@ export const useShopStore = create<ShopState>()(
           ),
         }));
         return { success: true };
+      },
+      resetWorkOrdersForTenant: () => {
+        set(() => ({
+          workOrders: [],
+          workOrderPartLines: [],
+          workOrderLaborLines: [],
+          workOrderJobLines: [],
+          workOrderActivity: [],
+          workOrderTimeEntries: [],
+          workOrderChargeLines: [],
+        }));
       },
 
       // Purchase Orders

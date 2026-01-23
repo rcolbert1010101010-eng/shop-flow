@@ -293,6 +293,9 @@ export default function WorkOrderDetail() {
   const aiAssistEnabled = import.meta.env.DEV || env.VITE_AI_ASSIST_PREVIEW === 'true';
   const isMobile = useIsMobile();
   const workOrderJobLines = useShopStore((state) => state.workOrderJobLines);
+  const resetWorkOrdersForTenant = useShopStore((state) => state.resetWorkOrdersForTenant);
+  const tenantSettingsId = useShopStore((state) => state.settings.id);
+  const lastTenantSettingsIdRef = useRef<string | undefined>(undefined);
 
   const isNew = id === 'new';
   const unitFromQuery = searchParams.get('unit_id') || '';
@@ -380,6 +383,20 @@ export default function WorkOrderDetail() {
   const currentOrderId = currentOrder?.id ?? null;
   const currentOrderUpdatedAt =
     (currentOrder as any)?.updated_at ?? (currentOrder as any)?.updatedAt ?? null;
+
+  useEffect(() => {
+    const prev = lastTenantSettingsIdRef.current;
+    const next = tenantSettingsId;
+    if (prev && next && prev !== next) {
+      // Tenant switch invalidates work order caches to prevent cross-tenant leakage.
+      resetWorkOrdersForTenant();
+      setOrder(null);
+      if (!isNew) {
+        navigate('/work-orders', { replace: true });
+      }
+    }
+    lastTenantSettingsIdRef.current = next;
+  }, [isNew, navigate, resetWorkOrdersForTenant, tenantSettingsId]);
   const scheduleItems = schedulingRepo.list();
   const isScheduled =
     !!currentOrder &&
@@ -1324,8 +1341,8 @@ export default function WorkOrderDetail() {
     return (
       <div className="page-container">
         <style>{PRINT_STYLES}</style>
-        <PageHeader title="Order Not Found" backTo="/work-orders" />
-        <p className="text-muted-foreground">This work order does not exist.</p>
+        <PageHeader title="Work Order Not Available" backTo="/work-orders" />
+        <p className="text-muted-foreground">Work Order not available in this tenant.</p>
       </div>
     );
   }

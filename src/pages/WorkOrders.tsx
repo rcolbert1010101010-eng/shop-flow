@@ -6,9 +6,10 @@ import { Plus } from 'lucide-react';
 import { useRepos } from '@/repos';
 import type { WorkOrder } from '@/types';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
+import { useShopStore } from '@/stores/shopStore';
 
 type WorkOrderRow = WorkOrder & { customer_name: string; unit_label: string; is_active?: boolean };
 
@@ -19,6 +20,9 @@ const toNumber = (value: number | string | null | undefined) => {
 
 export default function WorkOrders() {
   const navigate = useNavigate();
+  const resetWorkOrdersForTenant = useShopStore((state) => state.resetWorkOrdersForTenant);
+  const tenantSettingsId = useShopStore((state) => state.settings.id);
+  const lastTenantSettingsIdRef = useRef<string | undefined>(undefined);
   const repos = useRepos();
   const { workOrders } = repos.workOrders;
   const { customers } = repos.customers;
@@ -27,6 +31,15 @@ export default function WorkOrders() {
   const scheduleItems = schedulingRepo.list();
   const [statusFilter, setStatusFilter] = useState<'open' | 'estimate' | 'invoiced' | 'deleted'>('open');
   const [showUnscheduledOnly, setShowUnscheduledOnly] = useState(false);
+  useEffect(() => {
+    const prev = lastTenantSettingsIdRef.current;
+    const next = tenantSettingsId;
+    if (prev && next && prev !== next) {
+      // Tenant switch invalidates work order caches to prevent cross-tenant leakage.
+      resetWorkOrdersForTenant();
+    }
+    lastTenantSettingsIdRef.current = next;
+  }, [resetWorkOrdersForTenant, tenantSettingsId]);
 
   const scheduledWorkOrderIds = useMemo(
     () =>
