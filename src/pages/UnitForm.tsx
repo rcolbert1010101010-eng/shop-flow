@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -76,6 +76,9 @@ export default function UnitForm() {
   const isMobile = useIsMobile();
   const pmSchedules = useShopStore((s) => s.pmSchedules);
   const pmHistory = useShopStore((s) => s.pmHistory);
+  const resetUnitsForTenant = useShopStore((state) => state.resetUnitsForTenant);
+  const tenantSettingsId = useShopStore((state) => state.settings.id);
+  const lastTenantSettingsIdRef = useRef<string | undefined>(undefined);
   const unknownValue = '—';
 
   const isNew = id === 'new';
@@ -102,6 +105,41 @@ export default function UnitForm() {
   const [unitTypes, setUnitTypes] = useState<UnitType[]>([]);
   const [unitTypeDialogOpen, setUnitTypeDialogOpen] = useState(false);
   const [newUnitTypeName, setNewUnitTypeName] = useState('');
+
+  useEffect(() => {
+    const prev = lastTenantSettingsIdRef.current;
+    const next = tenantSettingsId;
+    if (prev && next && prev !== next) {
+      // Tenant switch invalidates unit caches to prevent cross-tenant leakage.
+      resetUnitsForTenant();
+      setUnitTypes([]);
+      void (async () => {
+        try {
+          await ensureUnitTypesSeeded();
+          const list = await listUnitTypes({ includeInactive: true });
+          setUnitTypes(list);
+        } catch {
+          return;
+        }
+      })();
+      setFormData({
+        customer_id: '',
+        unit_type_id: '',
+        unit_name: '',
+        vin: '',
+        year: '',
+        make: '',
+        model: '',
+        mileage: '',
+        hours: '',
+        notes: '',
+      });
+      if (!isNew) {
+        navigate('/units', { replace: true });
+      }
+    }
+    lastTenantSettingsIdRef.current = next;
+  }, [ensureUnitTypesSeeded, isNew, listUnitTypes, navigate, resetUnitsForTenant, tenantSettingsId]);
 
   const activeCustomers = useMemo(
     () => customers.filter((c) => c.is_active && c.id !== 'walkin'),

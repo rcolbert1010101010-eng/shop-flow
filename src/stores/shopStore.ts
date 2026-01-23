@@ -145,6 +145,7 @@ interface ShopState {
   updateUnit: (id: string, unit: Partial<Unit>) => void;
   deactivateUnit: (id: string) => void;
   getUnitsByCustomer: (customerId: string) => Unit[];
+  resetUnitsForTenant: () => void;
 
   // Unit Attachments (images)
   unitAttachments: UnitAttachment[];
@@ -1114,6 +1115,13 @@ export const useShopStore = create<ShopState>()(
           units: [...state.units, newUnit],
         }));
         return newUnit;
+      },
+
+      resetUnitsForTenant: () => {
+        set(() => ({
+          units: [],
+          unitAttachments: [],
+        }));
       },
 
       updateUnit: (id, unit) =>

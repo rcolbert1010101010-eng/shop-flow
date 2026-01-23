@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { DataTable, Column } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useRepos } from '@/repos';
 import type { UnitType } from '@/integrations/supabase/units';
+import { useShopStore } from '@/stores/shopStore';
 
 export default function UnitTypes() {
   const repos = useRepos();
@@ -28,6 +29,9 @@ export default function UnitTypes() {
     setUnitTypeActive,
     ensureUnitTypesSeeded,
   } = repos.units;
+  const resetUnitsForTenant = useShopStore((state) => state.resetUnitsForTenant);
+  const tenantSettingsId = useShopStore((state) => state.settings.id);
+  const lastTenantSettingsIdRef = useRef<string | undefined>(undefined);
 
   const [unitTypes, setUnitTypes] = useState<UnitType[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
@@ -45,6 +49,18 @@ export default function UnitTypes() {
   useEffect(() => {
     void loadUnitTypes();
   }, [loadUnitTypes]);
+
+  useEffect(() => {
+    const prev = lastTenantSettingsIdRef.current;
+    const next = tenantSettingsId;
+    if (prev && next && prev !== next) {
+      // Tenant switch invalidates unit caches to prevent cross-tenant leakage.
+      resetUnitsForTenant();
+      setUnitTypes([]);
+      void loadUnitTypes();
+    }
+    lastTenantSettingsIdRef.current = next;
+  }, [loadUnitTypes, resetUnitsForTenant, tenantSettingsId]);
 
   const unitTypesForTenant = useMemo(() => unitTypes, [unitTypes]);
 

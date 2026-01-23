@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { DataTable, Column } from '@/components/ui/data-table';
@@ -18,6 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { Unit } from '@/types';
 import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 import { ImportUnitsDialog } from '@/components/units/ImportUnitsDialog';
+import { useShopStore } from '@/stores/shopStore';
 
 const OPEN_WO_STATUSES = ['OPEN', 'IN_PROGRESS', 'SCHEDULED', 'ESTIMATE', 'HOLD'];
 const OPEN_SO_STATUSES = ['OPEN', 'APPROVED', 'ESTIMATE', 'QUOTE', 'PARTIAL'];
@@ -26,6 +27,9 @@ export default function Units() {
   const navigate = useNavigate();
   const repos = useRepos();
   const { toast } = useToast();
+  const resetUnitsForTenant = useShopStore((state) => state.resetUnitsForTenant);
+  const tenantSettingsId = useShopStore((state) => state.settings.id);
+  const lastTenantSettingsIdRef = useRef<string | undefined>(undefined);
   const { units } = repos.units;
   const { customers } = repos.customers;
   const { workOrders } = repos.workOrders;
@@ -36,6 +40,18 @@ export default function Units() {
   const [customerFilter, setCustomerFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ACTIVE' | 'INACTIVE' | 'ALL'>('ACTIVE');
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [tenantKey, setTenantKey] = useState(0);
+
+  useEffect(() => {
+    const prev = lastTenantSettingsIdRef.current;
+    const next = tenantSettingsId;
+    if (prev && next && prev !== next) {
+      // Tenant switch invalidates unit caches to prevent cross-tenant leakage.
+      resetUnitsForTenant();
+      setTenantKey((k) => k + 1);
+    }
+    lastTenantSettingsIdRef.current = next;
+  }, [resetUnitsForTenant, tenantSettingsId]);
 
   const unitActivity = useMemo(() => {
     const map: Record<
@@ -210,7 +226,7 @@ export default function Units() {
   const hasAnyUnits = filteredUnits.length > 0;
 
   return (
-    <div className="page-container">
+    <div key={tenantKey} className="page-container">
       <PageHeader
         title="Units / Equipment"
         subtitle="Manage customer equipment and vehicles"
