@@ -209,34 +209,6 @@ export interface CycleCountLine {
   updated_at: string;
 }
 
-export type ManufacturedProductType = 'DUMP_BODY' | 'TRAILER' | 'CUSTOM_EQUIPMENT';
-
-export interface ManufacturedProduct {
-  id: string;
-  name: string;
-  sku: string;
-  product_type: ManufacturedProductType;
-  description: string | null;
-  base_price: number;
-  estimatedLaborHours: number;
-  estimatedOverhead: number;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ManufacturedProductOption {
-  id: string;
-  product_id: string;
-  name: string;
-  option_type: string;
-  price_delta: number;
-  sort_order: number;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
 export interface ManufacturingProductBomItem {
   id: string;
   productId: string;
@@ -257,45 +229,6 @@ export interface ManufacturingProductCostSummary {
   laborCost: number;
   overhead: number;
   totalEstimatedCost: number;
-}
-
-export type ManufacturingBuildStatus =
-  | 'ENGINEERING'
-  | 'FABRICATION'
-  | 'ASSEMBLY'
-  | 'PAINT'
-  | 'QA'
-  | 'READY'
-  | 'DELIVERED'
-  | 'CANCELLED';
-
-export interface ManufacturingBuild {
-  id: string;
-  build_number: string;
-  customer_id: string | null;
-  unit_id: string | null;
-  product_id: string;
-  status: ManufacturingBuildStatus;
-  serial_number: string | null;
-  notes: string | null;
-  priority: 'low' | 'normal' | 'high' | 'rush';
-  promisedDate?: string | null;
-  assignedTechnicianId?: string | null;
-  internalJobNumber?: string | null;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ManufacturingBuildSelectedOption {
-  id: string;
-  build_id: string;
-  option_id: string | null;
-  option_name_snapshot: string;
-  price_delta_snapshot: number;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
 }
 
 export type VendorCostSource = 'RECEIVING' | 'MANUAL';

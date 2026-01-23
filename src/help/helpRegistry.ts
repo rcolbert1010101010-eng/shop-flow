@@ -8,7 +8,6 @@ import { invoicesHelp } from './modules/invoices';
 import { paymentsHelp } from './modules/payments';
 import { schedulingHelp } from './modules/scheduling';
 import { warrantyReturnsHelp } from './modules/warranty_returns';
-import { manufacturingHelp } from './modules/manufacturing';
 import { customersHelp } from './modules/customers';
 import { dashboardHelp } from './modules/dashboard';
 import { unitsHelp } from './modules/units';
@@ -40,7 +39,6 @@ export const helpByModule: Record<string, ModuleHelpContent> = {
   payments: paymentsHelp,
   scheduling: schedulingHelp,
   warranty_returns: warrantyReturnsHelp,
-  manufacturing: manufacturingHelp,
   customers: customersHelp,
   dashboard: dashboardHelp,
   units: unitsHelp,

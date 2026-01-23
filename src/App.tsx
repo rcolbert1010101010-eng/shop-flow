@@ -17,12 +17,8 @@ import Categories from "@/pages/Categories";
 import CategoryDetail from "@/pages/CategoryDetail";
 import Inventory from "@/pages/Inventory";
 import PartForm from "@/pages/PartForm";
-import ManufacturingProductsPage from "@/pages/manufacturing/ProductsPage";
-import ManufacturingProductFormPage from "@/pages/manufacturing/ProductFormPage";
 import SalesOrders from "@/pages/SalesOrders";
 import SalesOrderDetail from "@/pages/SalesOrderDetail";
-import ManufacturingBuildsPage from "@/pages/manufacturing/BuildsPage";
-import ManufacturingBuildFormPage from "@/pages/manufacturing/BuildFormPage";
 import WorkOrders from "@/pages/WorkOrders";
 import WorkOrderDetail from "@/pages/WorkOrderDetail";
 import PurchaseOrders from "@/pages/PurchaseOrders";
@@ -107,12 +103,6 @@ const App = () => {
                   <Route path="/receiving-history" element={<ReceivingHistory />} />
                   <Route path="/receiving-history/:id" element={<ReceivingReceiptDetail />} />
                   <Route path="/inventory/:id" element={<PartForm />} />
-                  <Route path="/manufacturing/products" element={<ManufacturingProductsPage />} />
-                  <Route path="/manufacturing/products/new" element={<ManufacturingProductFormPage />} />
-                  <Route path="/manufacturing/products/:id" element={<ManufacturingProductFormPage />} />
-                  <Route path="/manufacturing/builds" element={<ManufacturingBuildsPage />} />
-                  <Route path="/manufacturing/builds/new" element={<ManufacturingBuildFormPage />} />
-                  <Route path="/manufacturing/builds/:id" element={<ManufacturingBuildFormPage />} />
                   <Route path="/sales-orders" element={<SalesOrders />} />
                   <Route path="/sales-orders/:id" element={<SalesOrderDetail />} />
                   <Route path="/plasma" element={<PlasmaProjects />} />

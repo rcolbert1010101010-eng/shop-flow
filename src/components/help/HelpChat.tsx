@@ -94,14 +94,6 @@ function getModuleSuggestions(moduleKey: string): string[] {
       'How do I track warranty claim status?',
       'Does a return affect QOH automatically?',
     ],
-    manufacturing: [
-      "What's the best way to write a traveler?",
-      'How do I link manufacturing work to a WO or SO?',
-      'What should I track for time and profitability?',
-      'How do I plan capacity for next week?',
-      'What statuses should we use for fab work?',
-      'How do plasma/brake/weld jobs differ in tracking?',
-    ],
     units: [
       'How do I add a new truck for an existing fleet customer?',
       "What should I fill out on a unit if I'm in a hurry?",

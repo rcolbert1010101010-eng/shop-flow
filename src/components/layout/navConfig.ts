@@ -15,8 +15,6 @@ import {
   Flame,
   Calendar,
   CalendarCheck,
-  Factory,
-  Layers,
   CreditCard,
   FileText,
 } from 'lucide-react';
@@ -26,7 +24,7 @@ import type { Capability } from '@/security/rbac';
 export type NavLink = { type: 'link'; path: string; label: string; icon: LucideIcon };
 export type NavGroup = {
   type: 'group';
-  key: 'serviceOrders' | 'inventory' | 'returnsWarranty' | 'manufacturing' | 'purchaseOrders';
+  key: 'serviceOrders' | 'inventory' | 'returnsWarranty' | 'purchaseOrders';
   label: string;
   icon: LucideIcon;
   children: NavLink[];
@@ -76,16 +74,6 @@ const purchaseOrdersGroup: NavGroup = {
 };
 const schedulingLink: NavLink = { type: 'link', path: '/scheduling', label: 'Scheduling', icon: Calendar };
 const plannerLink: NavLink = { type: 'link', path: '/planner', label: 'Planner', icon: CalendarCheck };
-const manufacturingGroup: NavGroup = {
-  type: 'group',
-  key: 'manufacturing',
-  label: 'Manufacturing',
-  icon: Factory,
-  children: [
-    { type: 'link', path: '/manufacturing/products', label: 'Products', icon: Package },
-    { type: 'link', path: '/manufacturing/builds', label: 'Builds', icon: Layers },
-  ],
-};
 const invoicesLink: NavLink = { type: 'link', path: '/invoices', label: 'Invoices', icon: FileText };
 const paymentsLink: NavLink = { type: 'link', path: '/payments', label: 'Payments', icon: CreditCard };
 const adminUsersLink: NavLink = { type: 'link', path: '/admin/users', label: 'Users', icon: Users };
@@ -111,7 +99,6 @@ export const navSections: NavSection[] = [
   { label: 'Inventory', items: [inventoryGroup] },
   { label: 'Purchasing', items: [purchaseOrdersGroup] },
   { label: 'Scheduling', items: [schedulingLink, plannerLink] },
-  { label: 'Manufacturing', items: [manufacturingGroup] },
   { label: 'Accounting', items: [invoicesLink, paymentsLink, returnsWarrantyGroup] },
   { label: 'Reports', items: [reportsLink] },
   { label: 'Settings', items: [settingsLink] },
