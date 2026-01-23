@@ -626,7 +626,6 @@ export const useShopStore = create<ShopState>()(
             description: params.description,
             qty: 1,
             unit_price: params.totalPrice,
-            total_price: params.totalPrice,
             source_ref_type: 'PLASMA_JOB' as SalesOrderChargeSourceType,
             source_ref_id: params.plasmaJobId,
           };
