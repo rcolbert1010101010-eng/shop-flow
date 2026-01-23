@@ -22,6 +22,7 @@ export type ResolvePriceInput = {
   categoryCode?: string | null;
   customerType?: CustomerType | null;
   isSpecialOrder?: boolean;
+  customerDiscountPercent?: number | null;
   rules: PricingRule[];
 };
 
@@ -71,7 +72,8 @@ const describeBaseRule = (rule: PricingRule) => {
 };
 
 export const resolvePartPrice = (input: ResolvePriceInput): ResolvePriceResult => {
-  const { cost, msrp, categoryCode, customerType, isSpecialOrder, rules } = input;
+  const { cost, msrp, categoryCode, customerType, isSpecialOrder, customerDiscountPercent, rules } =
+    input;
   const normalizedCategory = categoryCode?.toUpperCase() ?? null;
   const normalizedCustomerType = customerType ?? null;
 
@@ -162,6 +164,14 @@ export const resolvePartPrice = (input: ResolvePriceInput): ResolvePriceResult =
   }
 
   let unitPrice = cost * (1 + markupPercent / 100);
+  const discountPct = customerDiscountPercent ?? 0;
+  if (discountPct < 0) {
+    throw new Error("Customer discount percent cannot be negative.");
+  }
+  if (discountPct > 0) {
+    unitPrice = unitPrice * (1 - discountPct / 100);
+    flags.push("CUSTOMER_DISCOUNT_APPLIED");
+  }
 
   const minAllowed = cost + minMarginDollars;
   if (unitPrice < minAllowed) {
@@ -195,6 +205,9 @@ export const resolvePartPrice = (input: ResolvePriceInput): ResolvePriceResult =
   ];
   if (flags.length > 0) {
     explanationParts.push(`Flags: ${flags.join(", ")}`);
+  }
+  if (flags.includes("CUSTOMER_DISCOUNT_APPLIED")) {
+    explanationParts.push(`Discount: ${discountPct}%`);
   }
 
   return {
