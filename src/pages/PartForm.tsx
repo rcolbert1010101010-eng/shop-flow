@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -85,6 +85,9 @@ export default function PartForm() {
   const sessionUserName = (settings.session_user_name || 'system').trim() || 'system';
   const enableConsumables = settings.inventory_enable_consumables === true;
   const isMobile = useIsMobile();
+  const resetPartsForTenant = useShopStore((state) => state.resetPartsForTenant);
+  const tenantSettingsId = useShopStore((state) => state.settings.id);
+  const lastTenantSettingsIdRef = useRef<string | undefined>(undefined);
 
   const isNew = id === 'new';
   const part = !isNew ? parts.find((p) => p.id === id) : null;
@@ -137,6 +140,64 @@ export default function PartForm() {
   const [newComponentId, setNewComponentId] = useState('');
   const [newComponentQty, setNewComponentQty] = useState('1');
   const [copying, setCopying] = useState(false);
+  useEffect(() => {
+    const prev = lastTenantSettingsIdRef.current;
+    const next = tenantSettingsId;
+    if (prev && next && prev !== next) {
+      // Tenant switch invalidates parts caches to prevent cross-tenant leakage.
+      resetPartsForTenant();
+      setConfirmDeactivateOpen(false);
+      setEditing(isNew);
+      setFormData({
+        part_number: '',
+        description: '',
+        vendor_id: '',
+        category_id: '',
+        cost: '',
+        selling_price: '',
+        core_required: false,
+        core_charge: '0',
+        barcode: '',
+        is_kit: false,
+        is_consumable: false,
+        include_in_valuation: true,
+        min_qty: '',
+        max_qty: '',
+        bin_location: '',
+        model: '',
+        serial_number: '',
+        uom: 'EA',
+        initial_qoh: '',
+        material_kind: 'STANDARD',
+        sheet_width_in: '',
+        sheet_length_in: '',
+        thickness_in: '',
+        grade: '',
+      });
+      setVendorDialogOpen(false);
+      setCategoryDialogOpen(false);
+      setNewVendorName('');
+      setNewCategoryName('');
+      setAdjustReason('Cycle Count');
+      setAdjustReasonOther('');
+      setAdjustDialogOpen(false);
+      setNewQoh('');
+      setQtyError(null);
+      setRemnantDialogOpen(false);
+      setRemnantWidth('');
+      setRemnantLength('');
+      setRemnantBinLocation('');
+      setSubtractFromParent(true);
+      setUsedSqft('');
+      setNewComponentId('');
+      setNewComponentQty('1');
+      setCopying(false);
+      if (!isNew) {
+        navigate('/inventory', { replace: true });
+      }
+    }
+    lastTenantSettingsIdRef.current = next;
+  }, [isNew, navigate, resetPartsForTenant, tenantSettingsId]);
 
   const activeVendors = vendors.filter((v) => v.is_active);
   const activeCategories = categories.filter((c) => c.is_active);

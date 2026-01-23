@@ -66,6 +66,10 @@ export default function Inventory() {
   const scanInputRef = useRef<HTMLInputElement | null>(null);
   const inventoryMovements = useShopStore((s) => s.inventoryMovements);
   const inventoryAdjustments = useShopStore((s) => s.inventoryAdjustments);
+  const resetPartsForTenant = useShopStore((s) => s.resetPartsForTenant);
+  const tenantSettingsId = useShopStore((s) => s.settings.id);
+  const lastTenantSettingsIdRef = useRef<string | undefined>(undefined);
+  const [tenantKey, setTenantKey] = useState(0);
   const [adjustDialogOpen, setAdjustDialogOpen] = useState(false);
   const [selectedPart, setSelectedPart] = useState<Part | null>(null);
   const [newQoh, setNewQoh] = useState('');
@@ -103,6 +107,19 @@ export default function Inventory() {
   const isMobile = useIsMobile();
   const [vendorFilter, setVendorFilter] = useState<string>('ALL');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
+  useEffect(() => {
+    const prev = lastTenantSettingsIdRef.current;
+    const next = tenantSettingsId;
+    if (prev && next && prev !== next) {
+      // Tenant switch invalidates parts caches to prevent cross-tenant leakage.
+      resetPartsForTenant();
+      setTenantKey((k) => k + 1);
+      closeAdjustDialog();
+      setSelectedIds({});
+      setCountInputs({});
+    }
+    lastTenantSettingsIdRef.current = next;
+  }, [resetPartsForTenant, tenantSettingsId]);
   const toNumber = (value: number | string | null | undefined) => {
     const numeric = typeof value === 'number' ? value : value != null ? Number(value) : NaN;
     return Number.isFinite(numeric) ? numeric : 0;
@@ -1008,7 +1025,7 @@ export default function Inventory() {
 
   return (
     <TooltipProvider>
-      <div className="page-container">
+      <div key={tenantKey} className="page-container">
       <PageHeader
         title="Inventory"
         subtitle="Manage parts and stock levels"

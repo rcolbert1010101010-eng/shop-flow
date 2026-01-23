@@ -175,6 +175,7 @@ interface ShopState {
   updatePartWithQohAdjustment: (id: string, part: Partial<Part>, meta: { reason: string; adjusted_by: string }) => { success: boolean; warning?: string; error?: string };
   deactivatePart: (id: string) => void;
   reactivatePart: (id: string) => void;
+  resetPartsForTenant: () => void;
   kitComponents: PartKitComponent[];
   addKitComponent: (component: Omit<PartKitComponent, 'id' | 'is_active' | 'created_at' | 'updated_at'>) => PartKitComponent;
   updateKitComponentQuantity: (id: string, quantity: number) => void;
@@ -1314,6 +1315,13 @@ export const useShopStore = create<ShopState>()(
       // Parts
       parts: [...SAMPLE_PARTS],
       kitComponents: [],
+      resetPartsForTenant: () => {
+        set(() => ({
+          parts: [],
+          inventoryMovements: [],
+          inventoryAdjustments: [],
+        }));
+      },
 
       addPart: (part) => {
         const uom = part.uom ?? 'EA';
