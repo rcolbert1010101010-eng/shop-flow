@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { z } from 'zod';
@@ -78,6 +78,7 @@ const toNumber = (value: number | string | null | undefined) => {
   return Number.isFinite(numeric) ? numeric : 0;
 };
 const formatNumber = (value: number | string | null | undefined, digits = 2) => toNumber(value).toFixed(digits);
+const isUuid = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
 
 export default function ManufacturingProductFormPage() {
   const navigate = useNavigate();
@@ -104,6 +105,7 @@ export default function ManufacturingProductFormPage() {
   const { summary: costSummary } = useProductCostSummary(productId ?? undefined, product ?? null);
   const bomAvailability = useBomAvailability(!isNew ? productId ?? undefined : undefined);
   const [bomDraft, setBomDraft] = useState<ManufacturingProductBomItem[]>([]);
+  const partsForBom = useMemo(() => parts.filter((part) => isUuid(part.id)), [parts]);
 
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
@@ -228,11 +230,11 @@ export default function ManufacturingProductFormPage() {
       toast({ title: 'Save product first', description: 'Save the product before adding a BOM', variant: 'destructive' });
       return;
     }
-    if (parts.length === 0) {
-      toast({ title: 'No parts found', variant: 'destructive' });
+    if (partsForBom.length === 0) {
+      toast({ title: 'No parts available in this tenant', variant: 'destructive' });
       return;
     }
-    const defaultPartId = parts[0].id;
+    const defaultPartId = partsForBom[0].id;
     setBomDraft((prev) => [
       ...prev,
       {
@@ -268,6 +270,11 @@ export default function ManufacturingProductFormPage() {
       toast({ title: 'Select at least one part', variant: 'destructive' });
       return;
     }
+    const validPartIds = new Set(partsForBom.map((part) => part.id));
+    if (prepared.some((item) => !validPartIds.has(item.partId))) {
+      toast({ title: 'Invalid part selected (not in tenant)', variant: 'destructive' });
+      return;
+    }
     try {
       await saveBom.mutateAsync(prepared);
       toast({ title: 'BOM saved' });
@@ -281,7 +288,7 @@ export default function ManufacturingProductFormPage() {
   };
 
   const computeRowCost = (item: ManufacturingProductBomItem) => {
-    const part = parts.find((p) => p.id === item.partId);
+    const part = partsForBom.find((p) => p.id === item.partId);
     const partCost = part?.cost ?? item.cost ?? 0;
     const qty = toNumber(item.quantity);
     const scrap = toNumber(item.scrapFactor);
@@ -516,10 +523,10 @@ export default function ManufacturingProductFormPage() {
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">Bill of Materials</h2>
             <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={handleSaveBom} disabled={saveBom.isPending || isNew}>
+              <Button variant="outline" onClick={handleSaveBom} disabled={saveBom.isPending || isNew || bomLoading || partsForBom.length === 0}>
                 Save BOM
               </Button>
-              <Button onClick={handleAddBomRow} disabled={isNew || bomLoading || parts.length === 0}>
+              <Button onClick={handleAddBomRow} disabled={isNew || bomLoading || partsForBom.length === 0}>
                 <Plus className="w-4 h-4 mr-1" />
                 Add Item
               </Button>
@@ -553,7 +560,7 @@ export default function ManufacturingProductFormPage() {
               </TableRow>
             ) : (
               bomDraft.map((item) => {
-                const part = parts.find((p) => p.id === item.partId);
+                const part = partsForBom.find((p) => p.id === item.partId);
                 const rowCost = computeRowCost(item);
                 const availability = bomAvailability.items.find(
                   (a) => a.partId === item.partId || a.bomItemId === item.id
@@ -566,13 +573,13 @@ export default function ManufacturingProductFormPage() {
                       <Select
                         value={item.partId}
                           onValueChange={(value) => handleBomChange(item.id, { partId: value })}
-                          disabled={parts.length === 0}
+                          disabled={partsForBom.length === 0}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder={parts.length === 0 ? 'No parts available' : 'Select part'} />
+                            <SelectValue placeholder={partsForBom.length === 0 ? 'No parts available' : 'Select part'} />
                           </SelectTrigger>
                           <SelectContent>
-                            {parts.map((p) => (
+                            {partsForBom.map((p) => (
                               <SelectItem key={p.id} value={p.id}>
                                 {p.part_number} — {p.description}
                               </SelectItem>
