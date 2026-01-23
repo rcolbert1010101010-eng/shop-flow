@@ -20,11 +20,12 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { Capability } from '@/security/rbac';
+import { FEATURES } from '@/config/features';
 
 export type NavLink = { type: 'link'; path: string; label: string; icon: LucideIcon };
 export type NavGroup = {
   type: 'group';
-  key: 'serviceOrders' | 'inventory' | 'returnsWarranty' | 'purchaseOrders';
+  key: 'serviceOrders' | 'inventory' | 'returnsWarranty' | 'purchaseOrders' | 'manufacturingV2';
   label: string;
   icon: LucideIcon;
   children: NavLink[];
@@ -88,6 +89,17 @@ const returnsWarrantyGroup: NavGroup = {
     { type: 'link', path: '/reports/returns-warranty', label: 'Returns/Warranty Report', icon: BarChart2 },
   ],
 };
+const manufacturingV2Group: NavGroup = {
+  type: 'group',
+  key: 'manufacturingV2',
+  label: 'Manufacturing (v2)',
+  icon: HardHat,
+  children: [
+    { type: 'link', path: '/manufacturing-v2', label: 'Overview', icon: HardHat },
+    { type: 'link', path: '/manufacturing-v2/products', label: 'Products', icon: HardHat },
+    { type: 'link', path: '/manufacturing-v2/builds', label: 'Builds', icon: HardHat },
+  ],
+};
 const reportsLink: NavLink = { type: 'link', path: '/reports', label: 'Reports', icon: BarChart2 };
 const settingsLink: NavLink = { type: 'link', path: '/settings', label: 'Settings', icon: Settings };
 
@@ -100,6 +112,7 @@ export const navSections: NavSection[] = [
   { label: 'Purchasing', items: [purchaseOrdersGroup] },
   { label: 'Scheduling', items: [schedulingLink, plannerLink] },
   { label: 'Accounting', items: [invoicesLink, paymentsLink, returnsWarrantyGroup] },
+  ...(FEATURES.manufacturingV2 ? [{ label: 'Manufacturing', items: [manufacturingV2Group] }] : []),
   { label: 'Reports', items: [reportsLink] },
   { label: 'Settings', items: [settingsLink] },
   { label: 'Admin', items: [adminUsersLink] },

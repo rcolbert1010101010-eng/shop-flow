@@ -62,6 +62,10 @@ import Login from "@/pages/Login";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { LoginRedirect } from "@/components/auth/LoginRedirect";
 import { useTheme } from "@/hooks/useTheme";
+import { FEATURES } from "@/config/features";
+import ManufacturingV2HomePage from "@/pages/manufacturingV2/ManufacturingV2HomePage";
+import ManufacturingV2ProductsPage from "@/pages/manufacturingV2/ManufacturingV2ProductsPage";
+import ManufacturingV2BuildsPage from "@/pages/manufacturingV2/ManufacturingV2BuildsPage";
 
 const queryClient = new QueryClient();
 
@@ -139,6 +143,13 @@ const App = () => {
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/settings/integrations/quickbooks" element={<QuickBooksIntegration />} />
                   <Route path="/admin/users" element={<AdminUsers />} />
+                  {FEATURES.manufacturingV2 && (
+                    <>
+                      <Route path="/manufacturing-v2" element={<ManufacturingV2HomePage />} />
+                      <Route path="/manufacturing-v2/products" element={<ManufacturingV2ProductsPage />} />
+                      <Route path="/manufacturing-v2/builds" element={<ManufacturingV2BuildsPage />} />
+                    </>
+                  )}
                 </Route>
               </Route>
               <Route path="*" element={<NotFound />} />
