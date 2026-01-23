@@ -28,6 +28,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Edit, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useRepos } from '@/repos';
 import type { ManufacturedProductOption, ManufacturingProductBomItem, Part } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -43,7 +44,6 @@ import {
   useProductCostSummary,
   useBomAvailability,
 } from '@/hooks/useManufacturing';
-import { fetchParts } from '@/integrations/supabase/catalog';
 
 const PRODUCT_TYPES = [
   { value: 'DUMP_BODY', label: 'Dump Body' },
@@ -86,6 +86,8 @@ export default function ManufacturingProductFormPage() {
   const isNew = productId === 'new';
   const [isEditing, setIsEditing] = useState(isNew);
   const { toast } = useToast();
+  const repos = useRepos();
+  const { parts } = repos.parts;
 
   const {
     data: product,
@@ -102,8 +104,6 @@ export default function ManufacturingProductFormPage() {
   const { summary: costSummary } = useProductCostSummary(productId ?? undefined, product ?? null);
   const bomAvailability = useBomAvailability(!isNew ? productId ?? undefined : undefined);
   const [bomDraft, setBomDraft] = useState<ManufacturingProductBomItem[]>([]);
-  const [parts, setParts] = useState<Part[]>([]);
-  const [isLoadingParts, setIsLoadingParts] = useState(false);
 
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
@@ -228,7 +228,11 @@ export default function ManufacturingProductFormPage() {
       toast({ title: 'Save product first', description: 'Save the product before adding a BOM', variant: 'destructive' });
       return;
     }
-    const defaultPartId = parts[0]?.id ?? '';
+    if (parts.length === 0) {
+      toast({ title: 'No parts found', variant: 'destructive' });
+      return;
+    }
+    const defaultPartId = parts[0].id;
     setBomDraft((prev) => [
       ...prev,
       {
@@ -260,6 +264,10 @@ export default function ManufacturingProductFormPage() {
         scrapFactor: toNumber(item.scrapFactor),
         notes: item.notes ?? null,
       }));
+    if (prepared.length === 0) {
+      toast({ title: 'Select at least one part', variant: 'destructive' });
+      return;
+    }
     try {
       await saveBom.mutateAsync(prepared);
       toast({ title: 'BOM saved' });
@@ -293,28 +301,6 @@ export default function ManufacturingProductFormPage() {
     }
   }, [bom]);
 
-  useEffect(() => {
-    let isMounted = true;
-    setIsLoadingParts(true);
-    fetchParts()
-      .then((data) => {
-        if (isMounted) setParts(data);
-      })
-      .catch((err) => {
-        console.error('Failed to load parts for BOM', err);
-        toast({
-          title: 'Error loading parts',
-          description: err?.message ?? 'Unable to load parts',
-          variant: 'destructive',
-        });
-      })
-      .finally(() => {
-        if (isMounted) setIsLoadingParts(false);
-      });
-    return () => {
-      isMounted = false;
-    };
-  }, [toast]);
 
   const handleSubmit = async (values: ProductFormValues) => {
     try {
@@ -533,7 +519,7 @@ export default function ManufacturingProductFormPage() {
               <Button variant="outline" onClick={handleSaveBom} disabled={saveBom.isPending || isNew}>
                 Save BOM
               </Button>
-              <Button onClick={handleAddBomRow} disabled={isNew || isLoadingParts || bomLoading}>
+              <Button onClick={handleAddBomRow} disabled={isNew || bomLoading || parts.length === 0}>
                 <Plus className="w-4 h-4 mr-1" />
                 Add Item
               </Button>
@@ -580,10 +566,10 @@ export default function ManufacturingProductFormPage() {
                       <Select
                         value={item.partId}
                           onValueChange={(value) => handleBomChange(item.id, { partId: value })}
-                          disabled={isLoadingParts}
+                          disabled={parts.length === 0}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder={isLoadingParts ? 'Loading parts...' : 'Select part'} />
+                            <SelectValue placeholder={parts.length === 0 ? 'No parts available' : 'Select part'} />
                           </SelectTrigger>
                           <SelectContent>
                             {parts.map((p) => (
