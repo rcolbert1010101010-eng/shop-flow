@@ -129,7 +129,7 @@ export interface CategoriesRepo {
 
 export interface PartsRepo {
   parts: Part[];
-  addPart: (part: Omit<Part, 'id' | 'is_active' | 'created_at' | 'updated_at' | 'last_cost' | 'avg_cost' | 'barcode'> & Partial<Pick<Part, 'last_cost' | 'avg_cost' | 'barcode'>>) => Part;
+  addPart: (part: Omit<Part, 'id' | 'is_active' | 'created_at' | 'updated_at' | 'last_cost' | 'avg_cost' | 'barcode'> & Partial<Pick<Part, 'last_cost' | 'avg_cost' | 'barcode' | 'is_active'>>) => Part;
   updatePart: (id: string, part: Partial<Part>) => void;
   updatePartWithQohAdjustment: (
     id: string,
@@ -193,7 +193,7 @@ export interface SalesOrdersRepo {
   updateSalesOrderNotes: (orderId: string, notes: string | null) => void;
   getSalesOrderLines: (orderId: string) => SalesOrderLine[];
   getSalesOrderChargeLines: (orderId: string) => SalesOrderChargeLine[];
-  addSalesOrderChargeLine: (line: Omit<SalesOrderChargeLine, 'id' | 'created_at' | 'updated_at'> & { id?: string }) => SalesOrderChargeLine | null;
+  addSalesOrderChargeLine: (line: Omit<SalesOrderChargeLine, 'id' | 'created_at' | 'updated_at' | 'total_price'> & { id?: string }) => SalesOrderChargeLine | null;
   updateSalesOrderChargeLine: (id: string, patch: Partial<SalesOrderChargeLine>) => void;
   removeSalesOrderChargeLine: (id: string) => void;
   recalculateSalesOrderTotals: (orderId: string) => void;
@@ -228,7 +228,7 @@ export interface WorkOrdersRepo {
   getWorkOrderLaborLines: (orderId: string) => WorkOrderLaborLine[];
   getWorkOrderChargeLines: (orderId: string) => WorkOrderChargeLine[];
   updateWorkOrderNotes: (orderId: string, notes: string | null) => void;
-  addWorkOrderChargeLine: (line: Omit<WorkOrderChargeLine, 'id' | 'created_at' | 'updated_at'> & { id?: string }) => WorkOrderChargeLine | null;
+  addWorkOrderChargeLine: (line: Omit<WorkOrderChargeLine, 'id' | 'created_at' | 'updated_at' | 'total_price'> & { id?: string }) => WorkOrderChargeLine | null;
   updateWorkOrderChargeLine: (id: string, patch: Partial<WorkOrderChargeLine>) => void;
   removeWorkOrderChargeLine: (id: string) => void;
   recalculateWorkOrderTotals: (orderId: string) => void;
