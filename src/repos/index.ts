@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 
 import { useShopStore } from '@/stores/shopStore';
+import { moneyRound, moneySafe } from '@/lib/utils';
 
 import type { Repos } from './repos';
 import { zustandRepos } from './zustandRepos';
@@ -37,9 +38,12 @@ const apiBackedRepos: Repos = {
       const lines = zustandRepos.salesOrders.getSalesOrderLines(input.salesOrderId);
       const partLines = lines.filter((line) => !line.is_core_refund_line);
 
-      const subtotal_parts = partLines.reduce((sum, line) => sum + line.line_total, 0);
-      const tax_amount = Math.round(subtotal_parts * order.tax_rate * 100) / 100;
-      const total = subtotal_parts + tax_amount;
+      const subtotal_parts = moneyRound(
+        partLines.reduce((sum, line) => sum + moneySafe(line.line_total), 0)
+      );
+      const tax_rate = moneySafe(order.tax_rate);
+      const tax_amount = moneyRound(subtotal_parts * (tax_rate / 100));
+      const total = moneyRound(subtotal_parts + tax_amount);
 
       invoiceCounter += 1;
       const invoice_number = `INV-${String(invoiceCounter).padStart(6, '0')}`;
@@ -100,15 +104,20 @@ const apiBackedRepos: Repos = {
       const validLaborLines = laborLines;
       const validChargeLines = chargeLines;
 
-      const subtotal_parts = validPartLines.reduce((sum, line) => sum + line.line_total, 0);
-      const subtotal_labor = validLaborLines.reduce((sum, line) => sum + line.line_total, 0);
-      const subtotal_fees = validChargeLines.reduce((sum, line) => sum + line.total_price, 0);
+      const subtotal_parts = moneyRound(
+        validPartLines.reduce((sum, line) => sum + moneySafe(line.line_total), 0)
+      );
+      const subtotal_labor = moneyRound(
+        validLaborLines.reduce((sum, line) => sum + moneySafe(line.line_total), 0)
+      );
+      const subtotal_fees = moneyRound(
+        validChargeLines.reduce((sum, line) => sum + moneySafe(line.total_price), 0)
+      );
 
       const tax_base = subtotal_parts + subtotal_labor + subtotal_fees;
-      const tax_amount = workOrder.tax_rate
-        ? Math.round(tax_base * workOrder.tax_rate * 100) / 100
-        : 0;
-      const total = subtotal_parts + subtotal_labor + subtotal_fees + tax_amount;
+      const tax_rate = moneySafe(workOrder.tax_rate);
+      const tax_amount = tax_rate ? moneyRound(tax_base * (tax_rate / 100)) : 0;
+      const total = moneyRound(subtotal_parts + subtotal_labor + subtotal_fees + tax_amount);
 
       invoiceCounter += 1;
       const invoice_number = `INV-${String(invoiceCounter).padStart(6, '0')}`;
