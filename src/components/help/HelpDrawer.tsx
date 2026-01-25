@@ -44,7 +44,7 @@ export function HelpDrawer({ moduleKey, open, onOpenChange, context }: HelpDrawe
 
         <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4">
           <AutoHelpPanel moduleKey={moduleKey} context={context} />
-          <OnboardingPanel />
+          {moduleKey !== 'sales_orders' && <OnboardingPanel />}
 
           {resolvedContent.tips.length > 0 && (
             <section className="space-y-2">
