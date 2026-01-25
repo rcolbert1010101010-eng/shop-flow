@@ -391,9 +391,6 @@ export default function SalesOrderDetail() {
     const partsHasCost = partsCostEntries.length > 0;
     const partsCost = partsCostEntries.reduce((sum, value) => sum + value, 0);
 
-    const laborRevenue = 0;
-    const laborHasCost = false;
-
     const feesRevenue = chargeLines.reduce((sum, line) => sum + toNumber(line.total_price), 0);
     const feesHasCost = false;
 
@@ -403,12 +400,6 @@ export default function SalesOrderDetail() {
         revenue: partsRevenue,
         hasCost: partsHasCost,
         cost: partsHasCost ? partsCost : null,
-      },
-      {
-        label: 'Labor',
-        revenue: laborRevenue,
-        hasCost: laborHasCost,
-        cost: null,
       },
       {
         label: 'Fees/Sublet',
