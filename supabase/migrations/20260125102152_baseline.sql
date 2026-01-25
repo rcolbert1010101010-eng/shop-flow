@@ -1,0 +1,4 @@
+-- Baseline marker migration.
+-- This repo previously managed schema via supabase/sql/*.sql and flat SQL files.
+-- This migration is intentionally empty and is used to establish a Supabase migrations baseline
+-- WITHOUT changing the remote database schema.

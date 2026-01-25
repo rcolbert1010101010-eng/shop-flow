@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { apiClient } from '@/api/client';
+import { supabase } from '@/integrations/supabase/client';
 import {
   ManufacturingTemplate,
   useManufacturingStore,
@@ -108,7 +108,16 @@ export default function ManufacturingTemplates() {
     if (deactivatingTemplates[template.id]) return;
     setDeactivatingTemplates((state) => ({ ...state, [template.id]: true }));
     try {
-      await apiClient.put(`/manufacturing/templates/${template.id}`, { is_active: false });
+      if (!supabase) {
+        throw new Error('Supabase not configured');
+      }
+      const { error } = await supabase
+        .from('manufacturing_templates')
+        .update({ is_active: false })
+        .eq('id', template.id);
+      if (error) {
+        throw error;
+      }
       const refresh = await fetchTemplates();
       if (!refresh.success && refresh.error) {
         toast({
@@ -162,6 +171,7 @@ export default function ManufacturingTemplates() {
                   'current_version_id',
                   'version',
                   'latest_version',
+                  'current_version_number',
                 ]);
                 const isActive = getActiveState(template);
                 const draftValid = isDraftValid(template);

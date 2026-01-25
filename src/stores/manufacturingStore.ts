@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { apiClient } from '@/api/client';
+import { supabase } from '@/integrations/supabase/client';
 
 type ActionResult = {
   success: boolean;
@@ -86,11 +86,20 @@ export const useManufacturingStore = create<ManufacturingState>((set, get) => ({
 
     set({ isSavingTemplate: true });
     try {
-      const created = await apiClient.post<ManufacturingTemplate, Record<string, unknown>>(
-        '/manufacturing/templates',
-        payload
-      );
-      set((state) => ({ templates: upsertById(state.templates, created) }));
+      if (!supabase) {
+        return { success: false, error: 'Supabase not configured' };
+      }
+      const { data, error } = await supabase
+        .from('manufacturing_templates')
+        .insert(payload)
+        .select('*')
+        .single();
+      if (error) {
+        return { success: false, error: error.message };
+      }
+      if (data) {
+        set((state) => ({ templates: upsertById(state.templates, data as ManufacturingTemplate) }));
+      }
       return { success: true };
     } catch (error) {
       return { success: false, error: toErrorMessage(error) };
@@ -108,11 +117,47 @@ export const useManufacturingStore = create<ManufacturingState>((set, get) => ({
       isSavingTemplateDraft: { ...state.isSavingTemplateDraft, [templateId]: true },
     }));
     try {
-      const updated = await apiClient.put<ManufacturingTemplate, Record<string, unknown>>(
-        `/manufacturing/templates/${templateId}/draft`,
-        payload
-      );
-      set((state) => ({ templates: upsertById(state.templates, updated) }));
+      if (!supabase) {
+        return { success: false, error: 'Supabase not configured' };
+      }
+      const record = payload ?? {};
+      const materialSpec =
+        record.materialSpec && typeof record.materialSpec === 'object' && !Array.isArray(record.materialSpec)
+          ? record.materialSpec
+          : {
+              name: (record as any).name ?? null,
+              description: (record as any).description ?? null,
+              is_active: (record as any).is_active ?? (record as any).isActive ?? true,
+            };
+      const materialGroups = Array.isArray((record as any).material_groups)
+        ? (record as any).material_groups
+        : Array.isArray((record as any).materialGroups)
+          ? (record as any).materialGroups
+          : [];
+      const operationsSource = Array.isArray((record as any).fabrication_operations)
+        ? (record as any).fabrication_operations
+        : Array.isArray((record as any).operations)
+          ? (record as any).operations
+          : [];
+      const operations = operationsSource.map((op: any) => ({
+        name: op?.name ?? op?.operation_type ?? op?.operationType ?? '',
+        estimated_hours: Number(op?.estimated_hours ?? op?.estimatedHours ?? 0),
+        skill_type: op?.skill_type ?? op?.skillType ?? '',
+        machine_type: op?.machine_type ?? op?.machineType ?? '',
+      }));
+
+      const { error } = await supabase.functions.invoke('manufacturing-template-draft', {
+        method: 'PUT',
+        body: {
+          templateId,
+          materialSpec,
+          materialGroups,
+          operations,
+        },
+      });
+      if (error) {
+        return { success: false, error: error.message };
+      }
       return { success: true };
     } catch (error) {
       return { success: false, error: toErrorMessage(error) };
@@ -132,12 +177,15 @@ export const useManufacturingStore = create<ManufacturingState>((set, get) => ({
       isSavingTemplateVersion: { ...state.isSavingTemplateVersion, [templateId]: true },
     }));
     try {
-      const updated = await apiClient.post<ManufacturingTemplate, Record<string, unknown>>(
-        `/manufacturing/templates/${templateId}/versions`,
-        {}
-      );
-      if (updated?.id === templateId) {
-        set((state) => ({ templates: upsertById(state.templates, updated) }));
+      if (!supabase) {
+        return { success: false, error: 'Supabase not configured' };
+      }
+      const { error } = await supabase.functions.invoke('manufacturing-template-version', {
+        method: 'POST',
+        body: { template_id: templateId },
+      });
+      if (error) {
+        return { success: false, error: error.message };
       }
       return { success: true };
     } catch (error) {
@@ -156,8 +204,17 @@ export const useManufacturingStore = create<ManufacturingState>((set, get) => ({
 
     set({ isFetchingTemplates: true });
     try {
-      const templates = await apiClient.get<ManufacturingTemplate[]>('/manufacturing/templates');
-      set({ templates: templates ?? [] });
+      if (!supabase) {
+        return { success: false, error: 'Supabase not configured' };
+      }
+      const { data, error } = await supabase.functions.invoke('manufacturing-templates', {
+        method: 'GET',
+      });
+      if (error) {
+        return { success: false, error: error.message };
+      }
+      const templates = Array.isArray(data) ? (data as ManufacturingTemplate[]) : [];
+      set({ templates });
       return { success: true };
     } catch (error) {
       return { success: false, error: toErrorMessage(error) };
@@ -175,11 +232,33 @@ export const useManufacturingStore = create<ManufacturingState>((set, get) => ({
       isSavingJobCreate: { ...state.isSavingJobCreate, [templateVersionId]: true },
     }));
     try {
-      const created = await apiClient.post<ManufacturingJob, Record<string, unknown>>(
-        '/manufacturing/jobs',
-        { template_version_id: templateVersionId, name: jobName }
-      );
-      set((state) => ({ jobs: upsertById(state.jobs, created) }));
+      if (!supabase) {
+        return { success: false, error: 'Supabase not configured' };
+      }
+      const { data, error } = await supabase
+        .from('manufacturing_jobs')
+        .insert({
+          source_template_version_id: templateVersionId,
+          job_name: jobName,
+          status: 'draft',
+          calculated_cost: 0,
+          cost_breakdown_json: { rate_source: 'stubbed_default_v1' },
+        })
+        .select('*')
+        .single();
+      if (error) {
+        return { success: false, error: error.message };
+      }
+      if (data) {
+        const mapped: ManufacturingJob = {
+          ...(data as Record<string, unknown>),
+          id: data.id,
+          name: (data as any).job_name ?? jobName,
+          status: (data as any).status ?? 'draft',
+          template_version_id: (data as any).source_template_version_id ?? templateVersionId,
+        };
+        set((state) => ({ jobs: upsertById(state.jobs, mapped) }));
+      }
       return { success: true };
     } catch (error) {
       return { success: false, error: toErrorMessage(error) };
@@ -197,8 +276,22 @@ export const useManufacturingStore = create<ManufacturingState>((set, get) => ({
 
     set({ isFetchingJobs: true });
     try {
-      const jobs = await apiClient.get<ManufacturingJob[]>('/manufacturing/jobs');
-      set({ jobs: jobs ?? [] });
+      if (!supabase) {
+        return { success: false, error: 'Supabase not configured' };
+      }
+      const { data, error } = await supabase
+        .from('manufacturing_jobs')
+        .select('id, job_name, status, source_template_version_id, calculated_cost, created_at')
+        .order('created_at', { ascending: false });
+      if (error) {
+        return { success: false, error: error.message };
+      }
+      const jobs = (data ?? []).map((row: any) => ({
+        ...row,
+        name: row.job_name,
+        template_version_id: row.source_template_version_id,
+      })) as ManufacturingJob[];
+      set({ jobs });
       return { success: true };
     } catch (error) {
       return { success: false, error: toErrorMessage(error) };
@@ -216,7 +309,32 @@ export const useManufacturingStore = create<ManufacturingState>((set, get) => ({
       isFetchingJobDetail: { ...state.isFetchingJobDetail, [jobId]: true },
     }));
     try {
-      const detail = await apiClient.get<ManufacturingJobDetail>(`/manufacturing/jobs/${jobId}`);
+      if (!supabase) {
+        return { success: false, error: 'Supabase not configured' };
+      }
+      const { data: job, error: jobError } = await supabase
+        .from('manufacturing_jobs')
+        .select('*')
+        .eq('id', jobId)
+        .maybeSingle();
+      if (jobError) {
+        return { success: false, error: jobError.message };
+      }
+      const { data: operations, error: opsError } = await supabase
+        .from('manufacturing_job_operations')
+        .select('*')
+        .eq('manufacturing_job_id', jobId);
+      if (opsError) {
+        return { success: false, error: opsError.message };
+      }
+      const detail: ManufacturingJobDetail = {
+        ...(job as Record<string, unknown>),
+        id: (job as any)?.id ?? jobId,
+        name: (job as any)?.job_name ?? '',
+        status: (job as any)?.status ?? '',
+        template_version_id: (job as any)?.source_template_version_id ?? null,
+        operations: operations ?? [],
+      };
       set((state) => ({
         jobDetails: { ...state.jobDetails, [jobId]: detail },
       }));
@@ -239,16 +357,34 @@ export const useManufacturingStore = create<ManufacturingState>((set, get) => ({
       isSavingJobStatus: { ...state.isSavingJobStatus, [jobId]: true },
     }));
     try {
-      const updated = await apiClient.put<ManufacturingJob, Record<string, unknown>>(
-        `/manufacturing/jobs/${jobId}/status`,
-        { status }
-      );
-      set((state) => ({
-        jobs: upsertById(state.jobs, updated),
-        jobDetails: state.jobDetails[jobId]
-          ? { ...state.jobDetails, [jobId]: { ...state.jobDetails[jobId], ...updated } }
-          : state.jobDetails,
-      }));
+      if (!supabase) {
+        return { success: false, error: 'Supabase not configured' };
+      }
+      const normalizedStatus = status.toLowerCase();
+      const { data, error } = await supabase
+        .from('manufacturing_jobs')
+        .update({ status: normalizedStatus })
+        .eq('id', jobId)
+        .select('*')
+        .maybeSingle();
+      if (error) {
+        return { success: false, error: error.message };
+      }
+      if (data) {
+        const mapped: ManufacturingJob = {
+          ...(data as Record<string, unknown>),
+          id: data.id,
+          name: (data as any).job_name ?? '',
+          status: (data as any).status ?? normalizedStatus,
+          template_version_id: (data as any).source_template_version_id ?? null,
+        };
+        set((state) => ({
+          jobs: upsertById(state.jobs, mapped),
+          jobDetails: state.jobDetails[jobId]
+            ? { ...state.jobDetails, [jobId]: { ...state.jobDetails[jobId], ...mapped } }
+            : state.jobDetails,
+        }));
+      }
       return { success: true };
     } catch (error) {
       return { success: false, error: toErrorMessage(error) };
