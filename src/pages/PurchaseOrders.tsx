@@ -9,7 +9,6 @@ import { Plus } from 'lucide-react';
 import { useRepos } from '@/repos';
 import type { PurchaseOrder } from '@/types';
 import { getPurchaseOrderDerivedStatus } from '@/services/purchaseOrderStatus';
-import { HelpTooltip } from '@/components/help/HelpTooltip';
 import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 
 type PurchaseOrderRow = PurchaseOrder & {
@@ -65,7 +64,6 @@ export default function PurchaseOrders() {
       header: (
         <span className="flex items-center gap-1">
           PO #
-          <HelpTooltip content="Internal PO number for tracking vendor orders." />
         </span>
       ), 
       sortable: true, 
@@ -76,7 +74,6 @@ export default function PurchaseOrders() {
       header: (
         <span className="flex items-center gap-1">
           Derived Status
-          <HelpTooltip content="Calculated from line receiving: Open, Partially Received, or Received." />
         </span>
       ),
       sortable: true,
@@ -87,7 +84,6 @@ export default function PurchaseOrders() {
       header: (
         <span className="flex items-center gap-1">
           Vendor
-          <HelpTooltip content="Who you're buying from." />
         </span>
       ),
       sortable: true,
@@ -97,7 +93,6 @@ export default function PurchaseOrders() {
       header: (
         <span className="flex items-center gap-1">
           Linked SO
-          <HelpTooltip content="Shows which customer order/job this PO is supporting." />
         </span>
       ),
       sortable: true,
@@ -107,7 +102,6 @@ export default function PurchaseOrders() {
       header: (
         <span className="flex items-center gap-1">
           Linked WO
-          <HelpTooltip content="Shows which customer order/job this PO is supporting." />
         </span>
       ),
       sortable: true,
@@ -117,7 +111,6 @@ export default function PurchaseOrders() {
       header: (
         <span className="flex items-center gap-1">
           Status
-          <HelpTooltip content="Manual lock status (Open/Closed). Closing locks the PO." />
         </span>
       ),
       sortable: true,
@@ -137,7 +130,6 @@ export default function PurchaseOrders() {
       header: (
         <span className="flex items-center gap-1">
           Created
-          <HelpTooltip content="When the PO was created." />
         </span>
       ),
       sortable: true,
@@ -168,7 +160,6 @@ export default function PurchaseOrders() {
         subtitle={
           <span className="flex items-center gap-1">
             Manage vendor orders and receiving
-            <HelpTooltip content="Start a vendor order. Add lines, receive items, then close when complete." />
           </span>
         }
         actions={
@@ -185,7 +176,6 @@ export default function PurchaseOrders() {
       <div className="flex justify-end items-center gap-2 mb-4">
         <span className="text-sm text-muted-foreground flex items-center gap-1">
           Filters:
-          <HelpTooltip content="Filters by what's been received so you can focus on what still needs action." />
         </span>
         {(['open', 'partial', 'received'] as const).map((filter) => (
           <Button

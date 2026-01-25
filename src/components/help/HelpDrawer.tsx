@@ -4,10 +4,10 @@ import { Separator } from '@/components/ui/separator';
 import { HelpChat } from './HelpChat';
 import type { HelpContext } from '@/help/types';
 import { AutoHelpPanel } from './AutoHelp';
-import { OnboardingPanel } from './OnboardingPanel';
 import { customersHelpContent } from './customersHelpContent';
 import { salesOrdersHelpContent } from './salesOrdersHelpContent';
 import { workOrdersHelpContent } from './workOrdersHelpContent';
+import { purchaseOrdersHelpContent } from './content/purchaseOrdersHelpContent';
 
 interface HelpDrawerProps {
   moduleKey: string;
@@ -25,6 +25,8 @@ export function HelpDrawer({ moduleKey, open, onOpenChange, context }: HelpDrawe
       ? salesOrdersHelpContent
       : moduleKey === 'work_orders'
       ? workOrdersHelpContent
+      : moduleKey === 'purchase_orders'
+      ? purchaseOrdersHelpContent
       : helpContent;
 
   if (!resolvedContent) {
@@ -44,7 +46,6 @@ export function HelpDrawer({ moduleKey, open, onOpenChange, context }: HelpDrawe
 
         <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4">
           <AutoHelpPanel moduleKey={moduleKey} context={context} />
-          {moduleKey !== 'sales_orders' && <OnboardingPanel />}
 
           {resolvedContent.tips.length > 0 && (
             <section className="space-y-2">
