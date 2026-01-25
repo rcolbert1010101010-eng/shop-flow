@@ -23,35 +23,6 @@ const playbookMap: Record<
     byRole: Record<HelpRole, { reason: string; lines: string[] }>;
   }
 > = {
-  high_risk_transition: {
-    title: 'What Happens If I Do This?',
-    byRole: {
-      'Technician': {
-        reason: 'High-risk action (invoicing/receiving/closing) detected.',
-        lines: [
-          'Confirm parts/labor quantities and UOM before you post.',
-          'Once posted, use a return/credit instead of editing.',
-          'Pause if anything is uncertain—ask a Service Writer/Manager.',
-        ],
-      },
-      'Service Writer': {
-        reason: 'High-risk action will impact billing and workflow.',
-        lines: [
-          'Verify totals/tax, customer hold status, and payment path.',
-          'Invoicing or receiving may lock pricing—plan corrections via credit/return.',
-          'Communicate any changes to technicians before posting.',
-        ],
-      },
-      'Manager/Admin': {
-        reason: 'High-risk action will lock financial/inventory state.',
-        lines: [
-          'Confirm revenue/COGS impact and approvals before posting.',
-          'Once locked, corrections must be credit/return with audit notes.',
-          'Ensure inventory and costing (UOM/conversions) are correct pre-post.',
-        ],
-      },
-    },
-  },
   locked_action: {
     title: 'Why Is This Locked?',
     byRole: {
@@ -77,35 +48,6 @@ const playbookMap: Record<
           'Invoiced/locked records stay immutable; use credit/return paths.',
           'Document rationale for any corrective action (audit).',
           'If inventory is involved, ensure adjustments are authorized.',
-        ],
-      },
-    },
-  },
-  hesitation: {
-    title: 'What Happens If I Do This?',
-    byRole: {
-      'Technician': {
-        reason: 'Repeated hover/attempt detected—providing steps.',
-        lines: [
-          'Review the steps before proceeding; confirm quantities/UOM.',
-          'If unsure, pause and ask a Service Writer.',
-          'Avoid irreversible actions until confirmed.',
-        ],
-      },
-      'Service Writer': {
-        reason: 'Hesitation detected—clarify billing impact.',
-        lines: [
-          'Validate totals, taxes, and customer status first.',
-          'If action locks billing, plan the correction path (credit/return).',
-          'Coordinate with technicians before proceeding.',
-        ],
-      },
-      'Manager/Admin': {
-        reason: 'Hesitation on a controlled action—review financial impact.',
-        lines: [
-          'Ensure approvals and audit notes before committing.',
-          'If this affects inventory, confirm conversions and costing.',
-          'Proceed only if correction paths are documented.',
         ],
       },
     },
