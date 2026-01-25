@@ -8,6 +8,7 @@ import { customersHelpContent } from './customersHelpContent';
 import { salesOrdersHelpContent } from './salesOrdersHelpContent';
 import { workOrdersHelpContent } from './workOrdersHelpContent';
 import { purchaseOrdersHelpContent } from './content/purchaseOrdersHelpContent';
+import { inventoryHelpContent } from './content/inventoryHelpContent';
 
 interface HelpDrawerProps {
   moduleKey: string;
@@ -27,6 +28,8 @@ export function HelpDrawer({ moduleKey, open, onOpenChange, context }: HelpDrawe
       ? workOrdersHelpContent
       : moduleKey === 'purchase_orders'
       ? purchaseOrdersHelpContent
+      : moduleKey === 'inventory'
+      ? inventoryHelpContent
       : helpContent;
 
   if (!resolvedContent) {

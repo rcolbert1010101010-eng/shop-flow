@@ -46,7 +46,6 @@ import { ResponsiveDataList } from '@/components/common/ResponsiveDataList';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { normalizeQty, formatQtyWithUom, formatSheetsEquivalent } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { HelpTooltip } from '@/components/help/HelpTooltip';
 import { ImportPartsDialog } from '@/components/inventory/ImportPartsDialog';
 import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 import { usePermissions } from '@/security/usePermissions';
@@ -1572,7 +1571,6 @@ export default function Inventory() {
             <div className="space-y-2">
               <Label htmlFor="adjust_reason" className="flex items-center gap-1">
                 Reason *
-                <HelpTooltip content="Select why you are adjusting inventory. Common reasons: Cycle Count, Scrap, Cut Usage, Return. Required for audit trail." />
               </Label>
               <Select value={adjustReason} onValueChange={(value) => {
                 setAdjustReason(value);
