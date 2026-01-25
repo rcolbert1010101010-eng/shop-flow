@@ -8,6 +8,7 @@ import { workOrdersFieldGuide } from './workOrdersHelpContent';
 import { purchaseOrdersFieldGuide } from './content/purchaseOrdersHelpContent';
 import { inventoryFieldGuide } from './content/inventoryHelpContent';
 import { schedulingFieldGuide } from './content/schedulingHelpContent';
+import { invoicesFieldGuide } from './content/invoicesHelpContent';
 
 interface Response {
   answer: string;
@@ -386,6 +387,61 @@ function detectSchedulingCrossModule(text: string): { label: string } | null {
   return null;
 }
 
+function isInvoicesFieldQuestion(text: string): boolean {
+  const normalized = normalizeText(text);
+  return invoicesFieldGuide.some((entry) =>
+    entry.keywords.some((keyword) => normalized.includes(keyword))
+  );
+}
+
+function findInvoicesFieldGuideEntry(text: string) {
+  const normalized = normalizeText(text);
+  return (
+    invoicesFieldGuide.find((entry) =>
+      entry.keywords.some((keyword) => normalized.includes(keyword))
+    ) ?? null
+  );
+}
+
+function buildInvoicesFieldAnswer(entry: {
+  field: string;
+  what: string;
+  when: string;
+  example: string;
+  mistakes: string;
+  impact: string;
+}): string {
+  return [
+    `**${entry.field}**`,
+    `What it is: ${entry.what}`,
+    `When to use: ${entry.when}`,
+    `Example: ${entry.example}`,
+    `Common mistakes: ${entry.mistakes}`,
+    `Downstream impact: ${entry.impact}`,
+  ].join('\n');
+}
+
+function detectInvoicesCrossModule(text: string): { label: string } | null {
+  const normalized = normalizeText(text);
+  const matches = [
+    { label: 'Work Orders', keywords: ['work order', 'work orders', 'workorder'] },
+    { label: 'Sales Orders', keywords: ['sales order', 'sales orders', 'salesorder'] },
+    { label: 'Inventory', keywords: ['inventory', 'qoh', 'stock'] },
+    { label: 'Purchase Orders', keywords: ['purchase order', 'purchase orders', 'po number'] },
+    { label: 'Receiving', keywords: ['receiving', 'receive shipment'] },
+    { label: 'Scheduling', keywords: ['schedule', 'scheduling', 'calendar'] },
+    { label: 'Settings', keywords: ['settings', 'setup', 'configuration'] },
+  ];
+
+  for (const match of matches) {
+    if (match.keywords.some((keyword) => normalized.includes(keyword))) {
+      return { label: match.label };
+    }
+  }
+
+  return null;
+}
+
 function countMatches(text: string, searchTerms: string[]): number {
   const normalized = normalizeText(text);
   return searchTerms.filter((term) => normalized.includes(term)).length;
@@ -716,6 +772,20 @@ export function respond(
     if (crossModule && !isSchedulingFieldQuestion(userText)) {
       return logAndReturn(
         `Scheduling-only on this screen. Open ${crossModule.label} Help for that topic.`,
+        [`Open ${crossModule.label} Help`]
+      );
+    }
+  }
+
+  if (moduleKey === 'invoices') {
+    const fieldMatch = findInvoicesFieldGuideEntry(userText);
+    if (fieldMatch) {
+      return logAndReturn(buildInvoicesFieldAnswer(fieldMatch), [fieldMatch.field, 'Field Guide']);
+    }
+    const crossModule = detectInvoicesCrossModule(userText);
+    if (crossModule && !isInvoicesFieldQuestion(userText)) {
+      return logAndReturn(
+        `Invoices-only on this screen. Open ${crossModule.label} Help for that topic.`,
         [`Open ${crossModule.label} Help`]
       );
     }

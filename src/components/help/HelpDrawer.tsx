@@ -10,6 +10,7 @@ import { workOrdersHelpContent } from './workOrdersHelpContent';
 import { purchaseOrdersHelpContent } from './content/purchaseOrdersHelpContent';
 import { inventoryHelpContent } from './content/inventoryHelpContent';
 import { schedulingHelpContent } from './content/schedulingHelpContent';
+import { invoicesHelpContent } from './content/invoicesHelpContent';
 
 interface HelpDrawerProps {
   moduleKey: string;
@@ -33,6 +34,8 @@ export function HelpDrawer({ moduleKey, open, onOpenChange, context }: HelpDrawe
       ? inventoryHelpContent
       : moduleKey === 'scheduling'
       ? schedulingHelpContent
+      : moduleKey === 'invoices'
+      ? invoicesHelpContent
       : helpContent;
 
   if (!resolvedContent) {
