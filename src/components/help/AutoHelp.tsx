@@ -81,35 +81,6 @@ const playbookMap: Record<
       },
     },
   },
-  inventory_impact: {
-    title: 'Inventory / UOM Playbooks',
-    byRole: {
-      'Technician': {
-        reason: 'Inventory-impacting action detected.',
-        lines: [
-          'Use the correct UOM before adjusting or receiving.',
-          'Avoid negative QOH—flag discrepancies to a manager.',
-          'For sheet/remnant work, follow the Remnants & Drops steps.',
-        ],
-      },
-      'Service Writer': {
-        reason: 'Inventory change affects billing and availability.',
-        lines: [
-          'Choose Receive vs Adjust correctly; note vendor docs.',
-          'Keep UOM consistent with vendor/customer billing.',
-          'Link receipts to orders to preserve cost traceability.',
-        ],
-      },
-      'Manager/Admin': {
-        reason: 'Inventory action affects cost, availability, and audit.',
-        lines: [
-          'Validate UOM conversions and costing before posting.',
-          'For sheet goods/remnants, preserve dimensions and cost basis.',
-          'Ensure approvals exist for adjustments; log reasons.',
-        ],
-      },
-    },
-  },
   hesitation: {
     title: 'What Happens If I Do This?',
     byRole: {
