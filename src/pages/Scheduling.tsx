@@ -16,7 +16,6 @@ import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
-import { HelpTooltip } from '@/components/help/HelpTooltip';
 import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 import { cn } from '@/lib/utils';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -865,7 +864,6 @@ export default function Scheduling() {
                     <User className="w-4 h-4 text-muted-foreground" />
                     <CardTitle className="text-base flex items-center gap-1">
                       {techId === 'unassigned' ? 'Unassigned' : tech?.name || 'Technician'}
-                      <HelpTooltip content="Each lane is a tech's capacity. Don't overbook—leave room for surprises." />
                     </CardTitle>
                   </div>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -964,13 +962,11 @@ export default function Scheduling() {
                           <div className="flex items-center justify-between gap-2">
                             <Badge className={cn('px-2 py-0.5 text-xs flex items-center gap-1', statusStyles[item.status])}>
                               {statusLabels[item.status]}
-                              <HelpTooltip content="Quick read of job state (scheduled, in progress, waiting parts, complete)." />
                             </Badge>
                             <div className="flex items-center gap-2 text-xs text-muted-foreground">
                               <Clock className="w-3 h-3" />
                               <span className="flex items-center gap-1">
                                 {formatTimeRange(item)}
-                                <HelpTooltip content="Planned time. Use best estimate—actuals come from time tracking." />
                               </span>
                               {hasConflict && conflictSummary && (
                                 <Tooltip>
@@ -1010,7 +1006,6 @@ export default function Scheduling() {
                           <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
                             <Badge variant="outline" className={cn('px-2 py-0.5 text-[11px] font-semibold flex items-center gap-1', item.priority === 1 ? 'border-destructive text-destructive' : '')}>
                               P{item.priority}
-                              <HelpTooltip content="Use priority to bubble urgent work without hiding everything else." />
                             </Badge>
                             <Separator orientation="vertical" className="h-4" />
                             <span>{formatTimeRange(item)}</span>
@@ -1030,7 +1025,6 @@ export default function Scheduling() {
                           {item.notes && (
                             <p className="mt-1 text-xs text-muted-foreground line-clamp-2 flex items-center gap-1">
                               <span>{item.notes}</span>
-                              <HelpTooltip content="Short scheduling notes: 'needs bay 2', 'waiting on part', 'customer drop-off'." />
                             </p>
                           )}
                           {hasConflict && (
@@ -1070,7 +1064,6 @@ export default function Scheduling() {
           subtitle={
             <span className="flex items-center gap-1">
               Plan technician workload for the week.
-              <HelpTooltip content="Plan jobs by day and technician. Keep it real so the shop stays predictable." />
             </span>
           }
         actions={
@@ -1091,7 +1084,6 @@ export default function Scheduling() {
                 ))}
               </SelectContent>
             </Select>
-            <HelpTooltip content="Filters help you focus. Clear filters when you're done so you don't miss work." />
             </div>
             <div className="flex rounded-md border">
               {(['DAY', 'WEEK'] as const).map((mode) => (
@@ -1341,7 +1333,6 @@ export default function Scheduling() {
                             {item.notes && (
                               <p className="mt-1 text-xs text-muted-foreground line-clamp-2 flex items-center gap-1">
                                 <span>{item.notes}</span>
-                                <HelpTooltip content="Short scheduling notes: 'needs bay 2', 'waiting on part', 'customer drop-off'." />
                               </p>
                             )}
                             {hasConflict && (
@@ -1571,7 +1562,6 @@ export default function Scheduling() {
                   <div className="flex items-center justify-between gap-2">
                     <Label className="flex items-center gap-1">
                       Work Order
-                      <HelpTooltip content="Opens the job. Keep scheduling tied to the WO so history stays clean." />
                     </Label>
                     {hasDialogConflicts && dialogConflictSummary && (
                       <Tooltip>
@@ -1639,7 +1629,6 @@ export default function Scheduling() {
                 <div className="flex items-center justify-between gap-2">
                   <Label className="flex items-center gap-1">
                     Technician
-                    <HelpTooltip content="Each lane is a tech's capacity. Don't overbook—leave room for surprises." />
                   </Label>
                   {hasDialogConflicts && dialogConflictSummary && (
                     <Tooltip>
@@ -1686,7 +1675,6 @@ export default function Scheduling() {
                 <div className="flex items-center justify-between gap-2">
                   <Label className="flex items-center gap-1">
                     Start
-                    <HelpTooltip content="Drag jobs to change day/time. Move it when the plan changes." />
                   </Label>
                   {hasDialogConflicts && dialogConflictSummary && (
                     <Tooltip>
@@ -1714,7 +1702,6 @@ export default function Scheduling() {
                 <div className="flex items-center justify-between gap-2">
                   <Label className="flex items-center gap-1">
                     Duration (hours)
-                    <HelpTooltip content="Planned time. Use best estimate—actuals come from time tracking." />
                   </Label>
                   {hasDialogConflicts && dialogConflictSummary && (
                     <Tooltip>
@@ -1743,7 +1730,6 @@ export default function Scheduling() {
               <div className="space-y-2">
                 <Label className="flex items-center gap-1">
                   Status
-                  <HelpTooltip content="Quick read of job state (scheduled, in progress, waiting parts, complete)." />
                 </Label>
                 <Select
                   value={formState.status}
@@ -1765,7 +1751,6 @@ export default function Scheduling() {
                 <div className="flex items-center justify-between gap-2">
                   <Label className="flex items-center gap-1">
                     Priority (1-5)
-                    <HelpTooltip content="Use priority to bubble urgent work without hiding everything else." />
                   </Label>
                   <Badge variant="outline" className={cn('px-2 py-0.5 text-[11px] font-semibold', formState.priority === 1 ? 'border-destructive text-destructive' : '')}>
                     P{formState.priority || 1}
@@ -1802,7 +1787,6 @@ export default function Scheduling() {
             <div className="space-y-2">
               <Label className="flex items-center gap-1">
                 Notes
-                <HelpTooltip content="Short scheduling notes: 'needs bay 2', 'waiting on part', 'customer drop-off'." />
               </Label>
               <Textarea
                 value={formState.notes}

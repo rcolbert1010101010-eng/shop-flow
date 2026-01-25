@@ -7,6 +7,7 @@ import { salesOrdersFieldGuide } from './salesOrdersHelpContent';
 import { workOrdersFieldGuide } from './workOrdersHelpContent';
 import { purchaseOrdersFieldGuide } from './content/purchaseOrdersHelpContent';
 import { inventoryFieldGuide } from './content/inventoryHelpContent';
+import { schedulingFieldGuide } from './content/schedulingHelpContent';
 
 interface Response {
   answer: string;
@@ -317,6 +318,61 @@ function detectInventoryCrossModule(text: string): { label: string } | null {
     { label: 'Receiving', keywords: ['receiving', 'receive shipment'] },
     { label: 'Work Orders', keywords: ['work order', 'work orders', 'workorder'] },
     { label: 'Sales Orders', keywords: ['sales order', 'sales orders', 'salesorder'] },
+    { label: 'Payments', keywords: ['payment history', 'void payment'] },
+    { label: 'Settings', keywords: ['settings', 'setup', 'configuration'] },
+  ];
+
+  for (const match of matches) {
+    if (match.keywords.some((keyword) => normalized.includes(keyword))) {
+      return { label: match.label };
+    }
+  }
+
+  return null;
+}
+
+function isSchedulingFieldQuestion(text: string): boolean {
+  const normalized = normalizeText(text);
+  return schedulingFieldGuide.some((entry) =>
+    entry.keywords.some((keyword) => normalized.includes(keyword))
+  );
+}
+
+function findSchedulingFieldGuideEntry(text: string) {
+  const normalized = normalizeText(text);
+  return (
+    schedulingFieldGuide.find((entry) =>
+      entry.keywords.some((keyword) => normalized.includes(keyword))
+    ) ?? null
+  );
+}
+
+function buildSchedulingFieldAnswer(entry: {
+  field: string;
+  what: string;
+  when: string;
+  example: string;
+  mistakes: string;
+  impact: string;
+}): string {
+  return [
+    `**${entry.field}**`,
+    `What it is: ${entry.what}`,
+    `When to use: ${entry.when}`,
+    `Example: ${entry.example}`,
+    `Common mistakes: ${entry.mistakes}`,
+    `Downstream impact: ${entry.impact}`,
+  ].join('\n');
+}
+
+function detectSchedulingCrossModule(text: string): { label: string } | null {
+  const normalized = normalizeText(text);
+  const matches = [
+    { label: 'Work Orders', keywords: ['work order', 'work orders', 'workorder'] },
+    { label: 'Sales Orders', keywords: ['sales order', 'sales orders', 'salesorder'] },
+    { label: 'Inventory', keywords: ['inventory', 'qoh', 'stock'] },
+    { label: 'Purchase Orders', keywords: ['purchase order', 'purchase orders', 'po number'] },
+    { label: 'Receiving', keywords: ['receiving', 'receive shipment'] },
     { label: 'Payments', keywords: ['payment history', 'void payment'] },
     { label: 'Settings', keywords: ['settings', 'setup', 'configuration'] },
   ];
@@ -646,6 +702,20 @@ export function respond(
     if (crossModule && !isInventoryFieldQuestion(userText)) {
       return logAndReturn(
         `Inventory-only on this screen. Open ${crossModule.label} Help for that topic.`,
+        [`Open ${crossModule.label} Help`]
+      );
+    }
+  }
+
+  if (moduleKey === 'scheduling') {
+    const fieldMatch = findSchedulingFieldGuideEntry(userText);
+    if (fieldMatch) {
+      return logAndReturn(buildSchedulingFieldAnswer(fieldMatch), [fieldMatch.field, 'Field Guide']);
+    }
+    const crossModule = detectSchedulingCrossModule(userText);
+    if (crossModule && !isSchedulingFieldQuestion(userText)) {
+      return logAndReturn(
+        `Scheduling-only on this screen. Open ${crossModule.label} Help for that topic.`,
         [`Open ${crossModule.label} Help`]
       );
     }
