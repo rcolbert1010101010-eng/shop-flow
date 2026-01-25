@@ -7,6 +7,7 @@ import { AutoHelpPanel } from './AutoHelp';
 import { OnboardingPanel } from './OnboardingPanel';
 import { customersHelpContent } from './customersHelpContent';
 import { salesOrdersHelpContent } from './salesOrdersHelpContent';
+import { workOrdersHelpContent } from './workOrdersHelpContent';
 
 interface HelpDrawerProps {
   moduleKey: string;
@@ -22,6 +23,8 @@ export function HelpDrawer({ moduleKey, open, onOpenChange, context }: HelpDrawe
       ? customersHelpContent
       : moduleKey === 'sales_orders'
       ? salesOrdersHelpContent
+      : moduleKey === 'work_orders'
+      ? workOrdersHelpContent
       : helpContent;
 
   if (!resolvedContent) {

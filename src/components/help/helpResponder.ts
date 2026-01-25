@@ -4,6 +4,7 @@ import type { HelpContext, HelpRole } from '@/help/types';
 import { logHelpInteraction } from './helpAudit';
 import { customersFieldGuide } from './customersHelpContent';
 import { salesOrdersFieldGuide } from './salesOrdersHelpContent';
+import { workOrdersFieldGuide } from './workOrdersHelpContent';
 
 interface Response {
   answer: string;
@@ -147,6 +148,61 @@ function detectSalesOrdersCrossModule(text: string): { label: string } | null {
   const normalized = normalizeText(text);
   const matches = [
     { label: 'Work Orders', keywords: ['work order', 'work orders', 'workorder'] },
+    { label: 'Inventory', keywords: ['inventory', 'qoh', 'stock', 'cycle count'] },
+    { label: 'Purchase Orders', keywords: ['purchase order', 'purchase orders', 'po number'] },
+    { label: 'Receiving', keywords: ['receiving', 'receive shipment'] },
+    { label: 'Scheduling', keywords: ['schedule', 'scheduling', 'calendar'] },
+    { label: 'Payments', keywords: ['payment history', 'void payment'] },
+    { label: 'Settings', keywords: ['settings', 'setup', 'configuration'] },
+  ];
+
+  for (const match of matches) {
+    if (match.keywords.some((keyword) => normalized.includes(keyword))) {
+      return { label: match.label };
+    }
+  }
+
+  return null;
+}
+
+function isWorkOrdersFieldQuestion(text: string): boolean {
+  const normalized = normalizeText(text);
+  return workOrdersFieldGuide.some((entry) =>
+    entry.keywords.some((keyword) => normalized.includes(keyword))
+  );
+}
+
+function findWorkOrdersFieldGuideEntry(text: string) {
+  const normalized = normalizeText(text);
+  return (
+    workOrdersFieldGuide.find((entry) =>
+      entry.keywords.some((keyword) => normalized.includes(keyword))
+    ) ?? null
+  );
+}
+
+function buildWorkOrdersFieldAnswer(entry: {
+  field: string;
+  what: string;
+  when: string;
+  example: string;
+  mistakes: string;
+  impact: string;
+}): string {
+  return [
+    `**${entry.field}**`,
+    `What it is: ${entry.what}`,
+    `When to use: ${entry.when}`,
+    `Example: ${entry.example}`,
+    `Common mistakes: ${entry.mistakes}`,
+    `Downstream impact: ${entry.impact}`,
+  ].join('\n');
+}
+
+function detectWorkOrdersCrossModule(text: string): { label: string } | null {
+  const normalized = normalizeText(text);
+  const matches = [
+    { label: 'Sales Orders', keywords: ['sales order', 'sales orders', 'salesorder'] },
     { label: 'Inventory', keywords: ['inventory', 'qoh', 'stock', 'cycle count'] },
     { label: 'Purchase Orders', keywords: ['purchase order', 'purchase orders', 'po number'] },
     { label: 'Receiving', keywords: ['receiving', 'receive shipment'] },
@@ -438,6 +494,20 @@ export function respond(
     if (crossModule && !isSalesOrdersFieldQuestion(userText)) {
       return logAndReturn(
         `Sales Orders-only on this screen. Open ${crossModule.label} Help for that topic.`,
+        [`Open ${crossModule.label} Help`]
+      );
+    }
+  }
+
+  if (moduleKey === 'work_orders') {
+    const fieldMatch = findWorkOrdersFieldGuideEntry(userText);
+    if (fieldMatch) {
+      return logAndReturn(buildWorkOrdersFieldAnswer(fieldMatch), [fieldMatch.field, 'Field Guide']);
+    }
+    const crossModule = detectWorkOrdersCrossModule(userText);
+    if (crossModule && !isWorkOrdersFieldQuestion(userText)) {
+      return logAndReturn(
+        `Work Orders-only on this screen. Open ${crossModule.label} Help for that topic.`,
         [`Open ${crossModule.label} Help`]
       );
     }
