@@ -68,7 +68,7 @@ export default function QuickBooksIntegration() {
       return;
     }
     toast({ title: 'Test export queued', description: 'A test export payload was written to accounting_exports.' });
-    const rows = await listRecentExports();
+    const rows = await listRecentExports(25);
     setExports(rows);
   };
 
@@ -82,7 +82,7 @@ export default function QuickBooksIntegration() {
 
   useEffect(() => {
     const loadExports = async () => {
-      const rows = await listRecentExports();
+      const rows = await listRecentExports(25);
       setExports(rows);
     };
     void loadExports();
@@ -128,17 +128,19 @@ export default function QuickBooksIntegration() {
   const handleRunSender = async () => {
     setSenderRunning(true);
     try {
-      const { data, error } = await supabase.functions.invoke('qb-sender');
+      const { data, error } = await supabase.functions.invoke('qb-sender?limit=10');
       if (error) {
         toast({ title: 'Sender failed', description: error.message, variant: 'destructive' });
       } else {
         toast({
-          title: 'Sender ran',
-          description: `Processed ${data?.processed ?? 0} (claimed ${data?.claimed ?? 0} / scanned ${data?.scanned ?? 0})`,
+          title: 'Live transfer ran',
+          description: `Claimed ${data?.claimed ?? 0}, sent ${data?.sent ?? 0}, failed ${data?.failed ?? 0}, retried ${data?.retried ?? 0}`,
         });
+        const rows = await listRecentExports(25);
+        setExports(rows);
       }
     } catch (err: any) {
-      toast({ title: 'Sender failed', description: err?.message || 'Unknown error', variant: 'destructive' });
+      toast({ title: 'Live transfer failed', description: err?.message || 'Unknown error', variant: 'destructive' });
     } finally {
       setSenderRunning(false);
     }
@@ -234,16 +236,6 @@ export default function QuickBooksIntegration() {
                 >
                   Disconnect
                 </Button>
-                {canEdit && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleRunSender}
-                    disabled={senderRunning}
-                  >
-                    {senderRunning ? 'Running...' : 'Run Sender Now'}
-                  </Button>
-                )}
               </div>
             </div>
           </CardContent>
@@ -404,8 +396,18 @@ export default function QuickBooksIntegration() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Recent Exports</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Live Transfer</CardTitle>
+          {canEdit && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleRunSender}
+              disabled={senderRunning}
+            >
+              {senderRunning ? 'Running...' : 'Run Live Transfer Now'}
+            </Button>
+          )}
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           {draft?.is_enabled === false && (

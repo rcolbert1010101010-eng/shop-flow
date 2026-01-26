@@ -327,14 +327,14 @@ export function useQuickBooksIntegration() {
     [createInvoiceExport, getConfig]
   );
 
-  const listRecentExports = useCallback(async () => {
+  const listRecentExports = useCallback(async (limit = 10) => {
     if (!supabase) return [];
     const { data } = await supabase
       .from('accounting_exports')
       .select('id,status,created_at,export_type,source_entity_type,source_entity_id,attempt_count,last_error')
       .eq('provider', PROVIDER)
       .order('created_at', { ascending: false })
-      .limit(10);
+      .limit(limit);
     return data ?? [];
   }, []);
 
