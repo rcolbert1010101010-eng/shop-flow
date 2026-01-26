@@ -75,7 +75,7 @@ const isAdminOrService = (req: Request) => {
     if (token === serviceRoleKey) return true;
     const payload = parseJwt(token);
     const role = payload?.role || payload?.app_metadata?.role || payload?.user_metadata?.role;
-    return role === 'ADMIN';
+    return role === 'ADMIN' || role === 'service_role';
   }
   return false;
 };
