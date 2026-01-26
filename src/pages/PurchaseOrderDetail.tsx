@@ -43,7 +43,6 @@ import { QuickAddDialog } from '@/components/ui/quick-add-dialog';
 import { getPurchaseOrderDerivedStatus } from '@/services/purchaseOrderStatus';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { SmartSearchSelect } from '@/components/common/SmartSearchSelect';
-import { HelpTooltip } from '@/components/help/HelpTooltip';
 import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 import { usePermissions } from '@/security/usePermissions';
 
@@ -499,7 +498,6 @@ export default function PurchaseOrderDetail() {
             <div>
               <Label className="flex items-center gap-1">
                 Vendor *
-                <HelpTooltip content="Pick the vendor first. It's required to create the PO." />
               </Label>
               <Select value={selectedVendorId} onValueChange={setSelectedVendorId}>
                 <SelectTrigger>
@@ -621,7 +619,6 @@ export default function PurchaseOrderDetail() {
               <div className="flex items-center justify-between h-5">
                 <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground leading-none flex items-center gap-1">
                   Linked Sales Order
-                  <HelpTooltip content="Optional. Link when this PO is for a specific customer sale." />
                 </span>
                 {linkedSalesOrder ? (
                   <Button
@@ -713,7 +710,6 @@ export default function PurchaseOrderDetail() {
               <div className="flex items-center justify-between h-5">
                 <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground leading-none flex items-center gap-1">
                   Linked Work Order
-                  <HelpTooltip content="Optional. Link when this PO is for a specific repair job." />
                 </span>
                 {linkedWorkOrder ? (
                   <Button
@@ -806,7 +802,6 @@ export default function PurchaseOrderDetail() {
                 <div className="space-y-1">
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground flex items-center gap-1">
                     Link Status
-                    <HelpTooltip content="Shows whether links are clean, missing, or locked by invoicing." />
                   </p>
                   <p className="text-sm text-muted-foreground">{linkStatusMessage}</p>
                 </div>
@@ -842,37 +837,31 @@ export default function PurchaseOrderDetail() {
                     <TableHead>
                       <span className="flex items-center gap-1">
                         Part #
-                        <HelpTooltip content="Vendor order line item. Make sure the part number matches what you'll receive." />
                       </span>
                     </TableHead>
                     <TableHead>
                       <span className="flex items-center gap-1">
                         Description
-                        <HelpTooltip content="Quick confirmation of what's being ordered." />
                       </span>
                     </TableHead>
                     <TableHead className="text-right">
                       <span className="flex items-center justify-end gap-1">
                         Ordered
-                        <HelpTooltip content="How many you're ordering on this PO." />
                       </span>
                     </TableHead>
                     <TableHead className="text-right">
                       <span className="flex items-center justify-end gap-1">
                         Received
-                        <HelpTooltip content="How many have been received so far." />
                       </span>
                     </TableHead>
                     <TableHead className="text-right">
                       <span className="flex items-center justify-end gap-1">
                         Remaining
-                        <HelpTooltip content="How many are still outstanding on this line." />
                       </span>
                     </TableHead>
                     <TableHead className="text-right">
                       <span className="flex items-center justify-end gap-1">
                         Unit Cost
-                        <HelpTooltip content="Cost per unit for this PO line. Used for margins and cost history." />
                       </span>
                     </TableHead>
                     {!isClosed && <TableHead className="text-right w-32">Actions</TableHead>}
@@ -966,7 +955,6 @@ export default function PurchaseOrderDetail() {
           <CardHeader>
             <CardTitle className="text-base font-semibold flex items-center gap-1">
               Returns
-              <HelpTooltip content="Returns linked to this vendor PO (for credits, defects, wrong items)." />
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -1065,7 +1053,6 @@ export default function PurchaseOrderDetail() {
             <div className="space-y-2">
               <Label className="flex items-center gap-1">
                 Part *
-                <HelpTooltip content="Search and select the part you're ordering from the vendor." />
               </Label>
               <div className="flex items-center gap-2">
                 <SmartSearchSelect
@@ -1109,7 +1096,6 @@ export default function PurchaseOrderDetail() {
             <div>
               <Label className="flex items-center gap-1">
                 Quantity
-                <HelpTooltip content="Ordered quantity for this PO line." />
               </Label>
               <Input
                 type="number"
@@ -1147,7 +1133,6 @@ export default function PurchaseOrderDetail() {
                 />
                 <Label htmlFor="po-browse-in-stock" className="text-sm flex items-center gap-1">
                   In stock only
-                  <HelpTooltip content="Show only parts with QOH above zero." />
                 </Label>
               </div>
             </div>
@@ -1241,7 +1226,6 @@ export default function PurchaseOrderDetail() {
           <div>
             <Label className="flex items-center gap-1">
               Part Number *
-              <HelpTooltip content="Your unique identifier. Keep it stable—this is what techs search." />
             </Label>
             <Input
               value={newPartData.part_number}
@@ -1253,7 +1237,6 @@ export default function PurchaseOrderDetail() {
           <div>
             <Label className="flex items-center gap-1">
               Description
-              <HelpTooltip content="Plain-English name. Include key spec so it's searchable." />
             </Label>
             <Input
               value={newPartData.description}
@@ -1265,7 +1248,6 @@ export default function PurchaseOrderDetail() {
             <div>
               <Label className="flex items-center gap-1">
                 Vendor *
-                <HelpTooltip content="Preferred vendor for this part." />
               </Label>
               <Select
                 value={newPartData.vendor_id}
@@ -1286,7 +1268,6 @@ export default function PurchaseOrderDetail() {
             <div>
               <Label className="flex items-center gap-1">
                 Category *
-                <HelpTooltip content="Groups parts for browsing and reporting." />
               </Label>
               <Select
                 value={newPartData.category_id}
@@ -1311,7 +1292,6 @@ export default function PurchaseOrderDetail() {
             <div>
               <Label className="flex items-center gap-1">
                 Cost
-                <HelpTooltip content="Your unit cost. Helps margin and profitability." />
               </Label>
               <Input
                 type="number"
@@ -1324,7 +1304,6 @@ export default function PurchaseOrderDetail() {
             <div>
               <Label className="flex items-center gap-1">
                 Selling Price
-                <HelpTooltip content="What you charge per unit." />
               </Label>
               <Input
                 type="number"
@@ -1350,7 +1329,6 @@ export default function PurchaseOrderDetail() {
         <div>
           <Label className="flex items-center gap-1">
             Quantity to Receive
-            <HelpTooltip content="How many arrived today for this line. Partial receiving is normal." />
           </Label>
           <Input
             type="number"

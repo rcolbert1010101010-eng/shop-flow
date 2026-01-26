@@ -29,3 +29,4 @@ scripts/
 *.bak
 
 .vercel
+supabase/.temp/

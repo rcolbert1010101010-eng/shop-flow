@@ -12,6 +12,7 @@ export type AccountingConfig = {
   id?: string;
   provider: string;
   is_enabled: boolean;
+  transfer_mode?: 'IMPORT_ONLY' | 'LIVE_TRANSFER';
   mode: string;
   calculation_source: string;
   auto_create_customers: boolean;
@@ -87,10 +88,11 @@ export function useQuickBooksIntegration() {
     setConnection(connectionRows ? (connectionRows as IntegrationConnection) : null);
     setConfig(
       configRows
-        ? (configRows as AccountingConfig)
+        ? ({ ...configRows, transfer_mode: (configRows as any).transfer_mode ?? 'IMPORT_ONLY' } as AccountingConfig)
         : {
             provider: PROVIDER,
             is_enabled: false,
+            transfer_mode: 'IMPORT_ONLY',
             mode: 'INVOICE_ONLY',
             calculation_source: 'SHOPFLOW',
             auto_create_customers: true,
@@ -123,15 +125,20 @@ export function useQuickBooksIntegration() {
       if (!supabase) return;
       setSaving(true);
       setError(null);
+      const payload = {
+        ...next,
+        provider: PROVIDER,
+        transfer_mode: next.transfer_mode ?? 'IMPORT_ONLY',
+      };
       const { data, error: upsertError } = await supabase
         .from('accounting_integration_config')
-        .upsert({ ...next, provider: PROVIDER })
+        .upsert(payload)
         .select()
         .maybeSingle();
       if (upsertError) {
         setError(upsertError.message);
       } else if (data) {
-        setConfig(data as AccountingConfig);
+        setConfig({ ...data, transfer_mode: (data as any).transfer_mode ?? 'IMPORT_ONLY' } as AccountingConfig);
       }
       setSaving(false);
     },
@@ -167,8 +174,9 @@ export function useQuickBooksIntegration() {
       .eq('provider', PROVIDER)
       .maybeSingle();
     if (data) {
-      setConfig(data as AccountingConfig);
-      return data as AccountingConfig;
+      const hydrated = { ...data, transfer_mode: (data as any).transfer_mode ?? 'IMPORT_ONLY' } as AccountingConfig;
+      setConfig(hydrated);
+      return hydrated;
     }
     return null;
   }, [config]);
@@ -327,14 +335,14 @@ export function useQuickBooksIntegration() {
     [createInvoiceExport, getConfig]
   );
 
-  const listRecentExports = useCallback(async () => {
+  const listRecentExports = useCallback(async (limit = 10) => {
     if (!supabase) return [];
     const { data } = await supabase
       .from('accounting_exports')
       .select('id,status,created_at,export_type,source_entity_type,source_entity_id,attempt_count,last_error')
       .eq('provider', PROVIDER)
       .order('created_at', { ascending: false })
-      .limit(10);
+      .limit(limit);
     return data ?? [];
   }, []);
 

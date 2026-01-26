@@ -12,6 +12,7 @@ export type DbPricingRuleRow = {
   scope: PricingRule['scope'];
   priority: number | string;
   category_id?: string | null;
+  category_code?: string | null;
   customer_type?: CustomerType | null;
   cost_min: number | string;
   cost_max: number | string;
@@ -56,6 +57,7 @@ const mapPricingRule = (
   priority: toNumber(row.priority),
   categoryCode:
     row.pricing_categories?.code ??
+    row.category_code ??
     (row.category_id ? categoryCodeById?.get(row.category_id) ?? null : null),
   customerType: row.customer_type ?? null,
   costMin: toNumber(row.cost_min),
@@ -67,63 +69,24 @@ const mapPricingRule = (
   isActive: row.is_active ?? true,
 });
 
-const PRICING_RULE_SELECT =
-  'id,scope,priority,category_id,customer_type,cost_min,cost_max,markup_percent,min_margin_dollars,max_markup_percent,msrp_cap_percent,is_active';
+export async function fetchPricingRulesForTenant(): Promise<PricingRule[]> {
+  const { data, error } = await supabase.rpc('fetch_pricing_rules_for_current_tenant');
 
-export async function fetchPricingRulesForTenant(tenantId: string): Promise<PricingRule[]> {
-  const tenantOr = `tenant_id.eq.${tenantId},tenant_id.is.null`;
-  const { data: joinedData, error: joinedError } = await supabase
-    .from('pricing_rules')
-    .select(`${PRICING_RULE_SELECT},pricing_categories(code)`)
-    .or(tenantOr)
-    .eq('is_active', true);
-
-  if (!joinedError) {
-    return (joinedData ?? []).map((row) => mapPricingRule(row as DbPricingRuleRow));
+  if (error) {
+    console.error('Error fetching pricing rules', error);
+    throw new Error(`pricing_rules fetch failed: ${error.message ?? 'Unknown error'}`);
   }
 
-  console.error('Error fetching pricing rules with category join', joinedError);
-
-  const { data: rulesData, error: rulesError } = await supabase
-    .from('pricing_rules')
-    .select(PRICING_RULE_SELECT)
-    .or(tenantOr)
-    .eq('is_active', true);
-
-  if (rulesError) {
-    console.error('Error fetching pricing rules', rulesError);
-    throw new Error(`pricing_rules fetch failed: ${rulesError.message ?? 'Unknown error'}`);
-  }
-
-  const { data: categoryData, error: categoryError } = await supabase
-    .from('pricing_categories')
-    .select('id,code,tenant_id')
-    .or(tenantOr);
-
-  if (categoryError) {
-    console.error('Error fetching pricing categories', categoryError);
-    throw new Error(`pricing_categories fetch failed: ${categoryError.message ?? 'Unknown error'}`);
-  }
-
-  const categoryCodeById = new Map(
-    (categoryData ?? []).map((row) => [row.id, row.code])
-  );
-
-  return (rulesData ?? []).map((row) =>
-    mapPricingRule(row as DbPricingRuleRow, categoryCodeById)
-  );
+  return (data ?? []).map((row) => mapPricingRule(row as DbPricingRuleRow));
 }
 
 export async function fetchCustomerPricingProfile(
-  tenantId: string,
   customerId: string
 ): Promise<{ profileType: CustomerType; discountPercent: number } | null> {
   const { data, error } = await supabase
-    .from('customer_pricing_profiles')
-    .select('profile_type,discount_percent')
-    .eq('tenant_id', tenantId)
-    .eq('customer_id', customerId)
-    .eq('is_active', true)
+    .rpc('fetch_customer_pricing_profile_for_current_tenant', {
+      p_customer_id: customerId,
+    })
     .maybeSingle();
 
   if (error) {

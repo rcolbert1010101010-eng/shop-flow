@@ -68,7 +68,6 @@ import { ResponsiveDataList } from '@/components/common/ResponsiveDataList';
 import { MobileActionBar, MobileActionBarSpacer } from '@/components/common/MobileActionBar';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { normalizeQty, formatQtyWithUom } from '@/lib/utils';
-import { HelpTooltip } from '@/components/help/HelpTooltip';
 import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 import { supabase } from '@/integrations/supabase/client';
 import { usePermissions } from '@/security/usePermissions';
@@ -1939,7 +1938,6 @@ export default function WorkOrderDetail() {
             <div>
               <Label className="flex items-center gap-1">
                 Customer *
-                <HelpTooltip content="Customer controls billing + history. Pick it first." />
               </Label>
               <div className="flex items-center gap-2">
                 <SmartSearchSelect
@@ -1990,7 +1988,6 @@ export default function WorkOrderDetail() {
               <div>
                 <Label className="flex items-center gap-1">
                   Unit *
-                  <HelpTooltip content="Attach the right unit so service history stays accurate." />
                 </Label>
                 <div className="flex gap-2">
                   <div className="flex-1 min-w-0">
@@ -2174,7 +2171,6 @@ export default function WorkOrderDetail() {
           currentOrder ? (
             <div className="flex items-center gap-2">
               <span>{statusLabel} - Order {currentOrder.order_number}</span>
-              <HelpTooltip content="Status is the shop's truth. Update it intentionally so nothing gets lost." />
             </div>
           ) : (
             'Manage job, labor, parts, and status'
@@ -2254,7 +2250,6 @@ export default function WorkOrderDetail() {
                       <FileCheck className="w-4 h-4 mr-2" />
                       Invoice
                     </Button>
-                    <HelpTooltip content="Use when totals look correct and the WO is ready to bill." />
                   </div>
                 )}
               </>
@@ -2304,7 +2299,6 @@ export default function WorkOrderDetail() {
             <div>
               <span className="text-muted-foreground flex items-center gap-1">
                 Customer:
-                {currentOrder && <HelpTooltip content="Customer controls billing + history. Pick it first." />}
               </span>
               <p className="font-medium">{customer?.company_name || '-'}</p>
             </div>
@@ -3212,7 +3206,6 @@ export default function WorkOrderDetail() {
                       <Plus className="w-4 h-4 mr-2" />
                       Add Part
                     </Button>
-                    <HelpTooltip content="Parts here reduce QOH. Negative stock is allowed—don't block the repair." />
                   </div>
                 )}
               </div>
@@ -3546,7 +3539,6 @@ export default function WorkOrderDetail() {
                       <Plus className="w-4 h-4 mr-2" />
                       Add Labor
                     </Button>
-                    <HelpTooltip content="Add real hours under the closest Work Type. Notes explain exceptions." />
                   </div>
                 )}
               </div>
@@ -4174,7 +4166,6 @@ export default function WorkOrderDetail() {
                 <div className="mb-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
                   <div className="flex items-center gap-1 mb-1">
                     <span className="font-medium">Warnings</span>
-                    <HelpTooltip content="Flags missing or suspicious values (like zero cut length or no thickness). Fix before posting." />
                   </div>
                   {plasmaWarnings.map((w) => (
                     <div key={w}>{w}</div>
@@ -4285,25 +4276,21 @@ export default function WorkOrderDetail() {
                       <TableHead className="text-right">
                         <span className="flex items-center justify-end gap-1">
                           Thickness
-                          <HelpTooltip content="Material thickness for this line. Affects cut speed and pricing." />
                         </span>
                       </TableHead>
                       <TableHead className="text-right">
                         <span className="flex items-center justify-end gap-1">
                           Qty
-                          <HelpTooltip content="How many of this cut piece you're making." />
                         </span>
                       </TableHead>
                       <TableHead className="text-right">
                         <span className="flex items-center justify-end gap-1">
                           Cut Length
-                          <HelpTooltip content="Total inches of cut for this line. Higher cut length = more machine time." />
                         </span>
                       </TableHead>
                       <TableHead className="text-right">
                         <span className="flex items-center justify-end gap-1">
                           Pierces
-                          <HelpTooltip content="How many pierces (starts). Pierces add time and consumable wear." />
                         </span>
                       </TableHead>
                       {showPlasmaDetails && (
@@ -4311,20 +4298,17 @@ export default function WorkOrderDetail() {
                           <TableHead className="text-right">
                             <span className="flex items-center justify-end gap-1">
                               Setup (min)
-                              <HelpTooltip content="One-time setup time for this line (fixturing, program setup, material handling)." />
                             </span>
                           </TableHead>
                           <TableHead className="text-right">
                             <span className="flex items-center justify-end gap-1">
                               Machine (min)
-                              <HelpTooltip content="Run time for cutting. This is the time you're charging for on the table." />
                             </span>
                           </TableHead>
                           <TableHead className="text-right">Derived?</TableHead>
                           <TableHead className="text-right">
                             <span className="flex items-center justify-end gap-1">
                               Unit Sell
-                              <HelpTooltip content="What you charge for this line. Recalc can fill defaults—override only when needed." />
                             </span>
                           </TableHead>
                         </>
@@ -4482,7 +4466,6 @@ export default function WorkOrderDetail() {
                   <div className="text-sm text-right space-y-1">
                     <div className="font-medium flex items-center justify-end gap-1">
                       <span>Plasma Total: ${formatNumber(plasmaTotal)}</span>
-                      <HelpTooltip content="Total sell amount for this plasma job (sum of line totals)." />
                     </div>
                     {plasmaChargeLine && (
                       <div className="text-muted-foreground">
@@ -5144,7 +5127,6 @@ export default function WorkOrderDetail() {
             <div>
               <Label className="flex items-center gap-1">
                 Quantity
-                <HelpTooltip content="This will reduce QOH. If you need to correct it, edit the line—don't create duplicates." />
               </Label>
               <Input type="number" min="1" value={partQty} onChange={(e) => setPartQty(e.target.value)} />
             </div>
@@ -5359,7 +5341,6 @@ export default function WorkOrderDetail() {
           <div>
             <Label className="flex items-center gap-1">
               Work Type
-              <HelpTooltip content="Pick the closest work type—this powers reporting and pricing rules later." />
             </Label>
             <Select value={laborTechnicianId} onValueChange={setLaborTechnicianId}>
               <SelectTrigger><SelectValue placeholder="Select technician (optional)" /></SelectTrigger>
@@ -5373,7 +5354,6 @@ export default function WorkOrderDetail() {
           <div>
             <Label className="flex items-center gap-1">
               Hours
-              <HelpTooltip content="Labor rate comes from system settings. If hours are wrong, totals are wrong." />
             </Label>
             <Input type="number" min="0.25" step="0.25" value={laborHours} onChange={(e) => setLaborHours(e.target.value)} />
           </div>

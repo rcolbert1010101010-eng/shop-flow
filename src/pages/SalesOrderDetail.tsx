@@ -65,7 +65,6 @@ import { AdaptiveDialog } from '@/components/common/AdaptiveDialog';
 import { MobileActionBar, MobileActionBarSpacer } from '@/components/common/MobileActionBar';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { normalizeQty, formatQtyWithUom } from '@/lib/utils';
-import { HelpTooltip } from '@/components/help/HelpTooltip';
 import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 import { ProfitabilityPanel } from '@/components/orders/ProfitabilityPanel';
 import { usePermissions } from '@/security/usePermissions';
@@ -392,9 +391,6 @@ export default function SalesOrderDetail() {
     const partsHasCost = partsCostEntries.length > 0;
     const partsCost = partsCostEntries.reduce((sum, value) => sum + value, 0);
 
-    const laborRevenue = 0;
-    const laborHasCost = false;
-
     const feesRevenue = chargeLines.reduce((sum, line) => sum + toNumber(line.total_price), 0);
     const feesHasCost = false;
 
@@ -404,12 +400,6 @@ export default function SalesOrderDetail() {
         revenue: partsRevenue,
         hasCost: partsHasCost,
         cost: partsHasCost ? partsCost : null,
-      },
-      {
-        label: 'Labor',
-        revenue: laborRevenue,
-        hasCost: laborHasCost,
-        cost: null,
       },
       {
         label: 'Fees/Sublet',
@@ -851,7 +841,6 @@ export default function SalesOrderDetail() {
             <div>
               <Label className="flex items-center gap-1">
                 Customer *
-                <HelpTooltip content="Customer drives billing and history. Pick it first." />
               </Label>
               <div className="flex items-center gap-2">
                 <SmartSearchSelect
@@ -889,7 +878,6 @@ export default function SalesOrderDetail() {
               <div>
                 <Label className="flex items-center gap-1">
                   Unit (optional)
-                  <HelpTooltip content="Attach a unit when the sale is tied to an asset for clean service history." />
                 </Label>
                 <SmartSearchSelect
                   label={undefined}
@@ -923,7 +911,6 @@ export default function SalesOrderDetail() {
           <div>
             <Label className="flex items-center gap-1">
               Company Name *
-              <HelpTooltip content="Customer drives billing and history. Pick it first." />
             </Label>
             <Input value={newCustomerName} onChange={(e) => setNewCustomerName(e.target.value)} placeholder="Enter company name" />
           </div>
@@ -1202,7 +1189,6 @@ export default function SalesOrderDetail() {
             <div>
               <span className="text-muted-foreground flex items-center gap-1">
                 Invoiced:
-                <HelpTooltip content="When this order was invoiced." />
               </span>
               <p className="font-medium">{new Date(currentOrder.invoiced_at).toLocaleString()}</p>
             </div>
@@ -1240,10 +1226,7 @@ export default function SalesOrderDetail() {
           {/* Notes Section */}
           <div className="mt-4 pt-4 border-t border-border">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-muted-foreground text-sm flex items-center gap-1">
-                Notes:
-                <HelpTooltip content="Internal-only. Use for substitutions, approvals, special instructions." />
-              </span>
+              <span className="text-muted-foreground text-sm">Notes:</span>
               {!isLocked && !isEditingNotes && (
                 <Button variant="ghost" size="sm" onClick={handleEditNotes}>
                   <Edit className="w-3 h-3" />
@@ -1486,37 +1469,18 @@ export default function SalesOrderDetail() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>
-                          <span className="flex items-center gap-1">
-                            Part #
-                            <HelpTooltip content="Pick the exact part number. This keeps pricing and inventory consistent." />
-                          </span>
-                        </TableHead>
-                        <TableHead>
-                          <span className="flex items-center gap-1">
-                            Description
-                            <HelpTooltip content="Confirm the item and clarify details if needed (size, brand, spec)." />
-                          </span>
-                        </TableHead>
+                        <TableHead>Part #</TableHead>
+                        <TableHead>Description</TableHead>
                         <TableHead className="text-center">Warranty</TableHead>
                         <TableHead className="text-center">Core</TableHead>
                         <TableHead className="text-right">
-                          <span className="flex items-center justify-end gap-1">
-                            Qty
-                            <HelpTooltip content="Quantity sold in the selected unit." />
-                          </span>
+                          <span className="flex items-center justify-end gap-1">Qty</span>
                         </TableHead>
                         <TableHead className="text-right">
-                          <span className="flex items-center justify-end gap-1">
-                            Price
-                            <HelpTooltip content="Sell price per unit. Adjust only when you have a reason." />
-                          </span>
+                          <span className="flex items-center justify-end gap-1">Price</span>
                         </TableHead>
                         <TableHead className="text-right">
-                          <span className="flex items-center justify-end gap-1">
-                            Total
-                            <HelpTooltip content="Auto-calculated. This is what the customer pays for this line." />
-                          </span>
+                          <span className="flex items-center justify-end gap-1">Total</span>
                         </TableHead>
                         {!isLocked && <TableHead className="w-10"></TableHead>}
                       </TableRow>
@@ -1696,10 +1660,7 @@ export default function SalesOrderDetail() {
                 <span>${formatMoney(currentOrder?.tax_amount)}</span>
               </div>
               <div className="flex justify-between text-lg font-semibold border-t border-border pt-2">
-                <span className="flex items-center gap-1">
-                  Total:
-                  <HelpTooltip content="Final amount due before payments." />
-                </span>
+                <span className="flex items-center gap-1">Total:</span>
                 <span>${formatMoney(currentOrder?.total)}</span>
               </div>
             </div>
@@ -1724,18 +1685,12 @@ export default function SalesOrderDetail() {
                   <span className="font-medium">${formatMoney(payments.summary.totalPaid)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground flex items-center gap-1">
-                    Balance Due
-                    <HelpTooltip content="What's still unpaid on this order." />
-                  </span>
+                  <span className="text-muted-foreground">Balance Due</span>
                   <span className="font-medium">${formatMoney(payments.summary.balanceDue)}</span>
                 </div>
               </div>
               <div className="space-y-2">
-                <p className="text-sm font-medium flex items-center gap-1">
-                  Record Payment
-                  <HelpTooltip content="Record a payment. Partial payments are fine." />
-                </p>
+                <p className="text-sm font-medium">Record Payment</p>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <Input
@@ -1925,7 +1880,6 @@ export default function SalesOrderDetail() {
             <div>
               <Label className="flex items-center gap-1">
                 Part *
-                <HelpTooltip content="Pick the exact part number. This keeps pricing and inventory consistent." />
               </Label>
               <div className="flex items-center gap-2">
                 <SmartSearchSelect
@@ -1991,7 +1945,6 @@ export default function SalesOrderDetail() {
             <div>
               <Label className="flex items-center gap-1">
                 Quantity
-                <HelpTooltip content="Quantity sold in the selected unit." />
               </Label>
               <Input type="number" min="1" value={partQty} onChange={(e) => setPartQty(e.target.value)} />
             </div>
@@ -2108,7 +2061,6 @@ export default function SalesOrderDetail() {
           <div>
             <Label className="flex items-center gap-1">
               Part Number *
-              <HelpTooltip content="Pick the exact part number. This keeps pricing and inventory consistent." />
             </Label>
             <Input
               value={newPartData.part_number}
@@ -2120,7 +2072,6 @@ export default function SalesOrderDetail() {
           <div>
             <Label className="flex items-center gap-1">
               Description
-              <HelpTooltip content="Confirm the item and clarify details if needed (size, brand, spec)." />
             </Label>
             <Textarea
               value={newPartData.description}
@@ -2133,7 +2084,6 @@ export default function SalesOrderDetail() {
             <div>
               <Label className="flex items-center gap-1">
                 Vendor *
-                <HelpTooltip content="Who you normally buy it from. Helps purchasing later." />
               </Label>
               <Select
                 value={newPartData.vendor_id}
@@ -2154,7 +2104,6 @@ export default function SalesOrderDetail() {
             <div>
               <Label className="flex items-center gap-1">
                 Category *
-                <HelpTooltip content="How you group parts for browsing and reporting." />
               </Label>
               <Select
                 value={newPartData.category_id}
@@ -2177,7 +2126,6 @@ export default function SalesOrderDetail() {
             <div>
               <Label className="flex items-center gap-1">
                 Cost
-                <HelpTooltip content="What it costs you per UOM. Used for margin and profitability." />
               </Label>
               <Input
                 type="number"
@@ -2190,7 +2138,6 @@ export default function SalesOrderDetail() {
             <div>
               <Label className="flex items-center gap-1">
                 Selling Price
-                <HelpTooltip content="What you charge per UOM. Keep it consistent with your quoting rules." />
               </Label>
               <Input
                 type="number"

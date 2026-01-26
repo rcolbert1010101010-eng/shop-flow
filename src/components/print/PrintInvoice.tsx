@@ -90,7 +90,7 @@ export function PrintWorkOrder({ order, partLines, laborLines, customer, unit, p
   });
 
   const laborItems = laborLines.map((line) => ({
-    description: line.description || 'Labor',
+    description: line.description || 'Item',
     quantity: line.hours,
     uom: 'HRS',
     rate: line.rate,

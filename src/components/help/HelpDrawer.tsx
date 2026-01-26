@@ -4,7 +4,13 @@ import { Separator } from '@/components/ui/separator';
 import { HelpChat } from './HelpChat';
 import type { HelpContext } from '@/help/types';
 import { AutoHelpPanel } from './AutoHelp';
-import { OnboardingPanel } from './OnboardingPanel';
+import { customersHelpContent } from './customersHelpContent';
+import { salesOrdersHelpContent } from './salesOrdersHelpContent';
+import { workOrdersHelpContent } from './workOrdersHelpContent';
+import { purchaseOrdersHelpContent } from './content/purchaseOrdersHelpContent';
+import { inventoryHelpContent } from './content/inventoryHelpContent';
+import { schedulingHelpContent } from './content/schedulingHelpContent';
+import { invoicesHelpContent } from './content/invoicesHelpContent';
 
 interface HelpDrawerProps {
   moduleKey: string;
@@ -15,8 +21,24 @@ interface HelpDrawerProps {
 
 export function HelpDrawer({ moduleKey, open, onOpenChange, context }: HelpDrawerProps) {
   const helpContent = getModuleHelp(moduleKey);
+  const resolvedContent =
+    moduleKey === 'customers'
+      ? customersHelpContent
+      : moduleKey === 'sales_orders'
+      ? salesOrdersHelpContent
+      : moduleKey === 'work_orders'
+      ? workOrdersHelpContent
+      : moduleKey === 'purchase_orders'
+      ? purchaseOrdersHelpContent
+      : moduleKey === 'inventory'
+      ? inventoryHelpContent
+      : moduleKey === 'scheduling'
+      ? schedulingHelpContent
+      : moduleKey === 'invoices'
+      ? invoicesHelpContent
+      : helpContent;
 
-  if (!helpContent) {
+  if (!resolvedContent) {
     return null;
   }
 
@@ -27,19 +49,18 @@ export function HelpDrawer({ moduleKey, open, onOpenChange, context }: HelpDrawe
         className="w-full sm:max-w-[520px] h-full flex flex-col p-0"
       >
         <SheetHeader className="px-5 pt-5 pb-4 border-b">
-          <SheetTitle className="text-xl font-semibold">{helpContent.title}</SheetTitle>
+          <SheetTitle className="text-xl font-semibold">{resolvedContent.title}</SheetTitle>
           <p className="text-sm text-muted-foreground">Contextual help for this screen</p>
         </SheetHeader>
 
         <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4">
           <AutoHelpPanel moduleKey={moduleKey} context={context} />
-          <OnboardingPanel />
 
-          {helpContent.tips.length > 0 && (
+          {resolvedContent.tips.length > 0 && (
             <section className="space-y-2">
               <h3 className="text-sm font-semibold">Quick Tips</h3>
               <div className="space-y-2">
-                {helpContent.tips.map((tipGroup, idx) => (
+                {resolvedContent.tips.map((tipGroup, idx) => (
                   <div key={idx} className="space-y-2 rounded-lg border border-border/60 bg-muted/30 p-3">
                     {tipGroup.title && (
                       <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -60,12 +81,12 @@ export function HelpDrawer({ moduleKey, open, onOpenChange, context }: HelpDrawe
             </section>
           )}
 
-          {helpContent.workflows.length > 0 && (
+          {resolvedContent.workflows.length > 0 && (
             <section className="space-y-2">
               <Separator />
               <h3 className="text-sm font-semibold">Common Workflows</h3>
               <div className="space-y-2">
-                {helpContent.workflows.map((workflow, idx) => (
+                {resolvedContent.workflows.map((workflow, idx) => (
                   <div
                     key={idx}
                     className="rounded-lg border border-border/60 bg-background/80 p-3 space-y-2"
@@ -90,12 +111,12 @@ export function HelpDrawer({ moduleKey, open, onOpenChange, context }: HelpDrawe
             </section>
           )}
 
-          {helpContent.definitions.length > 0 && (
+          {resolvedContent.definitions.length > 0 && (
             <section className="space-y-2">
               <Separator />
               <h3 className="text-sm font-semibold">Key Terms</h3>
               <dl className="space-y-2">
-                {helpContent.definitions.map((def, idx) => (
+                {resolvedContent.definitions.map((def, idx) => (
                   <div
                     key={idx}
                     className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-1.5"
@@ -117,7 +138,7 @@ export function HelpDrawer({ moduleKey, open, onOpenChange, context }: HelpDrawe
               </p>
             </div>
             <div className="border rounded-lg p-3 bg-muted/30">
-              <HelpChat moduleKey={moduleKey} content={helpContent} context={context} />
+              <HelpChat moduleKey={moduleKey} content={resolvedContent} context={context} />
             </div>
           </section>
         </div>

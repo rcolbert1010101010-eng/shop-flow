@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -41,6 +42,8 @@ export default function QuickBooksIntegration() {
   const [payloadLoading, setPayloadLoading] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [senderRunning, setSenderRunning] = useState(false);
+  const transferMode = draft?.transfer_mode ?? 'IMPORT_ONLY';
+  const isLiveTransfer = transferMode === 'LIVE_TRANSFER';
 
   const handleSave = async () => {
     if (!draft) return;
@@ -68,7 +71,7 @@ export default function QuickBooksIntegration() {
       return;
     }
     toast({ title: 'Test export queued', description: 'A test export payload was written to accounting_exports.' });
-    const rows = await listRecentExports();
+    const rows = await listRecentExports(25);
     setExports(rows);
   };
 
@@ -82,7 +85,7 @@ export default function QuickBooksIntegration() {
 
   useEffect(() => {
     const loadExports = async () => {
-      const rows = await listRecentExports();
+      const rows = await listRecentExports(25);
       setExports(rows);
     };
     void loadExports();
@@ -128,17 +131,19 @@ export default function QuickBooksIntegration() {
   const handleRunSender = async () => {
     setSenderRunning(true);
     try {
-      const { data, error } = await supabase.functions.invoke('qb-sender');
+      const { data, error } = await supabase.functions.invoke('qb-sender?limit=10');
       if (error) {
         toast({ title: 'Sender failed', description: error.message, variant: 'destructive' });
       } else {
         toast({
-          title: 'Sender ran',
-          description: `Processed ${data?.processed ?? 0} (claimed ${data?.claimed ?? 0} / scanned ${data?.scanned ?? 0})`,
+          title: 'Live transfer ran',
+          description: `Claimed ${data?.claimed ?? 0}, sent ${data?.sent ?? 0}, failed ${data?.failed ?? 0}, retried ${data?.retried ?? 0}`,
         });
+        const rows = await listRecentExports(25);
+        setExports(rows);
       }
     } catch (err: any) {
-      toast({ title: 'Sender failed', description: err?.message || 'Unknown error', variant: 'destructive' });
+      toast({ title: 'Live transfer failed', description: err?.message || 'Unknown error', variant: 'destructive' });
     } finally {
       setSenderRunning(false);
     }
@@ -234,16 +239,6 @@ export default function QuickBooksIntegration() {
                 >
                   Disconnect
                 </Button>
-                {canEdit && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleRunSender}
-                    disabled={senderRunning}
-                  >
-                    {senderRunning ? 'Running...' : 'Run Sender Now'}
-                  </Button>
-                )}
               </div>
             </div>
           </CardContent>
@@ -254,11 +249,43 @@ export default function QuickBooksIntegration() {
           <CardTitle>Configuration</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
+          {!isLiveTransfer && (
+            <Alert variant="default" className="text-xs">
+              <AlertTitle>Import mode enabled</AlertTitle>
+              <AlertDescription>
+                Live Transfer is disabled. Exports will be skipped and the sender will not run until you switch back to
+                Live Transfer.
+              </AlertDescription>
+            </Alert>
+          )}
           <p className="text-xs text-muted-foreground">
             When an invoice is issued, ShopFlow automatically queues an export (no QuickBooks connection needed).
             Payments queue when recorded if mode is set to Invoice + Payments.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Transfer Mode</Label>
+              <RadioGroup
+                value={transferMode}
+                onValueChange={(val) => setDraft((prev) => (prev ? { ...prev, transfer_mode: val as any } : prev))}
+                className="grid gap-2"
+                disabled={!canEdit}
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="IMPORT_ONLY" id="transfer-import" />
+                  <Label htmlFor="transfer-import">Import (manual)</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="LIVE_TRANSFER" id="transfer-live" />
+                  <Label htmlFor="transfer-live">Live Transfer (automatic)</Label>
+                </div>
+              </RadioGroup>
+              {isLiveTransfer && (
+                <p className="text-xs text-muted-foreground">
+                  Live Transfer will automatically send invoices and payments to QuickBooks.
+                </p>
+              )}
+            </div>
             <div className="space-y-2">
               <Label>Mode</Label>
                 <Select
@@ -396,7 +423,7 @@ export default function QuickBooksIntegration() {
             <Button onClick={handleSave} disabled={saving || !canEdit}>
               Save
             </Button>
-            <Button variant="outline" onClick={handleTestExport} disabled={saving || !canEdit}>
+            <Button variant="outline" onClick={handleTestExport} disabled={saving || !canEdit || !isLiveTransfer}>
               Test Export
             </Button>
           </div>
@@ -404,8 +431,18 @@ export default function QuickBooksIntegration() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Recent Exports</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Live Transfer</CardTitle>
+          {canEdit && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleRunSender}
+              disabled={senderRunning || !isLiveTransfer}
+            >
+              {senderRunning ? 'Running...' : 'Run Live Transfer Now'}
+            </Button>
+          )}
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           {draft?.is_enabled === false && (

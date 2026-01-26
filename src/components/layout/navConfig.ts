@@ -25,7 +25,7 @@ import { FEATURES } from '@/config/features';
 export type NavLink = { type: 'link'; path: string; label: string; icon: LucideIcon };
 export type NavGroup = {
   type: 'group';
-  key: 'serviceOrders' | 'inventory' | 'returnsWarranty' | 'purchaseOrders' | 'manufacturingV2';
+  key: 'serviceOrders' | 'inventory' | 'returnsWarranty' | 'purchaseOrders' | 'manufacturing' | 'manufacturingV2';
   label: string;
   icon: LucideIcon;
   children: NavLink[];
@@ -73,6 +73,16 @@ const purchaseOrdersGroup: NavGroup = {
     { type: 'link', path: '/receiving-history', label: 'Receiving History', icon: ClipboardList },
   ],
 };
+const manufacturingGroup: NavGroup = {
+  type: 'group',
+  key: 'manufacturing',
+  label: 'Manufacturing',
+  icon: HardHat,
+  children: [
+    { type: 'link', path: '/manufacturing/templates', label: 'Templates', icon: HardHat },
+    { type: 'link', path: '/manufacturing/jobs', label: 'Jobs', icon: HardHat },
+  ],
+};
 const schedulingLink: NavLink = { type: 'link', path: '/scheduling', label: 'Scheduling', icon: Calendar };
 const plannerLink: NavLink = { type: 'link', path: '/planner', label: 'Planner', icon: CalendarCheck };
 const invoicesLink: NavLink = { type: 'link', path: '/invoices', label: 'Invoices', icon: FileText };
@@ -112,6 +122,7 @@ export const navSections: NavSection[] = [
   { label: 'Purchasing', items: [purchaseOrdersGroup] },
   { label: 'Scheduling', items: [schedulingLink, plannerLink] },
   { label: 'Accounting', items: [invoicesLink, paymentsLink, returnsWarrantyGroup] },
+  { label: 'Manufacturing', items: [manufacturingGroup] },
   ...(FEATURES.manufacturingV2 ? [{ label: 'Manufacturing', items: [manufacturingV2Group] }] : []),
   { label: 'Reports', items: [reportsLink] },
   { label: 'Settings', items: [settingsLink] },
@@ -125,6 +136,7 @@ function requiredCapabilityForPath(path: string): Capability | null {
   if (path === '/reports' || path.startsWith('/reports')) return 'reports.view';
   if (path === '/receiving' || path.startsWith('/receiving/')) return 'inventory.receive';
   if (path === '/receiving-history' || path.startsWith('/receiving-history/')) return 'inventory.receive';
+  if (path === '/manufacturing' || path.startsWith('/manufacturing/')) return 'inventory.adjust_qoh';
   if (path === '/admin/users' || path.startsWith('/admin/users')) return 'admin.users';
   return null;
 }

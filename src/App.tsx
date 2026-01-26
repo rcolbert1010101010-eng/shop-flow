@@ -40,6 +40,8 @@ import PlasmaProjectDetail from "@/pages/PlasmaProjectDetail";
 import PlasmaPrint from "@/pages/PlasmaPrint";
 import PlasmaTemplates from "@/pages/PlasmaTemplates";
 import PlasmaTemplateDetail from "@/pages/PlasmaTemplateDetail";
+import ManufacturingTemplates from "@/pages/ManufacturingTemplates";
+import ManufacturingTemplateEdit from "@/pages/ManufacturingTemplateEdit";
 import Scheduling from "@/pages/Scheduling";
 import ReceiveInventory from "@/pages/ReceiveInventory";
 import ReceivingHistory from "@/pages/ReceivingHistory";
@@ -66,6 +68,9 @@ import { FEATURES } from "@/config/features";
 import ManufacturingV2HomePage from "@/pages/manufacturingV2/ManufacturingV2HomePage";
 import ManufacturingV2ProductsPage from "@/pages/manufacturingV2/ManufacturingV2ProductsPage";
 import ManufacturingV2BuildsPage from "@/pages/manufacturingV2/ManufacturingV2BuildsPage";
+import ManufacturingJobs from "@/pages/ManufacturingJobs";
+import ManufacturingJobCreate from "@/pages/ManufacturingJobCreate";
+import ManufacturingJobDetail from "@/pages/ManufacturingJobDetail";
 
 const queryClient = new QueryClient();
 
@@ -114,6 +119,11 @@ const App = () => {
                   <Route path="/plasma/:id/print" element={<PlasmaPrint />} />
                   <Route path="/plasma/templates" element={<PlasmaTemplates />} />
                   <Route path="/plasma/templates/:id" element={<PlasmaTemplateDetail />} />
+                  <Route path="/manufacturing/templates" element={<ManufacturingTemplates />} />
+                  <Route path="/manufacturing/templates/:templateId/edit" element={<ManufacturingTemplateEdit />} />
+                  <Route path="/manufacturing/jobs" element={<ManufacturingJobs />} />
+                  <Route path="/manufacturing/jobs/new" element={<ManufacturingJobCreate />} />
+                  <Route path="/manufacturing/jobs/:jobId" element={<ManufacturingJobDetail />} />
                   <Route path="/work-orders" element={<WorkOrders />} />
                   <Route path="/work-orders/:id" element={<WorkOrderDetail />} />
                   <Route path="/invoices" element={<InvoiceRegistry />} />
