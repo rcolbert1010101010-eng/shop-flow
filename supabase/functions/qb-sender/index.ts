@@ -47,6 +47,16 @@ type SendResult = {
   retried: number;
 };
 
+type IntegrationConfig = {
+  id: string;
+  tenant_id: string;
+  provider: string;
+  qb_customer_ref?: string | null;
+  qb_item_ref_parts?: string | null;
+  qb_item_ref_labor?: string | null;
+  qb_item_ref_fees_sublet?: string | null;
+};
+
 const parseJwt = (token: string) => {
   try {
     const parts = token.split('.');
@@ -133,6 +143,22 @@ const loadConnection = async (tenantId: string | null) => {
   return { conn: data } as const;
 };
 
+const loadConfig = async (tenantId: string | null) => {
+  if (!tenantId) return { error: 'tenant_id missing on export' } as const;
+  const { data, error } = await supabase
+    .from('accounting_integration_config')
+    .select('id,tenant_id,provider,is_enabled,transfer_mode,qb_customer_ref,qb_item_ref_parts,qb_item_ref_labor,qb_item_ref_fees_sublet')
+    .eq('provider', 'quickbooks')
+    .eq('tenant_id', tenantId)
+    .maybeSingle();
+  if (error || !data) return { error: 'QuickBooks config missing' } as const;
+  if (data.is_enabled !== true) return { error: 'QuickBooks config disabled' } as const;
+  if (data.transfer_mode !== 'LIVE_TRANSFER') {
+    return { error: 'QuickBooks transfer_mode is not LIVE_TRANSFER' } as const;
+  }
+  return { cfg: data as IntegrationConfig } as const;
+};
+
 const ensureAccessToken = async (conn: any) => {
   const expiresAt = conn.expires_at ? new Date(conn.expires_at).getTime() : null;
   const needsRefresh = expiresAt !== null && expiresAt - Date.now() <= 2 * 60 * 1000;
@@ -153,29 +179,64 @@ const ensureAccessToken = async (conn: any) => {
   return { accessToken: await decryptToken(tokenKey, refreshed.accessEnc), connUpdated: true };
 };
 
-const buildInvoiceBody = (payload: any) => {
+const buildInvoiceBody = (payload: any, cfg: IntegrationConfig) => {
   if (!payload) throw new Error('Missing payload');
-  const customerRef =
-    payload.customer?.qb_customer_id ||
-    payload.customer?.id ||
-    payload.customer_id;
-  if (!customerRef) throw new Error('CustomerRef missing');
+  if (!cfg.qb_customer_ref) throw new Error('Missing QB CustomerRef (config.qb_customer_ref)');
   const lines = Array.isArray(payload.lines) ? payload.lines : null;
-  if (!lines || lines.length === 0) throw new Error('Invoice payload mapping not implemented');
-  const qbLines = lines.map((line: any) => ({
-    DetailType: 'SalesItemLineDetail',
-    Amount: line.amount ?? 0,
-    Description: line.description || line.kind || 'Line',
-    SalesItemLineDetail: {
-      Qty: line.qty ?? 1,
-      UnitPrice: line.amount ?? 0,
-      ItemRef: { value: line.item_ref || line.kind || 'ITEM' },
-    },
-  }));
+  if (!lines || lines.length === 0) throw new Error('Invoice payload has no lines');
+  const qbLines = lines
+    .filter((line: any) => Number(line?.amount ?? 0) > 0)
+    .map((line: any) => {
+      const kind = (line?.kind || '').toString().toUpperCase();
+      const amount = Number(line?.amount ?? 0);
+      if (kind === 'LABOR') {
+        if (!cfg.qb_item_ref_labor) throw new Error('Missing QB ItemRef for labor (config.qb_item_ref_labor)');
+        return {
+          DetailType: 'SalesItemLineDetail',
+          Amount: amount,
+          Description: line.description || line.kind || 'Labor',
+          SalesItemLineDetail: {
+            Qty: 1,
+            UnitPrice: amount,
+            ItemRef: { value: cfg.qb_item_ref_labor },
+          },
+        };
+      }
+      if (kind === 'PARTS') {
+        if (!cfg.qb_item_ref_parts) throw new Error('Missing QB ItemRef for parts (config.qb_item_ref_parts)');
+        return {
+          DetailType: 'SalesItemLineDetail',
+          Amount: amount,
+          Description: line.description || line.kind || 'Parts',
+          SalesItemLineDetail: {
+            Qty: 1,
+            UnitPrice: amount,
+            ItemRef: { value: cfg.qb_item_ref_parts },
+          },
+        };
+      }
+      if (kind === 'FEES_SUBLET') {
+        if (!cfg.qb_item_ref_fees_sublet) {
+          throw new Error('Missing QB ItemRef for fees/sublet (config.qb_item_ref_fees_sublet)');
+        }
+        return {
+          DetailType: 'SalesItemLineDetail',
+          Amount: amount,
+          Description: line.description || line.kind || 'Fees/Sublet',
+          SalesItemLineDetail: {
+            Qty: 1,
+            UnitPrice: amount,
+            ItemRef: { value: cfg.qb_item_ref_fees_sublet },
+          },
+        };
+      }
+      throw new Error(`Unsupported invoice line kind: ${line?.kind ?? 'UNKNOWN'}`);
+    });
+  if (qbLines.length === 0) throw new Error('No billable lines (all amounts <= 0)');
   return {
     DocNumber: payload.source?.number || payload.source?.id,
     TxnDate: payload.source?.date || new Date().toISOString().slice(0, 10),
-    CustomerRef: { value: customerRef },
+    CustomerRef: { value: cfg.qb_customer_ref },
     Line: qbLines,
   };
 };
@@ -231,6 +292,12 @@ const processRow = async (row: ExportRow) => {
     return { failed: true };
   }
 
+  const { cfg, error: cfgErr } = await loadConfig(row.tenant_id);
+  if (cfgErr) {
+    await markFailure(row, 'FAILED', cfgErr);
+    return { failed: true };
+  }
+
   const { conn, error: connErr } = await loadConnection(row.tenant_id);
   if (connErr) {
     await markFailure(row, 'FAILED', connErr);
@@ -248,7 +315,7 @@ const processRow = async (row: ExportRow) => {
 
   let body: any;
   try {
-    body = buildInvoiceBody(row.payload_json);
+    body = buildInvoiceBody(row.payload_json, cfg);
   } catch (err: any) {
     await markFailure(row, 'FAILED', err?.message || 'Mapping failed');
     return { failed: true };
