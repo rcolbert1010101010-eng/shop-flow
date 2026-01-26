@@ -412,8 +412,21 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  cfg record;
 begin
   if to_regclass('public.accounting_exports') is null then
+    return;
+  end if;
+
+  select *
+  into cfg
+  from public.accounting_integration_config
+  where provider = p_provider
+    and tenant_id = public.current_tenant_id()
+  limit 1;
+
+  if cfg is null or cfg.is_enabled is not true or coalesce(cfg.transfer_mode, 'IMPORT_ONLY') <> 'LIVE_TRANSFER' then
     return;
   end if;
 

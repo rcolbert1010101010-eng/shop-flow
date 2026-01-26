@@ -9,6 +9,13 @@ export const quickbooksIntegrationHelp = {
       ],
     },
     {
+      heading: 'Transfer mode',
+      bullets: [
+        'Live Transfer: exports queue and the sender can post to QuickBooks automatically.',
+        'Import: exports are disabled and the sender will not run (use for inbound-only workflows).',
+      ],
+    },
+    {
       heading: 'Setup steps',
       bullets: [
         'Enable the integration.',

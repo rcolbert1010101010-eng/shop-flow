@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -41,6 +42,8 @@ export default function QuickBooksIntegration() {
   const [payloadLoading, setPayloadLoading] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [senderRunning, setSenderRunning] = useState(false);
+  const transferMode = draft?.transfer_mode ?? 'IMPORT_ONLY';
+  const isLiveTransfer = transferMode === 'LIVE_TRANSFER';
 
   const handleSave = async () => {
     if (!draft) return;
@@ -246,11 +249,43 @@ export default function QuickBooksIntegration() {
           <CardTitle>Configuration</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
+          {!isLiveTransfer && (
+            <Alert variant="default" className="text-xs">
+              <AlertTitle>Import mode enabled</AlertTitle>
+              <AlertDescription>
+                Live Transfer is disabled. Exports will be skipped and the sender will not run until you switch back to
+                Live Transfer.
+              </AlertDescription>
+            </Alert>
+          )}
           <p className="text-xs text-muted-foreground">
             When an invoice is issued, ShopFlow automatically queues an export (no QuickBooks connection needed).
             Payments queue when recorded if mode is set to Invoice + Payments.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Transfer Mode</Label>
+              <RadioGroup
+                value={transferMode}
+                onValueChange={(val) => setDraft((prev) => (prev ? { ...prev, transfer_mode: val as any } : prev))}
+                className="grid gap-2"
+                disabled={!canEdit}
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="IMPORT_ONLY" id="transfer-import" />
+                  <Label htmlFor="transfer-import">Import (manual)</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="LIVE_TRANSFER" id="transfer-live" />
+                  <Label htmlFor="transfer-live">Live Transfer (automatic)</Label>
+                </div>
+              </RadioGroup>
+              {isLiveTransfer && (
+                <p className="text-xs text-muted-foreground">
+                  Live Transfer will automatically send invoices and payments to QuickBooks.
+                </p>
+              )}
+            </div>
             <div className="space-y-2">
               <Label>Mode</Label>
                 <Select
@@ -388,7 +423,7 @@ export default function QuickBooksIntegration() {
             <Button onClick={handleSave} disabled={saving || !canEdit}>
               Save
             </Button>
-            <Button variant="outline" onClick={handleTestExport} disabled={saving || !canEdit}>
+            <Button variant="outline" onClick={handleTestExport} disabled={saving || !canEdit || !isLiveTransfer}>
               Test Export
             </Button>
           </div>
@@ -403,7 +438,7 @@ export default function QuickBooksIntegration() {
               variant="secondary"
               size="sm"
               onClick={handleRunSender}
-              disabled={senderRunning}
+              disabled={senderRunning || !isLiveTransfer}
             >
               {senderRunning ? 'Running...' : 'Run Live Transfer Now'}
             </Button>
