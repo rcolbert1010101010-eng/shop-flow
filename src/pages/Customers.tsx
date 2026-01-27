@@ -142,10 +142,6 @@ export default function Customers() {
           }
         />
 
-      <div className="mb-2">
-        <div className="flex items-center gap-1 text-sm text-muted-foreground">
-          <span>Search</span></div>
-      </div>
       <DataTable
         data={tableData}
         columns={columns}

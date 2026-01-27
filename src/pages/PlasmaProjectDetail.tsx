@@ -12,6 +12,7 @@ import { RotateCcw, FileCheck, Plus, Trash2 } from 'lucide-react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useRepos } from '@/repos';
 import type { PlasmaJobLine } from '@/types';
+import { useShopStore } from '@/stores/shopStore';
 
 const UNLINKED_VALUE = '__UNLINKED__';
 const CREATE_SO_VALUE = '__CREATE_SO__';
@@ -31,22 +32,39 @@ export default function PlasmaProjectDetail() {
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
+  // subscribe to plasma slices so repo-backed data re-renders when store updates
+  useShopStore((state) => state.plasmaJobs);
+  useShopStore((state) => state.plasmaJobLines);
+  useShopStore((state) => state.plasmaAttachments);
+  useShopStore((state) => state.plasmaTemplates);
+  const plasmaLocked = false; // hard-coded for now
+  const [isEditing, setIsEditing] = useState(false);
+  const isLocked = plasmaLocked || !isEditing;
+
   const templateOptions = plasmaRepo.templates.list();
 
   const plasmaData = id ? plasmaRepo.get(id) : null;
   const job = plasmaData?.job;
   const lines = useMemo(() => plasmaData?.lines ?? [], [plasmaData?.lines]);
+  const plasmaAttachments = job ? plasmaRepo.attachments.list(job.id) : [];
   const salesOrders = salesOrderRepo.salesOrders;
   const customers = customersRepo.customers;
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [titleDraft, setTitleDraft] = useState<string>(job?.title ?? '');
+  const [dirty, setDirty] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
-    if (!job) {
-      toast({ title: 'Plasma job not found', variant: 'destructive' });
-      navigate('/plasma', { replace: true });
-    }
-  }, [id, job, navigate, toast]);
+    plasmaRepo.get(id);
+    plasmaRepo.attachments.list(id);
+  }, [id, plasmaRepo]);
+
+  useEffect(() => {
+    setTitleDraft(job?.title ?? '');
+    setIsEditing(false);
+    setDirty(false);
+  }, [job?.title]);
 
   const linkedSalesOrder = useMemo(
     () => (job?.sales_order_id ? salesOrders.find((so) => so.id === job.sales_order_id) : undefined),
@@ -65,16 +83,14 @@ export default function PlasmaProjectDetail() {
   );
 
   const isInvoiced = linkedSalesOrder?.status === 'INVOICED';
-  const plasmaLocked = isInvoiced || (job ? job.status !== 'DRAFT' && job.status !== 'QUOTED' : false);
   const plasmaLines = useMemo(() => lines, [lines]);
   const plasmaTotal = useMemo(
     () => plasmaLines.reduce((sum, line) => sum + (line.sell_price_total ?? 0), 0),
     [plasmaLines]
   );
-  const plasmaAttachments = job ? plasmaRepo.attachments.list(job.id) : [];
 
   const handleAddLine = () => {
-    if (!job || plasmaLocked) return;
+    if (!job || isLocked) return;
     plasmaRepo.upsertLine(job.id, {
       qty: 1,
       cut_length: 0,
@@ -82,6 +98,7 @@ export default function PlasmaProjectDetail() {
       setup_minutes: 0,
       machine_minutes: 0,
     });
+    setDirty(true);
   };
 
   const handleNumberChange = (
@@ -89,29 +106,33 @@ export default function PlasmaProjectDetail() {
     field: keyof Pick<PlasmaJobLine, 'qty' | 'cut_length' | 'pierce_count' | 'setup_minutes' | 'machine_minutes' | 'thickness'>,
     value: string
   ) => {
-    if (!job || plasmaLocked) return;
+    if (!job || isLocked) return;
     const numeric = value === '' ? 0 : parseFloat(value);
     const safeValue = Number.isNaN(numeric) ? 0 : numeric;
     plasmaRepo.upsertLine(job.id, { id: lineId, [field]: safeValue } as Partial<PlasmaJobLine>);
+    setDirty(true);
   };
 
   const handleTextChange = (lineId: string, value: string) => {
-    if (!job || plasmaLocked) return;
+    if (!job || isLocked) return;
     plasmaRepo.upsertLine(job.id, { id: lineId, material_type: value });
+    setDirty(true);
   };
 
   const handleSellPriceChange = (lineId: string, value: string) => {
-    if (!job || plasmaLocked) return;
+    if (!job || isLocked) return;
     const numeric = value === '' ? 0 : parseFloat(value);
     const safeValue = Number.isNaN(numeric) ? 0 : numeric;
     const existing = lines.find((l) => l.id === lineId);
     const overrides = { ...(existing?.overrides || {}), sell_price_each: safeValue };
     plasmaRepo.upsertLine(job.id, { id: lineId, overrides });
+    setDirty(true);
   };
 
   const handleDeleteLine = (lineId: string) => {
-    if (plasmaLocked) return;
+    if (isLocked) return;
     plasmaRepo.deleteLine(lineId);
+    setDirty(true);
   };
 
   const handleRecalculate = () => {
@@ -123,6 +144,14 @@ export default function PlasmaProjectDetail() {
       setWarnings(result.warnings ?? []);
       toast({ title: 'Pricing updated' });
     }
+  };
+
+  const handleSave = () => {
+    handleRecalculate();
+    setDirty(false);
+    setLastSavedAt(new Date().toLocaleTimeString());
+    setIsEditing(false);
+    toast({ title: 'Saved' });
   };
 
   const ensureSalesOrderLink = () => {
@@ -138,7 +167,7 @@ export default function PlasmaProjectDetail() {
 
   const handlePostToSalesOrder = () => {
     if (!job) return;
-    if (plasmaLocked) {
+    if (isLocked) {
       toast({ title: 'Locked', description: 'Order is invoiced or job is posted', variant: 'destructive' });
       return;
     }
@@ -177,6 +206,14 @@ export default function PlasmaProjectDetail() {
     plasmaRepo.attachments.update(attachmentId, { notes });
   };
 
+  const saveTitleDraft = () => {
+    if (!job || isLocked) return;
+    const trimmed = titleDraft.trim();
+    plasmaRepo.updateJob(job.id, { title: trimmed.length ? trimmed : null });
+    setTitleDraft(trimmed);
+    setDirty(true);
+  };
+
   const handleSalesOrderChange = (value: string) => {
     if (!job) return;
     if (value === CREATE_SO_VALUE) {
@@ -197,15 +234,37 @@ export default function PlasmaProjectDetail() {
     plasmaRepo.linkToSalesOrder(job.id, value);
   };
 
-  if (!job) return null;
+  if (!job)
+    return (
+      <TooltipProvider>
+        <div className="page-container">Loading...</div>
+      </TooltipProvider>
+    );
 
   return (
     <TooltipProvider>
       <div className="page-container">
-        <PageHeader title={`Plasma Project ${job.id}`} backTo="/plasma" />
+        <PageHeader title={job.title ?? 'Plasma Project'} backTo="/plasma" />
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-3">
+          <div>
+            <Label htmlFor="project_title">Project Name</Label>
+            <Input
+              id="project_title"
+              value={titleDraft}
+              onChange={(e) => setTitleDraft(e.target.value)}
+              onBlur={saveTitleDraft}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  saveTitleDraft();
+                }
+              }}
+              placeholder="Plasma Project"
+              disabled={isLocked}
+            />
+          </div>
           <div className="flex items-center gap-3">
             <div>
               <Label className="flex items-center gap-1">Status</Label>
@@ -214,7 +273,7 @@ export default function PlasmaProjectDetail() {
                 {job.posted_at && (
                   <Badge variant="outline">Posted {new Date(job.posted_at).toLocaleString()}</Badge>
                 )}
-                {plasmaLocked && <Badge variant="outline">Locked</Badge>}
+                {isLocked && <Badge variant="outline">Locked</Badge>}
               </div>
             </div>
           </div>
@@ -223,7 +282,7 @@ export default function PlasmaProjectDetail() {
             <Select
               value={job.sales_order_id ?? UNLINKED_VALUE}
               onValueChange={handleSalesOrderChange}
-              disabled={plasmaLocked}
+              disabled={isLocked}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select Sales Order" />
@@ -248,10 +307,37 @@ export default function PlasmaProjectDetail() {
           </div>
         </div>
         <div className="flex items-end justify-end gap-2">
+          <div className="flex items-center gap-3">
+            <div className="text-sm text-muted-foreground">
+              {isLocked ? (
+                <span>Saved{lastSavedAt ? ` · ${lastSavedAt}` : ''}</span>
+              ) : dirty ? (
+                <span>Unsaved changes</span>
+              ) : (
+                <span>Editing</span>
+              )}
+            </div>
+            {isLocked && !isEditing && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsEditing(true);
+                  toast({ title: 'Editing enabled' });
+                }}
+              >
+                Edit
+              </Button>
+            )}
+            {isEditing && !isLocked && (
+              <Button variant="outline" onClick={handleSave} disabled={!job}>
+                Save
+              </Button>
+            )}
+          </div>
           <Button
             variant="outline"
             onClick={handleRecalculate}
-            disabled={!job || plasmaLocked}
+            disabled={!job || isLocked}
             title="Rebuilds pricing from the current line inputs. Use after changing thickness, cut length, or minutes."
           >
             <RotateCcw className="w-4 h-4 mr-2" />
@@ -259,7 +345,7 @@ export default function PlasmaProjectDetail() {
           </Button>
           <Button
             onClick={handlePostToSalesOrder}
-            disabled={plasmaLocked || lines.length === 0}
+            disabled={isLocked || lines.length === 0}
             title="Locks the plasma job so pricing can't drift after approval."
           >
             <FileCheck className="w-4 h-4 mr-2" />
@@ -305,7 +391,7 @@ export default function PlasmaProjectDetail() {
         </div>
       </div>
 
-      {plasmaLocked && (
+      {isLocked && (
         <div className="mt-3 text-sm text-muted-foreground">
           Editing is disabled because the job is posted or the linked Sales Order is invoiced.
         </div>
@@ -366,7 +452,7 @@ export default function PlasmaProjectDetail() {
                     <Input
                       value={line.material_type ?? ''}
                       onChange={(e) => handleTextChange(line.id, e.target.value)}
-                      disabled={plasmaLocked}
+                      disabled={isLocked}
                       placeholder="Material"
                     />
                   </TableCell>
@@ -376,7 +462,7 @@ export default function PlasmaProjectDetail() {
                       step="0.01"
                       value={line.thickness ?? ''}
                       onChange={(e) => handleNumberChange(line.id, 'thickness', e.target.value)}
-                      disabled={plasmaLocked}
+                      disabled={isLocked}
                       className="text-right"
                     />
                   </TableCell>
@@ -386,7 +472,7 @@ export default function PlasmaProjectDetail() {
                       min="0"
                       value={line.qty}
                       onChange={(e) => handleNumberChange(line.id, 'qty', e.target.value)}
-                      disabled={plasmaLocked}
+                      disabled={isLocked}
                       className="text-right"
                     />
                   </TableCell>
@@ -397,7 +483,7 @@ export default function PlasmaProjectDetail() {
                       step="0.01"
                       value={line.cut_length ?? ''}
                       onChange={(e) => handleNumberChange(line.id, 'cut_length', e.target.value)}
-                      disabled={plasmaLocked}
+                      disabled={isLocked}
                       className="text-right"
                     />
                   </TableCell>
@@ -407,7 +493,7 @@ export default function PlasmaProjectDetail() {
                       min="0"
                       value={line.pierce_count ?? ''}
                       onChange={(e) => handleNumberChange(line.id, 'pierce_count', e.target.value)}
-                      disabled={plasmaLocked}
+                      disabled={isLocked}
                       className="text-right"
                     />
                   </TableCell>
@@ -418,7 +504,7 @@ export default function PlasmaProjectDetail() {
                       step="0.1"
                       value={line.setup_minutes ?? ''}
                       onChange={(e) => handleNumberChange(line.id, 'setup_minutes', e.target.value)}
-                      disabled={plasmaLocked}
+                      disabled={isLocked}
                       className="text-right"
                     />
                   </TableCell>
@@ -429,7 +515,7 @@ export default function PlasmaProjectDetail() {
                      step="0.1"
                      value={line.machine_minutes ?? ''}
                      onChange={(e) => handleNumberChange(line.id, 'machine_minutes', e.target.value)}
-                     disabled={plasmaLocked}
+                     disabled={isLocked}
                      className="text-right"
                    />
                  </TableCell>
@@ -449,16 +535,16 @@ export default function PlasmaProjectDetail() {
                       step="0.01"
                       value={line.sell_price_each ?? 0}
                       onChange={(e) => handleSellPriceChange(line.id, e.target.value)}
-                      disabled={plasmaLocked}
+                      disabled={isLocked}
                       className="text-right"
                     />
                   </TableCell>
                   <TableCell className="text-right font-medium">${formatNumber(line.sell_price_total)}</TableCell>
-                  {!plasmaLocked && (
+                  {!isLocked && (
                     <TableCell>
                       <div className="flex gap-2">
                         <Button variant="outline" size="sm" onClick={() => handleRecalculate()}>
-                          Quick-Fill
+                          Recalculate Pricing
                         </Button>
                         <Button variant="ghost" size="icon" onClick={() => handleDeleteLine(line.id)}>
                           <Trash2 className="w-4 h-4" />
@@ -474,8 +560,8 @@ export default function PlasmaProjectDetail() {
       </div>
 
       <div className="mt-4 flex items-center justify-between">
-        {!plasmaLocked && (
-          <Button variant="outline" size="sm" onClick={handleAddLine}>
+        {!isLocked && (
+          <Button variant="outline" size="sm" onClick={handleAddLine} disabled={isLocked}>
             <Plus className="w-4 h-4 mr-2" />
             Add Line
           </Button>
@@ -507,9 +593,9 @@ export default function PlasmaProjectDetail() {
               accept=".dxf,.pdf,.png,.jpg,.jpeg"
               className="hidden"
               onChange={(e) => handleAttachmentUpload(e.target.files?.[0])}
-              disabled={plasmaLocked}
+              disabled={isLocked}
             />
-            <Button variant="outline" size="sm" onClick={() => attachmentInputRef.current?.click()} disabled={plasmaLocked}>
+            <Button variant="outline" size="sm" onClick={() => attachmentInputRef.current?.click()} disabled={isLocked}>
               Upload
             </Button>
           </div>
@@ -547,14 +633,14 @@ export default function PlasmaProjectDetail() {
                       <Input
                         defaultValue={att.notes ?? ''}
                         onBlur={(e) => handleAttachmentNoteChange(att.id, e.target.value)}
-                        disabled={plasmaLocked}
+                        disabled={isLocked}
                       />
                     </TableCell>
                     <TableCell className="text-right text-sm text-muted-foreground">
                       {new Date(att.created_at).toLocaleString()}
                     </TableCell>
                     <TableCell className="text-right">
-                      {!plasmaLocked && (
+                      {!isLocked && (
                         <Button variant="ghost" size="icon" onClick={() => handleRemoveAttachment(att.id)}>
                           <Trash2 className="w-4 h-4" />
                         </Button>

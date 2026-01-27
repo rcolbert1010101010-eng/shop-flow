@@ -479,6 +479,7 @@ export type PlasmaJobStatus = 'DRAFT' | 'QUOTED' | 'APPROVED' | 'CUT' | 'COMPLET
 
 export interface PlasmaJob {
   id: string;
+  title?: string | null;
   source_type: PlasmaJobSourceType;
   work_order_id?: string | null;
   sales_order_id?: string | null;
