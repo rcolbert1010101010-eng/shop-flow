@@ -28,7 +28,6 @@ import { useRepos } from '@/repos';
 import type { Customer, Unit } from '@/types';
 import { parseUnitsImport, type ImportParseResult, type ImportPreviewRow } from '@/lib/unitsImport';
 import { cn } from '@/lib/utils';
-import { HelpTooltip } from '@/components/help/HelpTooltip';
 
 type ImportUnitsDialogProps = {
   open: boolean;
@@ -237,9 +236,7 @@ export function ImportUnitsDialog({ open, onOpenChange, units, customers }: Impo
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label htmlFor="units-import-text" className="flex items-center gap-1">
-                Paste rows
-                <HelpTooltip content="Paste CSV or tab-separated unit rows with headers. Use the template to keep formatting aligned." />
-              </Label>
+                Paste rows</Label>
               <Button variant="outline" size="sm" onClick={handleDownloadTemplate}>
                 <Download className="w-4 h-4 mr-2" />
                 Download Template

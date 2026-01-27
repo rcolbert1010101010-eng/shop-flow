@@ -28,7 +28,6 @@ import { useRepos } from '@/repos';
 import type { Vendor } from '@/types';
 import { parseVendorsImport, type ImportParseResult, type ImportPreviewRow } from '@/lib/vendorsImport';
 import { cn } from '@/lib/utils';
-import { HelpTooltip } from '@/components/help/HelpTooltip';
 
 type ImportVendorsDialogProps = {
   open: boolean;
@@ -191,9 +190,7 @@ export function ImportVendorsDialog({ open, onOpenChange, vendors }: ImportVendo
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label htmlFor="vendors-import-text" className="flex items-center gap-1">
-                Paste rows
-                <HelpTooltip content="Paste CSV or tab-separated vendor rows with headers. Use the template to keep columns aligned." />
-              </Label>
+                Paste rows</Label>
               <Button variant="outline" size="sm" onClick={handleDownloadTemplate}>
                 <Download className="w-4 h-4 mr-2" />
                 Download Template

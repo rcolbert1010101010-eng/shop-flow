@@ -28,7 +28,6 @@ import { useRepos } from '@/repos';
 import type { Customer } from '@/types';
 import { parseCustomersImport, type ImportParseResult, type ImportPreviewRow } from '@/lib/customersImport';
 import { cn } from '@/lib/utils';
-import { HelpTooltip } from '@/components/help/HelpTooltip';
 
 type ImportCustomersDialogProps = {
   open: boolean;
@@ -224,9 +223,7 @@ export function ImportCustomersDialog({ open, onOpenChange, customers }: ImportC
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label htmlFor="customers-import-text" className="flex items-center gap-1">
-                Paste rows
-                <HelpTooltip content="Paste CSV or tab-separated data with headers. Download the template to keep formatting aligned." />
-              </Label>
+                Paste rows</Label>
               <Button variant="outline" size="sm" onClick={handleDownloadTemplate}>
                 <Download className="w-4 h-4 mr-2" />
                 Download Template

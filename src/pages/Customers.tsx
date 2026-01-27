@@ -10,7 +10,6 @@ import { QuickAddDialog } from '@/components/ui/quick-add-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { HelpTooltip } from '@/components/help/HelpTooltip';
 import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
@@ -123,9 +122,7 @@ export default function Customers() {
           title="Customers"
           subtitle={
             <span className="flex items-center gap-1">
-              Manage your customer database
-              <HelpTooltip content="Your customer directory. Keep names, contacts, and billing info accurate." />
-            </span>
+              Manage your customer database</span>
           }
           actions={
             <>
@@ -147,9 +144,7 @@ export default function Customers() {
 
       <div className="mb-2">
         <div className="flex items-center gap-1 text-sm text-muted-foreground">
-          <span>Search</span>
-          <HelpTooltip content="Search by name, phone, email, or account notes." />
-        </div>
+          <span>Search</span></div>
       </div>
       <DataTable
         data={tableData}
@@ -176,9 +171,7 @@ export default function Customers() {
         <div className="space-y-4">
           <div>
             <Label htmlFor="company_name" className="flex items-center gap-1">
-              Company Name *
-              <HelpTooltip content="Official name for billing and paperwork." />
-            </Label>
+              Company Name *</Label>
             <Input
               id="company_name"
               value={formData.company_name}
@@ -188,9 +181,7 @@ export default function Customers() {
           </div>
           <div>
             <Label htmlFor="contact_name" className="flex items-center gap-1">
-              Contact Name
-              <HelpTooltip content="Main person to call for approvals and updates." />
-            </Label>
+              Contact Name</Label>
             <Input
               id="contact_name"
               value={formData.contact_name}
@@ -201,9 +192,7 @@ export default function Customers() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="phone" className="flex items-center gap-1">
-                Phone
-                <HelpTooltip content="Use a number that actually reaches the decision maker." />
-              </Label>
+                Phone</Label>
               <Input
                 id="phone"
                 value={formData.phone}
@@ -213,9 +202,7 @@ export default function Customers() {
             </div>
             <div>
               <Label htmlFor="email" className="flex items-center gap-1">
-                Email
-                <HelpTooltip content="Used for quotes, invoices, and communication." />
-              </Label>
+                Email</Label>
               <Input
                 id="email"
                 type="email"
@@ -227,9 +214,7 @@ export default function Customers() {
           </div>
           <div>
             <Label htmlFor="address" className="flex items-center gap-1">
-              Address
-              <HelpTooltip content="Address used on invoices." />
-            </Label>
+              Address</Label>
             <Textarea
               id="address"
               value={formData.address}
@@ -240,9 +225,7 @@ export default function Customers() {
           </div>
           <div>
             <Label htmlFor="notes" className="flex items-center gap-1">
-              Notes
-              <HelpTooltip content="Internal notes: access rules, fleet preferences, approvals." />
-            </Label>
+              Notes</Label>
             <Textarea
               id="notes"
               value={formData.notes}

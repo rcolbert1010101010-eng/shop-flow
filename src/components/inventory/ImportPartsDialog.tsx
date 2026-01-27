@@ -30,7 +30,6 @@ import { parsePartsImport, type ImportParseResult } from '@/lib/partsImport';
 import { cn } from '@/lib/utils';
 import { useShopStore } from '@/stores/shopStore';
 import { ChevronDown, ChevronUp, History } from 'lucide-react';
-import { HelpTooltip } from '@/components/help/HelpTooltip';
 
 type ImportPartsDialogProps = {
   open: boolean;
@@ -177,7 +176,7 @@ let partsCreated = 0;
         const allow_fractional_qty = row.allow_fractional_qty ?? (uom === 'FT' || uom === 'SQFT' ? true : false);
         const qty_precision = row.qty_precision ?? (uom === 'EA' ? 0 : 2);
         const material_kind = row.material_kind ?? 'STANDARD';
-        
+
         repos.parts.addPart({
           part_number: row.part_number,
           description: row.description || row.part_number,
@@ -269,9 +268,7 @@ Optional columns: bin_location, location, min_qty, max_qty, has_core, core_cost.
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label htmlFor="parts-import-text" className="flex items-center gap-1">
-                Paste rows
-                <HelpTooltip content="Paste CSV or tab-separated data with headers. Download the template to ensure correct formatting." />
-              </Label>
+                Paste rows</Label>
               <Button variant="outline" size="sm" onClick={handleDownloadTemplate}>
                 <Download className="w-4 h-4 mr-2" />
                 Download Excel Template
@@ -462,6 +459,4 @@ Optional columns: bin_location, location, min_qty, max_qty, has_core, core_cost.
     </Dialog>
   );
 }
-
-
 
