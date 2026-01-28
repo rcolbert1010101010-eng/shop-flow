@@ -22,6 +22,7 @@ export default function SalesOrders() {
   const { salesOrders } = repos.salesOrders;
   const { customers } = repos.customers;
   const [statusFilter, setStatusFilter] = useState<'open' | 'estimate' | 'invoiced' | 'partial' | 'completed' | 'cancelled' | 'deleted'>('open');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'parts' | 'plasma'>('all');
 
   const tableData = useMemo<SalesOrderRow[]>(() => {
     return salesOrders.map((order) => {
@@ -68,7 +69,18 @@ export default function SalesOrders() {
   ];
 
   const filteredTableData = useMemo(() => {
-    const statusFiltered = tableData.filter((order) => {
+    const typeFiltered = tableData.filter((order) => {
+      switch (typeFilter) {
+        case 'parts':
+          return order.order_kind !== 'PLASMA';
+        case 'plasma':
+          return order.order_kind === 'PLASMA';
+        default:
+          return true;
+      }
+    });
+
+    const statusFiltered = typeFiltered.filter((order) => {
       switch (statusFilter) {
         case 'open':
           return order.is_active !== false && order.status === 'OPEN';
@@ -94,14 +106,14 @@ export default function SalesOrders() {
     }
 
     return statusFiltered;
-  }, [statusFilter, tableData]);
+  }, [statusFilter, tableData, typeFilter]);
   const hasAnySalesOrders = filteredTableData.length > 0;
 
   return (
     <div className="page-container">
       <PageHeader
         title="Sales Orders"
-        subtitle="Manage counter sales and parts orders"
+        subtitle="Manage counter sales, parts orders, and plasma billing"
         actions={
           <>
             <ModuleHelpButton moduleKey="sales_orders" context={{ isEmpty: !hasAnySalesOrders }} />
@@ -114,23 +126,39 @@ export default function SalesOrders() {
       />
 
       <div className="mb-4 overflow-x-auto">
-        <div className="flex justify-end gap-2 min-w-max pr-1">
-          {(['open', 'estimate', 'partial', 'completed', 'invoiced', 'cancelled', 'deleted'] as const).map((filter) => (
-            <Button
-              key={filter}
-              variant={statusFilter === filter ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setStatusFilter(filter)}
-            >
-              {filter === 'open' && 'Open'}
-              {filter === 'estimate' && 'Estimates'}
-              {filter === 'partial' && 'Partial'}
-              {filter === 'completed' && 'Completed'}
-              {filter === 'invoiced' && 'Invoiced'}
-              {filter === 'cancelled' && 'Cancelled'}
-              {filter === 'deleted' && 'Deleted'}
-            </Button>
-          ))}
+        <div className="flex flex-wrap items-center justify-between gap-2 min-w-max pr-1">
+          <div className="flex items-center gap-2">
+            {(['all', 'parts', 'plasma'] as const).map((filter) => (
+              <Button
+                key={filter}
+                variant={typeFilter === filter ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setTypeFilter(filter)}
+              >
+                {filter === 'all' && 'All'}
+                {filter === 'parts' && 'Parts'}
+                {filter === 'plasma' && 'Plasma'}
+              </Button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            {(['open', 'estimate', 'partial', 'completed', 'invoiced', 'cancelled', 'deleted'] as const).map((filter) => (
+              <Button
+                key={filter}
+                variant={statusFilter === filter ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setStatusFilter(filter)}
+              >
+                {filter === 'open' && 'Open'}
+                {filter === 'estimate' && 'Estimates'}
+                {filter === 'partial' && 'Partial'}
+                {filter === 'completed' && 'Completed'}
+                {filter === 'invoiced' && 'Invoiced'}
+                {filter === 'cancelled' && 'Cancelled'}
+                {filter === 'deleted' && 'Deleted'}
+              </Button>
+            ))}
+          </div>
         </div>
       </div>
 

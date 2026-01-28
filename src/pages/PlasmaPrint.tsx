@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -18,12 +17,6 @@ export default function PlasmaPrint() {
   const repos = useRepos();
   const plasmaPrint = id ? repos.plasma.getPrintView(id) : null;
   const navigate = useNavigate();
-
-  useEffect(() => {
-    if (plasmaPrint) {
-      setTimeout(() => window.print(), 100);
-    }
-  }, [plasmaPrint]);
 
   if (!plasmaPrint) {
     return (

@@ -2381,6 +2381,9 @@ export const useShopStore = create<ShopState>()(
                 ? { ...j, status: j.status === 'CUT' ? 'CUT' : 'APPROVED', posted_at: now(), updated_at: now() }
                 : j
             ),
+            salesOrders: state.salesOrders.map((so) =>
+              so.id === job.sales_order_id ? { ...so, order_kind: 'PLASMA', updated_at: now() } : so
+            ),
           }));
           return { success: true };
         },
@@ -3833,11 +3836,12 @@ export const useShopStore = create<ShopState>()(
 
         createStandalonePlasmaJob: (payload) => {
           const timestamp = now();
+          const salesOrderId = payload?.sales_order_id ?? null;
           const job: PlasmaJob = {
             id: generateId(),
             source_type: 'STANDALONE',
             work_order_id: null,
-            sales_order_id: payload?.sales_order_id ?? null,
+            sales_order_id: salesOrderId,
             status: 'DRAFT',
             calculated_at: null,
             posted_at: null,
@@ -3847,6 +3851,11 @@ export const useShopStore = create<ShopState>()(
           };
           set((state) => ({
             plasmaJobs: [...state.plasmaJobs, job],
+            salesOrders: salesOrderId
+              ? state.salesOrders.map((order) =>
+                  order.id === salesOrderId ? { ...order, order_kind: 'PLASMA', updated_at: now() } : order
+                )
+              : state.salesOrders,
           }));
           return job;
         },
@@ -3887,6 +3896,9 @@ export const useShopStore = create<ShopState>()(
           };
           set((state) => ({
             plasmaJobs: state.plasmaJobs.map((j) => (j.id === plasmaJobId ? updated : j)),
+            salesOrders: state.salesOrders.map((order) =>
+              order.id === salesOrderId ? { ...order, order_kind: 'PLASMA', updated_at: now() } : order
+            ),
           }));
           return updated;
         },

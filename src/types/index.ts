@@ -319,6 +319,7 @@ export interface SalesOrder {
   customer_id: string;
   unit_id: string | null;
   status: SalesOrderStatus;
+  order_kind?: 'STANDARD' | 'PLASMA' | null;
   notes: string | null;
   tax_rate: number;
   charge_subtotal?: number;
