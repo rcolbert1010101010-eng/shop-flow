@@ -38,7 +38,7 @@ export default function PlasmaProjects() {
 
   const handleCreate = () => {
     const job = plasmaRepo.createStandalone();
-    navigate(`/plasma/${job.id}`);
+    navigate(`/plasma/${job.id}`, { state: { autoEdit: true } });
   };
 
   const shortId = (id: string) => `${id.slice(0, 8)}\u2026${id.slice(-6)}`;
@@ -78,7 +78,7 @@ export default function PlasmaProjects() {
             ) : (
               projects.map((job) => {
                 const so = job.sales_order_id ? salesOrderById[job.sales_order_id] : null;
-                const jobTitle = job.title ?? 'Plasma Project';
+                const jobTitle = job.title?.trim() || shortId(job.id);
                 return (
                   <TableRow key={job.id}>
                     <TableCell>

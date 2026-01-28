@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams, Link, useLocation } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,16 +30,16 @@ export default function PlasmaProjectDetail() {
   const salesOrderRepo = repos.salesOrders;
   const customersRepo = repos.customers;
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
+  const autoEditHandledRef = useRef<string | null>(null);
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   // subscribe to plasma slices so repo-backed data re-renders when store updates
   useShopStore((state) => state.plasmaJobs);
   useShopStore((state) => state.plasmaJobLines);
   useShopStore((state) => state.plasmaAttachments);
   useShopStore((state) => state.plasmaTemplates);
-  const plasmaLocked = false; // hard-coded for now
   const [isEditing, setIsEditing] = useState(false);
-  const isLocked = plasmaLocked || !isEditing;
 
   const templateOptions = plasmaRepo.templates.list();
 
@@ -52,7 +52,7 @@ export default function PlasmaProjectDetail() {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [titleDraft, setTitleDraft] = useState<string>(job?.title ?? '');
   const [dirty, setDirty] = useState(false);
-  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+  const autoEdit = Boolean((location.state as { autoEdit?: boolean } | null)?.autoEdit);
 
   useEffect(() => {
     if (!id) return;
@@ -65,6 +65,13 @@ export default function PlasmaProjectDetail() {
     setIsEditing(false);
     setDirty(false);
   }, [job?.title]);
+
+  useEffect(() => {
+    if (!job || !autoEdit || autoEditHandledRef.current === job.id) return;
+    setIsEditing(true);
+    autoEditHandledRef.current = job.id;
+    navigate(`/plasma/${job.id}`, { replace: true, state: null });
+  }, [autoEdit, job, navigate]);
 
   const linkedSalesOrder = useMemo(
     () => (job?.sales_order_id ? salesOrders.find((so) => so.id === job.sales_order_id) : undefined),
@@ -83,11 +90,14 @@ export default function PlasmaProjectDetail() {
   );
 
   const isInvoiced = linkedSalesOrder?.status === 'INVOICED';
+  const plasmaLocked = Boolean(job?.posted_at) || isInvoiced;
+  const isLocked = plasmaLocked || !isEditing;
   const plasmaLines = useMemo(() => lines, [lines]);
   const plasmaTotal = useMemo(
     () => plasmaLines.reduce((sum, line) => sum + (line.sell_price_total ?? 0), 0),
     [plasmaLines]
   );
+  const numericInputClass = 'text-right tabular-nums min-w-[84px] h-8 px-2';
 
   const handleAddLine = () => {
     if (!job || isLocked) return;
@@ -149,7 +159,6 @@ export default function PlasmaProjectDetail() {
   const handleSave = () => {
     handleRecalculate();
     setDirty(false);
-    setLastSavedAt(new Date().toLocaleTimeString());
     setIsEditing(false);
     toast({ title: 'Saved' });
   };
@@ -178,6 +187,8 @@ export default function PlasmaProjectDetail() {
     }
     const result = plasmaRepo.postToSalesOrder(job.id);
     if (result.success) {
+      setIsEditing(false);
+      setDirty(false);
       toast({ title: 'Posted to Sales Order' });
     } else {
       toast({ title: 'Error', description: result.error, variant: 'destructive' });
@@ -234,6 +245,79 @@ export default function PlasmaProjectDetail() {
     plasmaRepo.linkToSalesOrder(job.id, value);
   };
 
+  const headerActions = (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-sm text-muted-foreground">
+        {plasmaLocked ? 'Locked' : dirty ? 'Unsaved changes' : 'Saved'}
+      </span>
+      {!plasmaLocked && !isEditing && (
+        <Button
+          variant="outline"
+          onClick={() => {
+            setIsEditing(true);
+            toast({ title: 'Editing enabled' });
+          }}
+        >
+          Edit
+        </Button>
+      )}
+      {isEditing && !plasmaLocked && (
+        <Button variant="outline" onClick={handleSave} disabled={!job}>
+          Save
+        </Button>
+      )}
+      <Button
+        variant="outline"
+        onClick={handleRecalculate}
+        disabled={!job || isLocked}
+        title="Rebuilds pricing from the current line inputs. Use after changing thickness, cut length, or minutes."
+      >
+        <RotateCcw className="w-4 h-4 mr-2" />
+        Recalculate
+      </Button>
+      <Button
+        onClick={handlePostToSalesOrder}
+        disabled={isLocked || lines.length === 0}
+        title="Locks the plasma job so pricing can't drift after approval."
+      >
+        <FileCheck className="w-4 h-4 mr-2" />
+        Post to Sales Order
+      </Button>
+      {job && (
+        <Button variant="outline" onClick={() => navigate(`/plasma/${job.id}/print`)}>
+          Cut Sheet
+        </Button>
+      )}
+      {templateOptions.length > 0 && job && (
+        <Select
+          onValueChange={(val) => {
+            if (val === '__NONE__') return;
+            const result = plasmaRepo.templates.applyToJob(val, job.id);
+            if (!result.success) {
+              toast({ title: 'Template error', description: result.error, variant: 'destructive' });
+            } else {
+              toast({ title: 'Template applied' });
+            }
+          }}
+        >
+          <SelectTrigger className="w-56">
+            <SelectValue placeholder="Add from Template" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__NONE__" disabled>
+              Select template
+            </SelectItem>
+            {templateOptions.map((tpl) => (
+              <SelectItem key={tpl.id} value={tpl.id}>
+                {tpl.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+    </div>
+  );
+
   if (!job)
     return (
       <TooltipProvider>
@@ -244,7 +328,7 @@ export default function PlasmaProjectDetail() {
   return (
     <TooltipProvider>
       <div className="page-container">
-        <PageHeader title={job.title ?? 'Plasma Project'} backTo="/plasma" />
+        <PageHeader title={job.title ?? 'Plasma Project'} backTo="/plasma" actions={headerActions} />
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-3">
@@ -305,89 +389,6 @@ export default function PlasmaProjectDetail() {
               </div>
             )}
           </div>
-        </div>
-        <div className="flex items-end justify-end gap-2">
-          <div className="flex items-center gap-3">
-            <div className="text-sm text-muted-foreground">
-              {isLocked ? (
-                <span>Saved{lastSavedAt ? ` · ${lastSavedAt}` : ''}</span>
-              ) : dirty ? (
-                <span>Unsaved changes</span>
-              ) : (
-                <span>Editing</span>
-              )}
-            </div>
-            {isLocked && !isEditing && (
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setIsEditing(true);
-                  toast({ title: 'Editing enabled' });
-                }}
-              >
-                Edit
-              </Button>
-            )}
-            {isEditing && !isLocked && (
-              <Button variant="outline" onClick={handleSave} disabled={!job}>
-                Save
-              </Button>
-            )}
-          </div>
-          <Button
-            variant="outline"
-            onClick={handleRecalculate}
-            disabled={!job || isLocked}
-            title="Rebuilds pricing from the current line inputs. Use after changing thickness, cut length, or minutes."
-          >
-            <RotateCcw className="w-4 h-4 mr-2" />
-            Recalculate
-          </Button>
-          <Button
-            onClick={handlePostToSalesOrder}
-            disabled={isLocked || lines.length === 0}
-            title="Locks the plasma job so pricing can't drift after approval."
-          >
-            <FileCheck className="w-4 h-4 mr-2" />
-            Post to Sales Order
-          </Button>
-          {linkedSalesOrder && (
-            <Button variant="outline" onClick={() => navigate(`/sales-orders/${linkedSalesOrder.id}`)}>
-              View linked order
-            </Button>
-          )}
-          {job && (
-            <Button variant="outline" onClick={() => navigate(`/plasma/${job.id}/print`)}>
-              Print Cut Sheet
-            </Button>
-          )}
-          {templateOptions.length > 0 && job && (
-            <Select
-              onValueChange={(val) => {
-                if (val === '__NONE__') return;
-                const result = plasmaRepo.templates.applyToJob(val, job.id);
-                if (!result.success) {
-                  toast({ title: 'Template error', description: result.error, variant: 'destructive' });
-                } else {
-                  toast({ title: 'Template applied' });
-                }
-              }}
-            >
-              <SelectTrigger className="w-56">
-                <SelectValue placeholder="Add from Template" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__NONE__" disabled>
-                  Select template
-                </SelectItem>
-                {templateOptions.map((tpl) => (
-                  <SelectItem key={tpl.id} value={tpl.id}>
-                    {tpl.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
         </div>
       </div>
 
@@ -463,7 +464,7 @@ export default function PlasmaProjectDetail() {
                       value={line.thickness ?? ''}
                       onChange={(e) => handleNumberChange(line.id, 'thickness', e.target.value)}
                       disabled={isLocked}
-                      className="text-right"
+                      className={numericInputClass}
                     />
                   </TableCell>
                   <TableCell>
@@ -473,7 +474,7 @@ export default function PlasmaProjectDetail() {
                       value={line.qty}
                       onChange={(e) => handleNumberChange(line.id, 'qty', e.target.value)}
                       disabled={isLocked}
-                      className="text-right"
+                      className={numericInputClass}
                     />
                   </TableCell>
                   <TableCell>
@@ -484,7 +485,7 @@ export default function PlasmaProjectDetail() {
                       value={line.cut_length ?? ''}
                       onChange={(e) => handleNumberChange(line.id, 'cut_length', e.target.value)}
                       disabled={isLocked}
-                      className="text-right"
+                      className={numericInputClass}
                     />
                   </TableCell>
                   <TableCell>
@@ -494,7 +495,7 @@ export default function PlasmaProjectDetail() {
                       value={line.pierce_count ?? ''}
                       onChange={(e) => handleNumberChange(line.id, 'pierce_count', e.target.value)}
                       disabled={isLocked}
-                      className="text-right"
+                      className={numericInputClass}
                     />
                   </TableCell>
                   <TableCell>
@@ -505,7 +506,7 @@ export default function PlasmaProjectDetail() {
                       value={line.setup_minutes ?? ''}
                       onChange={(e) => handleNumberChange(line.id, 'setup_minutes', e.target.value)}
                       disabled={isLocked}
-                      className="text-right"
+                      className={numericInputClass}
                     />
                   </TableCell>
                   <TableCell>
@@ -516,7 +517,7 @@ export default function PlasmaProjectDetail() {
                      value={line.machine_minutes ?? ''}
                      onChange={(e) => handleNumberChange(line.id, 'machine_minutes', e.target.value)}
                      disabled={isLocked}
-                     className="text-right"
+                     className={numericInputClass}
                    />
                  </TableCell>
                   <TableCell className="text-right text-xs text-muted-foreground">
@@ -536,7 +537,7 @@ export default function PlasmaProjectDetail() {
                       value={line.sell_price_each ?? 0}
                       onChange={(e) => handleSellPriceChange(line.id, e.target.value)}
                       disabled={isLocked}
-                      className="text-right"
+                      className={numericInputClass}
                     />
                   </TableCell>
                   <TableCell className="text-right font-medium">${formatNumber(line.sell_price_total)}</TableCell>
@@ -622,7 +623,25 @@ export default function PlasmaProjectDetail() {
               ) : (
                 plasmaAttachments.map((att) => (
                   <TableRow key={att.id}>
-                    <TableCell className="font-medium">{att.filename}</TableCell>
+                    <TableCell className="font-medium">
+                      {att.local_url ? (
+                        <a
+                          href={att.local_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-primary hover:underline"
+                        >
+                          {att.filename}
+                        </a>
+                      ) : (
+                        <span
+                          className="text-primary hover:underline cursor-pointer"
+                          onClick={() => toast({ title: 'No download URL available' })}
+                        >
+                          {att.filename}
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Badge variant="secondary">{att.kind}</Badge>
                     </TableCell>

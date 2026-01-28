@@ -605,6 +605,38 @@ const SAMPLE_TECHNICIANS: Technician[] = [];
 export const useShopStore = create<ShopState>()(
   persist<ShopState>(
     (set, get): ShopState => {
+      const plasmaShortId = (id: string) => id.slice(0, 8);
+      const summarizePlasmaJobForSo = (job: PlasmaJob, lines: PlasmaJobLine[]) => {
+        const toSafeNumber = (value: number | string | null | undefined) => {
+          const numeric = typeof value === 'number' ? value : value != null ? Number(value) : NaN;
+          return Number.isFinite(numeric) ? numeric : 0;
+        };
+        const totalQty = lines.reduce((sum, line) => sum + toSafeNumber(line.qty), 0);
+        const totalCut = lines.reduce(
+          (sum, line) => sum + toSafeNumber(line.cut_length) * toSafeNumber(line.qty),
+          0
+        );
+        const totalPierces = lines.reduce(
+          (sum, line) => sum + toSafeNumber(line.pierce_count) * toSafeNumber(line.qty),
+          0
+        );
+        const totalSetup = lines.reduce(
+          (sum, line) => sum + toSafeNumber(line.setup_minutes) * toSafeNumber(line.qty),
+          0
+        );
+        const totalMachine = lines.reduce(
+          (sum, line) => sum + toSafeNumber(line.machine_minutes) * toSafeNumber(line.qty),
+          0
+        );
+        const cutRounded = Math.round(totalCut * 10) / 10;
+        const setupRounded = Math.round(totalSetup);
+        const machineRounded = Math.round(totalMachine);
+        const piercesRounded = Math.round(totalPierces);
+        return `Lines: ${lines.length} | Total Qty: ${Math.round(totalQty)} | Cut: ${cutRounded.toFixed(
+          1
+        )} in | Pierces: ${piercesRounded} | Setup: ${setupRounded} min | Machine: ${machineRounded} min`;
+      };
+
       const upsertPlasmaChargeLine = (params: {
         target: 'WORK_ORDER' | 'SALES_ORDER';
         orderId: string;
@@ -2367,7 +2399,9 @@ export const useShopStore = create<ShopState>()(
           if (!calculation?.success) return calculation;
           const updatedLines = get().plasmaJobLines.filter((l) => l.plasma_job_id === plasmaJobId);
           const totalPrice = updatedLines.reduce((sum, line) => sum + line.sell_price_total, 0);
-          const description = `Plasma Job ${job.id}`;
+          const chargeTitle = `Plasma: ${job.title ?? plasmaShortId(job.id)}`;
+          const summary = summarizePlasmaJobForSo(job, updatedLines);
+          const description = `${chargeTitle}\n${summary}`;
           upsertPlasmaChargeLine({
             target: 'SALES_ORDER',
             orderId: job.sales_order_id,
