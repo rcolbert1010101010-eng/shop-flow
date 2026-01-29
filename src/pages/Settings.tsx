@@ -97,6 +97,14 @@ export default function Settings() {
       inventory_negative_qoh_policy: settings?.inventory_negative_qoh_policy || 'WARN',
       minimum_margin_percent: (fromResolved.minimum_margin_percent ?? 0).toString(),
       labor_rate: (fromResolved.labor_rate ?? 0).toString(),
+      plasma_material_cost_per_inch:
+        settings?.plasma_material_cost_per_inch != null ? String(settings.plasma_material_cost_per_inch) : '',
+      plasma_consumable_cost_per_pierce:
+        settings?.plasma_consumable_cost_per_pierce != null ? String(settings.plasma_consumable_cost_per_pierce) : '',
+      plasma_setup_rate_per_minute:
+        settings?.plasma_setup_rate_per_minute != null ? String(settings.plasma_setup_rate_per_minute) : '',
+      plasma_machine_rate_per_minute:
+        settings?.plasma_machine_rate_per_minute != null ? String(settings.plasma_machine_rate_per_minute) : '',
     };
     setFormData(next);
     setDraft(next);
@@ -256,6 +264,25 @@ export default function Settings() {
       const markupRetailParsed = parseNumberMaybe((draft as any).markup_retail_percent);
       const markupFleetParsed = parseNumberMaybe((draft as any).markup_fleet_percent);
       const markupWholesaleParsed = parseNumberMaybe((draft as any).markup_wholesale_percent);
+      const plasmaMaterialParsed = parseNumberMaybe((draft as any).plasma_material_cost_per_inch);
+      const plasmaConsumableParsed = parseNumberMaybe((draft as any).plasma_consumable_cost_per_pierce);
+      const plasmaSetupParsed = parseNumberMaybe((draft as any).plasma_setup_rate_per_minute);
+      const plasmaMachineParsed = parseNumberMaybe((draft as any).plasma_machine_rate_per_minute);
+      const plasmaFields = [
+        { label: 'Plasma material cost per inch', value: plasmaMaterialParsed },
+        { label: 'Plasma consumable cost per pierce', value: plasmaConsumableParsed },
+        { label: 'Plasma setup rate per minute', value: plasmaSetupParsed },
+        { label: 'Plasma machine rate per minute', value: plasmaMachineParsed },
+      ];
+      const invalidPlasma = plasmaFields.find((field) => field.value !== undefined && field.value < 0);
+      if (invalidPlasma) {
+        toast({
+          title: 'Validation Error',
+          description: `${invalidPlasma.label} must be a non-negative number`,
+          variant: 'destructive',
+        });
+        return;
+      }
       const legacyChanged =
         (draft.shop_name?.trim?.() ?? '') !== (settings?.shop_name ?? '') ||
         (taxRateParsed !== undefined && taxRateParsed !== (settings?.default_tax_rate ?? 0)) ||
@@ -265,7 +292,11 @@ export default function Settings() {
         (markupFleetParsed !== undefined && markupFleetParsed !== (settings?.markup_fleet_percent ?? 0)) ||
         (markupWholesaleParsed !== undefined && markupWholesaleParsed !== (settings?.markup_wholesale_percent ?? 0)) ||
         ((draft as any).session_user_name?.trim?.() ?? '') !== (settings?.session_user_name ?? '') ||
-        (draft as any).inventory_negative_qoh_policy !== (settings?.inventory_negative_qoh_policy ?? 'WARN');
+        (draft as any).inventory_negative_qoh_policy !== (settings?.inventory_negative_qoh_policy ?? 'WARN') ||
+        (plasmaMaterialParsed !== undefined && plasmaMaterialParsed !== (settings?.plasma_material_cost_per_inch ?? 0)) ||
+        (plasmaConsumableParsed !== undefined && plasmaConsumableParsed !== (settings?.plasma_consumable_cost_per_pierce ?? 0)) ||
+        (plasmaSetupParsed !== undefined && plasmaSetupParsed !== (settings?.plasma_setup_rate_per_minute ?? 0)) ||
+        (plasmaMachineParsed !== undefined && plasmaMachineParsed !== (settings?.plasma_machine_rate_per_minute ?? 0));
 
       if (changes.length === 0 && !legacyChanged) {
         toast({ title: 'No changes', description: 'Nothing to save.' });
@@ -337,6 +368,20 @@ export default function Settings() {
       if ((draft as any).inventory_negative_qoh_policy !== undefined && 
           (draft as any).inventory_negative_qoh_policy !== (settings?.inventory_negative_qoh_policy ?? 'WARN')) {
         legacyPayload.inventory_negative_qoh_policy = (draft as any).inventory_negative_qoh_policy;
+      }
+
+      // plasma pricing fields
+      if (plasmaMaterialParsed !== undefined && plasmaMaterialParsed !== (settings?.plasma_material_cost_per_inch ?? 0)) {
+        legacyPayload.plasma_material_cost_per_inch = plasmaMaterialParsed;
+      }
+      if (plasmaConsumableParsed !== undefined && plasmaConsumableParsed !== (settings?.plasma_consumable_cost_per_pierce ?? 0)) {
+        legacyPayload.plasma_consumable_cost_per_pierce = plasmaConsumableParsed;
+      }
+      if (plasmaSetupParsed !== undefined && plasmaSetupParsed !== (settings?.plasma_setup_rate_per_minute ?? 0)) {
+        legacyPayload.plasma_setup_rate_per_minute = plasmaSetupParsed;
+      }
+      if (plasmaMachineParsed !== undefined && plasmaMachineParsed !== (settings?.plasma_machine_rate_per_minute ?? 0)) {
+        legacyPayload.plasma_machine_rate_per_minute = plasmaMachineParsed;
       }
 
       // Only persist if there are changes
@@ -804,6 +849,74 @@ export default function Settings() {
           </div>
         </div>
       </div>
+
+      {canEditSettings && (
+        <div className="form-section max-w-xl mt-6">
+          <h2 className="text-lg font-semibold mb-4">Plasma Pricing</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="plasma_material_cost_per_inch">Material Cost per Inch</Label>
+              <Input
+                id="plasma_material_cost_per_inch"
+                type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
+                value={(draft as any).plasma_material_cost_per_inch ?? ''}
+                onChange={(e) =>
+                  setDraft((prev) => ({ ...prev, plasma_material_cost_per_inch: e.target.value }))
+                }
+                disabled={!editing || !canEditSettings}
+              />
+            </div>
+            <div>
+              <Label htmlFor="plasma_consumable_cost_per_pierce">Consumable Cost per Pierce</Label>
+              <Input
+                id="plasma_consumable_cost_per_pierce"
+                type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
+                value={(draft as any).plasma_consumable_cost_per_pierce ?? ''}
+                onChange={(e) =>
+                  setDraft((prev) => ({ ...prev, plasma_consumable_cost_per_pierce: e.target.value }))
+                }
+                disabled={!editing || !canEditSettings}
+              />
+            </div>
+            <div>
+              <Label htmlFor="plasma_setup_rate_per_minute">Setup Rate per Minute</Label>
+              <Input
+                id="plasma_setup_rate_per_minute"
+                type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
+                value={(draft as any).plasma_setup_rate_per_minute ?? ''}
+                onChange={(e) =>
+                  setDraft((prev) => ({ ...prev, plasma_setup_rate_per_minute: e.target.value }))
+                }
+                disabled={!editing || !canEditSettings}
+              />
+            </div>
+            <div>
+              <Label htmlFor="plasma_machine_rate_per_minute">Machine Rate per Minute</Label>
+              <Input
+                id="plasma_machine_rate_per_minute"
+                type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
+                value={(draft as any).plasma_machine_rate_per_minute ?? ''}
+                onChange={(e) =>
+                  setDraft((prev) => ({ ...prev, plasma_machine_rate_per_minute: e.target.value }))
+                }
+                disabled={!editing || !canEditSettings}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="form-section max-w-xl mt-6">
         <div className="flex items-center justify-between mb-2">

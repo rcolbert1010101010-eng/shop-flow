@@ -20,6 +20,10 @@ export interface SystemSettings {
   ai_enabled?: boolean;
   ai_confirm_risky_actions?: boolean;
   negative_inventory_policy?: 'warn' | 'block' | 'allow';
+  plasma_material_cost_per_inch?: number;
+  plasma_consumable_cost_per_pierce?: number;
+  plasma_setup_rate_per_minute?: number;
+  plasma_machine_rate_per_minute?: number;
 }
 
 // Customer

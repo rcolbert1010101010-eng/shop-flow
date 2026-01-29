@@ -65,7 +65,7 @@ import type {
   CycleCountLine,
 } from '@/types';
 import { calculateFabJob, fabricationPricingDefaults, type FabricationPricingSettings } from '@/services/fabricationPricingService';
-import { calculatePlasmaJob, plasmaPricingDefaults, type PlasmaPricingSettings } from '@/services/plasmaPricingService';
+import { calculatePlasmaJob, type PlasmaPricingSettings } from '@/services/plasmaPricingService';
 import { computePlasmaJobMetrics } from '@/services/plasmaJobSummary';
 
 
@@ -4020,6 +4020,12 @@ export const useShopStore = create<ShopState>()(
           const state = get();
           const job = state.plasmaJobs.find((j) => j.id === jobId);
           if (!job) return { success: false, error: 'Plasma job not found' };
+          if (job.posted_at) {
+            return { success: false, error: 'Plasma job is locked (posted)' };
+          }
+          if (job.sales_order_id && !settingsOverride) {
+            return { success: false, error: 'Plasma job is linked to a sales order' };
+          }
           if (job.work_order_id) {
             const wo = state.workOrders.find((o) => o.id === job.work_order_id);
             if (wo?.status === 'INVOICED') return { success: false, error: 'Work order is invoiced' };
@@ -4028,11 +4034,22 @@ export const useShopStore = create<ShopState>()(
             const so = state.salesOrders.find((o) => o.id === job.sales_order_id);
             if (so?.status === 'INVOICED') return { success: false, error: 'Sales order is invoiced' };
           }
+          const baseSettings: Partial<PlasmaPricingSettings> = {};
+          if (state.settings.plasma_material_cost_per_inch != null) {
+            baseSettings.materialCostPerInch = state.settings.plasma_material_cost_per_inch;
+          }
+          if (state.settings.plasma_consumable_cost_per_pierce != null) {
+            baseSettings.consumableCostPerPierce = state.settings.plasma_consumable_cost_per_pierce;
+          }
+          if (state.settings.plasma_setup_rate_per_minute != null) {
+            baseSettings.setupRatePerMinute = state.settings.plasma_setup_rate_per_minute;
+          }
+          if (state.settings.plasma_machine_rate_per_minute != null) {
+            baseSettings.machineRatePerMinute = state.settings.plasma_machine_rate_per_minute;
+          }
+          const mergedPricing: Partial<PlasmaPricingSettings> = { ...baseSettings, ...settingsOverride };
           const lines = state.plasmaJobLines.filter((l) => l.plasma_job_id === jobId);
-          const { lines: pricedLines, totals, warnings } = calculatePlasmaJob(job, lines, {
-            ...plasmaPricingDefaults,
-            ...settingsOverride,
-          });
+          const { lines: pricedLines, totals, warnings } = calculatePlasmaJob(job, lines, mergedPricing);
           set((state) => ({
             plasmaJobs: state.plasmaJobs.map((j) =>
               j.id === jobId ? { ...j, calculated_at: now(), updated_at: now() } : j

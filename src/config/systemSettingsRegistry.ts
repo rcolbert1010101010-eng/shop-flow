@@ -1,3 +1,5 @@
+import { plasmaPricingDefaults } from '@/services/plasmaPricingService';
+
 export type SystemSettingValueType = 'number' | 'boolean' | 'string' | 'json';
 export type SystemSettingCategory = 'operations' | 'inventory' | 'pricing' | 'ai';
 
@@ -75,6 +77,46 @@ export const SYSTEM_SETTINGS_REGISTRY = {
     category: 'ai',
     sensitivity: 'protected' as const,
     riskyAction: true,
+  },
+  plasma_material_cost_per_inch: {
+    label: 'Plasma Cut Length Rate ($/in)',
+    description: 'Charge per inch of cut length (used in plasma pricing)',
+    valueType: 'number',
+    defaultValue: plasmaPricingDefaults.materialCostPerInch,
+    category: 'pricing',
+    sensitivity: 'critical' as const,
+    requiresReason: true,
+    constraints: { min: 0, max: 1000 },
+  },
+  plasma_consumable_cost_per_pierce: {
+    label: 'Plasma Pierces Rate ($/pierce)',
+    description: 'Charge per pierce (used in plasma pricing)',
+    valueType: 'number',
+    defaultValue: plasmaPricingDefaults.consumableCostPerPierce,
+    category: 'pricing',
+    sensitivity: 'critical' as const,
+    requiresReason: true,
+    constraints: { min: 0, max: 1000 },
+  },
+  plasma_setup_rate_per_minute: {
+    label: 'Plasma Setup Rate ($/min)',
+    description: 'Labor rate applied to setup minutes in plasma pricing',
+    valueType: 'number',
+    defaultValue: plasmaPricingDefaults.setupRatePerMinute,
+    category: 'pricing',
+    sensitivity: 'critical' as const,
+    requiresReason: true,
+    constraints: { min: 0, max: 1000 },
+  },
+  plasma_machine_rate_per_minute: {
+    label: 'Plasma Machine Rate ($/min)',
+    description: 'Labor rate applied to machine minutes in plasma pricing',
+    valueType: 'number',
+    defaultValue: plasmaPricingDefaults.machineRatePerMinute,
+    category: 'pricing',
+    sensitivity: 'critical' as const,
+    requiresReason: true,
+    constraints: { min: 0, max: 1000 },
   },
 } as const;
 
