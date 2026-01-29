@@ -380,6 +380,8 @@ export default function SalesOrderDetail() {
     () => (currentOrder ? getSalesOrderChargeLines(currentOrder.id) : []),
     [currentOrder, getSalesOrderChargeLines]
   );
+  const plasmaChargeLines = chargeLines.filter((l) => l.source_ref_type === 'PLASMA_JOB');
+  const hasPlasmaProjects = plasmaChargeLines.length > 0;
   const profitability = useMemo(() => {
     const partsRevenue = orderLines.reduce((sum, line) => sum + toNumber(line.line_total), 0);
     const partsCostEntries = orderLines
@@ -401,12 +403,16 @@ export default function SalesOrderDetail() {
         hasCost: partsHasCost,
         cost: partsHasCost ? partsCost : null,
       },
-      {
-        label: 'Fees/Sublet',
-        revenue: feesRevenue,
-        hasCost: feesHasCost,
-        cost: null,
-      },
+      ...(hasPlasmaProjects
+        ? [
+            {
+              label: 'Plasma Projects',
+              revenue: feesRevenue,
+              hasCost: feesHasCost,
+              cost: null,
+            },
+          ]
+        : []),
     ].map((cat) => ({
       ...cat,
       gp: cat.hasCost && cat.cost != null ? cat.revenue - cat.cost : null,
@@ -432,7 +438,7 @@ export default function SalesOrderDetail() {
         gpPct: overallGpPct,
       },
     };
-  }, [chargeLines, orderLines, parts]);
+  }, [chargeLines, hasPlasmaProjects, orderLines, parts]);
   const orderTotal = toNumber(currentOrder?.total);
   const payments = usePayments('SALES_ORDER', currentOrder?.id, orderTotal);
   const paymentStatusClass = useMemo(() => {
@@ -1640,6 +1646,45 @@ export default function SalesOrderDetail() {
                 </div>
               )}
             />
+          )}
+
+          {/* Plasma Projects */}
+          {hasPlasmaProjects && (
+            <div className="mt-6 border rounded-lg">
+              <div className="px-4 py-3 border-b">
+                <h3 className="font-semibold text-lg">Plasma Projects</h3>
+              </div>
+              <div className="table-container p-4">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Description</TableHead>
+                      <TableHead className="text-right">Qty</TableHead>
+                      <TableHead className="text-right">Unit Price</TableHead>
+                      <TableHead className="text-right">Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {plasmaChargeLines.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center text-muted-foreground py-6">
+                          No plasma projects posted yet
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      plasmaChargeLines.map((line) => (
+                        <TableRow key={line.id}>
+                          <TableCell>{line.description || 'Plasma project'}</TableCell>
+                          <TableCell className="text-right">{line.qty}</TableCell>
+                          <TableCell className="text-right">${formatMoney(line.unit_price)}</TableCell>
+                          <TableCell className="text-right font-medium">${formatMoney(line.total_price)}</TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
           )}
 
           {/* Totals */}
