@@ -64,11 +64,37 @@ export async function setUserRole(userId: string, roleKeyUpper: string) {
 }
 
 export async function inviteUser(payload: { email: string; role: string; full_name?: string | null }) {
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) throw new Error(sessionError.message);
+  const accessToken = sessionData?.session?.access_token;
+  if (!accessToken) throw new Error('Not authenticated');
+
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${accessToken}`,
+  };
+  const anonKey = (supabase as any)?.supabaseKey;
+  if (anonKey) headers.apikey = anonKey;
+
   const { data, error } = await supabase.functions.invoke('admin-invite-user', {
     body: { ...payload, role: payload.role.toString().toUpperCase() },
+    headers,
   });
   if (error) {
-    const message = (data as any)?.error || error.message;
+    let contextMessage: string | undefined;
+    const contextBody = (error as any)?.context?.body ?? (error as any)?.context?.response?.body;
+    if (contextBody) {
+      try {
+        const parsedBody = typeof contextBody === 'string' ? JSON.parse(contextBody) : contextBody;
+        if (parsedBody && typeof parsedBody === 'object' && 'error' in parsedBody) {
+          contextMessage = (parsedBody as any).error;
+        }
+      } catch {
+        if (typeof contextBody === 'string') {
+          contextMessage = contextBody;
+        }
+      }
+    }
+    const message = contextMessage || (data as any)?.error || error.message;
     throw new Error(message);
   }
   return data;
