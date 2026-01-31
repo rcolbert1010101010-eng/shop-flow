@@ -26,20 +26,22 @@ async function extractEdgeErrorMessage(data: any, error: any): Promise<string> {
 
   const response = error?.context?.response;
   if (response) {
+    const status = response.status;
+    const statusText = response.statusText;
     try {
-      const contentType = response?.headers?.get?.('content-type') || '';
-      if (contentType.includes('application/json')) {
-        const body = await response.json();
+      const clone = response.clone();
+      const raw = await clone.text();
+      try {
+        const body = JSON.parse(raw);
         if (body?.error) {
           return `${body.error}${body.details ? `: ${body.details}` : ''}`;
         }
-        if (body?.message) return body.message;
-      } else {
-        const text = await response.text();
-        if (text) return text;
+      } catch {
+        // ignore JSON parse errors
       }
+      return `edge_${status}: ${raw || statusText || 'Unknown error'}`;
     } catch {
-      // ignore parse errors and fall back to generic message
+      // ignore parsing errors and fall back to generic message
     }
   }
 
