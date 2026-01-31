@@ -21,7 +21,7 @@ import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useToast } from '@/components/ui/use-toast';
 import { usePermissions } from '@/security/usePermissions';
-import { inviteUser, listUsers, setUserRole, updateUserProfile, type UserRow } from '@/repos/api/usersRepoApi';
+import { createUser, listUsers, setUserRole, updateUserProfile, type UserRow } from '@/repos/api/usersRepoApi';
 
 const roleOptions = [
   { value: 'ADMIN', label: 'Admin' },
@@ -71,26 +71,59 @@ export default function AdminUsers() {
     },
   });
 
-  const inviteMutation = useMutation({
-    mutationFn: inviteUser,
+  const createUserMutation = useMutation({
+    mutationFn: createUser,
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['admin-users'] });
-      toast({ title: 'Invite sent' });
-      setInviteOpen(false);
-      setInviteEmail('');
-      setInviteName('');
+      toast({ title: 'User created' });
+      setCreateOpen(false);
+      setCreateUsername('');
+      setCreatePassword('');
+      setCreatePasswordConfirm('');
+      setCreateName('');
     },
     onError: (err: any) => {
-      toast({ title: 'Invite failed', description: err?.message || 'Error inviting user', variant: 'destructive' });
+      toast({ title: 'Create failed', description: err?.message || 'Error creating user', variant: 'destructive' });
     },
   });
 
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState('TECHNICIAN');
-  const [inviteName, setInviteName] = useState('');
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createUsername, setCreateUsername] = useState('');
+  const [createPassword, setCreatePassword] = useState('');
+  const [createPasswordConfirm, setCreatePasswordConfirm] = useState('');
+  const [createRole, setCreateRole] = useState('TECHNICIAN');
+  const [createName, setCreateName] = useState('');
 
   const rows: UserRow[] = useMemo(() => profilesQuery.data || [], [profilesQuery.data]);
+
+  const handleCreateUser = async () => {
+    const username = createUsername.trim().toLowerCase();
+    const password = createPassword;
+    const confirmPassword = createPasswordConfirm;
+    const role = createRole.toUpperCase();
+    const full_name = createName || null;
+
+    if (!username) {
+      toast({ title: 'Username is required', variant: 'destructive' });
+      return;
+    }
+
+    if (!password) {
+      toast({ title: 'Password is required', variant: 'destructive' });
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      toast({ title: 'Passwords do not match', variant: 'destructive' });
+      return;
+    }
+
+    try {
+      await createUserMutation.mutateAsync({ username, password, role, full_name });
+    } catch {
+      // Errors are handled via createUserMutation onError
+    }
+  };
 
   if (!isAdmin) {
     return (
@@ -108,14 +141,14 @@ export default function AdminUsers() {
     <div className="page-container space-y-4">
       <PageHeader title="Users" backTo="/settings" />
 
-      <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle>User Management</CardTitle>
             </div>
             <DialogTrigger asChild>
-              <Button>Invite User</Button>
+              <Button>Create User (username/password)</Button>
             </DialogTrigger>
           </CardHeader>
           <CardContent>
@@ -187,21 +220,43 @@ export default function AdminUsers() {
 
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Invite User</DialogTitle>
-            <DialogDescription>Send an invite email and assign a role.</DialogDescription>
+            <DialogTitle>Create User</DialogTitle>
+            <DialogDescription>Create a user with a username and password.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1">
-              <Label>Email</Label>
-              <Input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="user@example.com" />
+              <Label>Username</Label>
+              <Input
+                value={createUsername}
+                onChange={(e) => setCreateUsername(e.target.value)}
+                placeholder="username"
+              />
             </div>
             <div className="space-y-1">
               <Label>Full name (optional)</Label>
-              <Input value={inviteName} onChange={(e) => setInviteName(e.target.value)} placeholder="Full name" />
+              <Input value={createName} onChange={(e) => setCreateName(e.target.value)} placeholder="Full name" />
+            </div>
+            <div className="space-y-1">
+              <Label>Password</Label>
+              <Input
+                type="password"
+                value={createPassword}
+                onChange={(e) => setCreatePassword(e.target.value)}
+                placeholder="Password"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Confirm password</Label>
+              <Input
+                type="password"
+                value={createPasswordConfirm}
+                onChange={(e) => setCreatePasswordConfirm(e.target.value)}
+                placeholder="Confirm password"
+              />
             </div>
             <div className="space-y-1">
               <Label>Role</Label>
-              <Select value={inviteRole} onValueChange={setInviteRole}>
+              <Select value={createRole} onValueChange={setCreateRole}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -217,16 +272,10 @@ export default function AdminUsers() {
           </div>
           <DialogFooter>
             <Button
-              onClick={() =>
-                inviteMutation.mutate({
-                  email: inviteEmail,
-                  role: inviteRole.toUpperCase(),
-                  full_name: inviteName || null,
-                })
-              }
-              disabled={inviteMutation.isLoading}
+              onClick={handleCreateUser}
+              disabled={createUserMutation.isPending}
             >
-              {inviteMutation.isLoading ? 'Sending...' : 'Send Invite'}
+              {createUserMutation.isPending ? 'Creating...' : 'Create User'}
             </Button>
           </DialogFooter>
         </DialogContent>

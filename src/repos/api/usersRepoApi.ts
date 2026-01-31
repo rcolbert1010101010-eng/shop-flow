@@ -12,13 +12,29 @@ export type ProfileRow = {
 export type UserRow = ProfileRow;
 
 export async function listUsers(): Promise<UserRow[]> {
-  const [{ data: profiles, error: profilesError }, { data: userRoles, error: rolesError }] = await Promise.all([
-    supabase
-      .from('user_profiles')
-      .select('id,email,full_name,is_active,created_at')
-      .order('created_at', { ascending: false }),
-    supabase.from('user_roles').select('user_id, role:roles(key)'),
-  ]);
+  let profiles;
+  let profilesError;
+  let userRoles;
+  let rolesError;
+
+  try {
+    [
+      { data: profiles, error: profilesError },
+      { data: userRoles, error: rolesError },
+    ] = await Promise.all([
+      supabase
+        .from('user_profiles')
+        .select('id,email,full_name,is_active,created_at')
+        .order('created_at', { ascending: false }),
+      supabase.from('user_roles').select('user_id, role:roles(key)'),
+    ]);
+  } catch (err: any) {
+    const message = (err?.message || '').toString().toLowerCase();
+    if (err?.name === 'AbortError' || message.includes('signal is aborted') || message.includes('aborted')) {
+      return [];
+    }
+    throw err;
+  }
 
   if (profilesError) throw new Error(profilesError.message);
   if (rolesError) throw new Error(rolesError.message);
@@ -63,13 +79,18 @@ export async function setUserRole(userId: string, roleKeyUpper: string) {
   if (upsertError) throw new Error(upsertError.message);
 }
 
-export async function inviteUser(payload: { email: string; role: string; full_name?: string | null }) {
+export async function createUser(payload: {
+  username: string;
+  password: string;
+  role: string;
+  full_name?: string | null;
+}) {
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
   if (sessionError) throw new Error(sessionError.message);
   const accessToken = sessionData?.session?.access_token;
   if (!accessToken) throw new Error('Not authenticated');
 
-  const { data, error } = await supabase.functions.invoke('admin-invite-user', {
+  const { data, error } = await supabase.functions.invoke('admin-create-user', {
     body: { ...payload, role: payload.role.toString().toUpperCase() },
     headers: {
       Authorization: `Bearer ${accessToken}`,
