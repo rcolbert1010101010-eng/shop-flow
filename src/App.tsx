@@ -152,7 +152,8 @@ const App = () => {
                   <Route path="/technicians/:id" element={<TechnicianDetail />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/settings/integrations/quickbooks" element={<QuickBooksIntegration />} />
-                  <Route path="/settings/users" element={<AdminUsers />} />
+                  <Route path="/users" element={<AdminUsers />} />
+                  <Route path="/settings/users" element={<Navigate to="/users" replace />} />
                   {FEATURES.manufacturingV2 && (
                     <>
                       <Route path="/manufacturing-v2" element={<ManufacturingV2HomePage />} />
