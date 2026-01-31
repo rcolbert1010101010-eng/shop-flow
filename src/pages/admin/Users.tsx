@@ -14,6 +14,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -21,7 +31,14 @@ import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useToast } from '@/components/ui/use-toast';
 import { usePermissions } from '@/security/usePermissions';
-import { createUser, listUsers, setUserRole, updateUserProfile, type UserRow } from '@/repos/api/usersRepoApi';
+import {
+  createUser,
+  listUsers,
+  removeUserFromTenant,
+  setUserRole,
+  updateUserProfile,
+  type UserRow,
+} from '@/repos/api/usersRepoApi';
 
 const roleOptions = [
   { value: 'ADMIN', label: 'Admin' },
@@ -46,8 +63,8 @@ export default function AdminUsers() {
   });
 
   const updateProfileMutation = useMutation({
-    mutationFn: async (payload: { id: string; is_active?: boolean }) => {
-      await updateUserProfile(payload.id, { is_active: payload.is_active });
+    mutationFn: async (payload: { id: string; is_active?: boolean; full_name?: string | null }) => {
+      await updateUserProfile(payload.id, { is_active: payload.is_active, full_name: payload.full_name });
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['admin-users'] });
@@ -87,12 +104,32 @@ export default function AdminUsers() {
     },
   });
 
+  const removeUserMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      await removeUserFromTenant(userId);
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin-users'] });
+      toast({ title: 'User removed' });
+      setRemoveOpen(false);
+      setRemoveUser(null);
+    },
+    onError: (err: any) => {
+      toast({ title: 'Remove failed', description: err?.message || 'Error removing user', variant: 'destructive' });
+    },
+  });
+
   const [createOpen, setCreateOpen] = useState(false);
   const [createUsername, setCreateUsername] = useState('');
   const [createPassword, setCreatePassword] = useState('');
   const [createPasswordConfirm, setCreatePasswordConfirm] = useState('');
   const [createRole, setCreateRole] = useState('TECHNICIAN');
   const [createName, setCreateName] = useState('');
+  const [editOpen, setEditOpen] = useState(false);
+  const [editUserId, setEditUserId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [removeOpen, setRemoveOpen] = useState(false);
+  const [removeUser, setRemoveUser] = useState<UserRow | null>(null);
 
   const rows: UserRow[] = useMemo(() => profilesQuery.data || [], [profilesQuery.data]);
 
@@ -122,6 +159,41 @@ export default function AdminUsers() {
       await createUserMutation.mutateAsync({ username, password, role, full_name });
     } catch {
       // Errors are handled via createUserMutation onError
+    }
+  };
+
+  const handleEditOpen = (row: UserRow) => {
+    setEditUserId(row.id);
+    setEditName(row.full_name || '');
+    setEditOpen(true);
+  };
+
+  const handleEditSave = async () => {
+    if (!editUserId) return;
+    try {
+      await updateProfileMutation.mutateAsync({
+        id: editUserId,
+        full_name: editName.trim() || null,
+      });
+      setEditOpen(false);
+      setEditUserId(null);
+      setEditName('');
+    } catch {
+      // Errors are handled via updateProfileMutation onError
+    }
+  };
+
+  const handleRemoveOpen = (row: UserRow) => {
+    setRemoveUser(row);
+    setRemoveOpen(true);
+  };
+
+  const handleRemoveConfirm = async () => {
+    if (!removeUser?.id) return;
+    try {
+      await removeUserMutation.mutateAsync(removeUser.id);
+    } catch {
+      // Errors are handled via removeUserMutation onError
     }
   };
 
@@ -209,6 +281,12 @@ export default function AdminUsers() {
                             }
                           />
                         </div>
+                        <Button variant="outline" size="sm" onClick={() => handleEditOpen(row)}>
+                          Edit
+                        </Button>
+                        <Button variant="destructive" size="sm" onClick={() => handleRemoveOpen(row)}>
+                          Remove
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -280,6 +358,62 @@ export default function AdminUsers() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        open={editOpen}
+        onOpenChange={(open) => {
+          setEditOpen(open);
+          if (!open) {
+            setEditUserId(null);
+            setEditName('');
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit User</DialogTitle>
+            <DialogDescription>Update the user's profile details.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Full name</Label>
+              <Input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="Full name"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={handleEditSave}
+              disabled={!editUserId || updateProfileMutation.isPending}
+            >
+              {updateProfileMutation.isPending ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={removeOpen} onOpenChange={setRemoveOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove user?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will deactivate the user and remove them from the current tenant. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleRemoveConfirm}
+              disabled={removeUserMutation.isPending}
+            >
+              {removeUserMutation.isPending ? 'Removing...' : 'Remove'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

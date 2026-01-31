@@ -11,6 +11,14 @@ export type ProfileRow = {
 
 export type UserRow = ProfileRow;
 
+async function requireAccessToken(): Promise<string> {
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) throw new Error(sessionError.message);
+  const accessToken = sessionData?.session?.access_token;
+  if (!accessToken) throw new Error('Not authenticated');
+  return accessToken;
+}
+
 export async function listUsers(): Promise<UserRow[]> {
   let profiles;
   let profilesError;
@@ -54,29 +62,49 @@ export async function listUsers(): Promise<UserRow[]> {
 }
 
 export async function updateUserProfile(id: string, fields: Partial<UserRow>) {
+  const accessToken = await requireAccessToken();
   const payload: Partial<UserRow> = {
     full_name: fields.full_name,
     is_active: fields.is_active,
   };
-  const { error } = await supabase.from('user_profiles').update(payload).eq('id', id);
-  if (error) throw new Error(error.message);
+  const { data, error } = await supabase.functions.invoke('admin-update-user', {
+    body: { user_id: id, ...payload },
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+  if (error) {
+    const message = (data as any)?.error || error.message;
+    throw new Error(message);
+  }
 }
 
 export async function setUserRole(userId: string, roleKeyUpper: string) {
-  const roleKey = roleKeyUpper.toString().toLowerCase();
-  const { data: roleRow, error: roleError } = await supabase
-    .from('roles')
-    .select('id')
-    .eq('key', roleKey)
-    .eq('is_active', true)
-    .maybeSingle();
-  if (roleError) throw new Error(roleError.message);
-  if (!roleRow?.id) throw new Error('Role not found or inactive');
+  const accessToken = await requireAccessToken();
+  const { data, error } = await supabase.functions.invoke('admin-update-user', {
+    body: { user_id: userId, role: roleKeyUpper },
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+  if (error) {
+    const message = (data as any)?.error || error.message;
+    throw new Error(message);
+  }
+}
 
-  const { error: upsertError } = await supabase
-    .from('user_roles')
-    .upsert({ user_id: userId, role_id: roleRow.id }, { onConflict: 'user_id' });
-  if (upsertError) throw new Error(upsertError.message);
+export async function removeUserFromTenant(userId: string) {
+  const accessToken = await requireAccessToken();
+  const { data, error } = await supabase.functions.invoke('admin-update-user', {
+    body: { user_id: userId, action: 'remove' },
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+  if (error) {
+    const message = (data as any)?.error || error.message;
+    throw new Error(message);
+  }
 }
 
 export async function createUser(payload: {
@@ -85,10 +113,7 @@ export async function createUser(payload: {
   role: string;
   full_name?: string | null;
 }) {
-  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-  if (sessionError) throw new Error(sessionError.message);
-  const accessToken = sessionData?.session?.access_token;
-  if (!accessToken) throw new Error('Not authenticated');
+  const accessToken = await requireAccessToken();
 
   const { data, error } = await supabase.functions.invoke('admin-create-user', {
     body: { ...payload, role: payload.role.toString().toUpperCase() },
