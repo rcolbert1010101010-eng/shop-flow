@@ -41,11 +41,21 @@ async function extractEdgeErrorMessage(data: any, error: any): Promise<string> {
       }
       return `edge_${status}: ${raw || statusText || 'Unknown error'}`;
     } catch {
-      // ignore parsing errors and fall back to generic message
+      // ignore parsing errors and fall back to diagnostic message
     }
   }
 
-  return error?.message || 'Unknown error';
+  const errorName = error?.name ?? '';
+  const errorMessage = error?.message ?? '';
+  const keys = Object.getOwnPropertyNames(error ?? {}).join(',');
+  const contextKeys = Object.getOwnPropertyNames(error?.context ?? {}).join(',');
+  let contextString = '';
+  try {
+    contextString = JSON.stringify(error?.context ?? null);
+  } catch {
+    contextString = '';
+  }
+  return `edge_invoke_failed: name=${errorName} message=${errorMessage} keys=${keys} contextKeys=${contextKeys} context=${contextString}`;
 }
 
 export async function listUsers(): Promise<UserRow[]> {
