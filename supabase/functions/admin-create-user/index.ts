@@ -101,7 +101,7 @@ serve(async (req) => {
     const password = (payload?.password ?? '').toString();
     const role = (payload?.role ?? '').toString().trim().toUpperCase();
     const full_name = (payload?.full_name ?? '').toString().trim() || null;
-    const email = `${username}@local.shopflow`;
+    const email = `${username}@shopflow.local`;
 
     console.log('create user called', { hasAuthHeader: !!authHeader, username });
 
