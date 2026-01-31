@@ -5,7 +5,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -68,6 +76,9 @@ export default function AdminUsers() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['admin-users'] });
       toast({ title: 'Invite sent' });
+      setInviteOpen(false);
+      setInviteEmail('');
+      setInviteName('');
     },
     onError: (err: any) => {
       toast({ title: 'Invite failed', description: err?.message || 'Error inviting user', variant: 'destructive' });
@@ -97,79 +108,83 @@ export default function AdminUsers() {
     <div className="page-container space-y-4">
       <PageHeader title="Users" backTo="/settings" />
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle>User Management</CardTitle>
-          </div>
-          <Button onClick={() => setInviteOpen(true)}>Invite User</Button>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Email</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground">
-                    No users found.
-                  </TableCell>
-                </TableRow>
-              )}
-              {rows.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell>{row.email}</TableCell>
-                  <TableCell>{row.full_name || '—'}</TableCell>
-                  <TableCell>
-                    <Select
-                      value={(row.role || 'TECHNICIAN').toUpperCase()}
-                      onValueChange={(val) => updateRoleMutation.mutate({ id: row.id, role: val.toUpperCase() })}
-                    >
-                      <SelectTrigger className="w-[160px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {roleOptions.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={row.is_active ? 'default' : 'secondary'}>
-                      {row.is_active ? 'Active' : 'Inactive'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{row.created_at ? new Date(row.created_at).toLocaleString() : '—'}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">Active</span>
-                        <Switch
-                          checked={!!row.is_active}
-                          onCheckedChange={(checked) => updateProfileMutation.mutate({ id: row.id, is_active: checked })}
-                        />
-                      </div>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>User Management</CardTitle>
+            </div>
+            <DialogTrigger asChild>
+              <Button>Invite User</Button>
+            </DialogTrigger>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Created</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-muted-foreground">
+                      No users found.
+                    </TableCell>
+                  </TableRow>
+                )}
+                {rows.map((row) => (
+                  <TableRow key={row.id}>
+                    <TableCell>{row.email}</TableCell>
+                    <TableCell>{row.full_name || '—'}</TableCell>
+                    <TableCell>
+                      <Select
+                        value={(row.role || 'TECHNICIAN').toUpperCase()}
+                        onValueChange={(val) => updateRoleMutation.mutate({ id: row.id, role: val.toUpperCase() })}
+                      >
+                        <SelectTrigger className="w-[160px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {roleOptions.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={row.is_active ? 'default' : 'secondary'}>
+                        {row.is_active ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{row.created_at ? new Date(row.created_at).toLocaleString() : '—'}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">Active</span>
+                          <Switch
+                            checked={!!row.is_active}
+                            onCheckedChange={(checked) =>
+                              updateProfileMutation.mutate({ id: row.id, is_active: checked })
+                            }
+                          />
+                        </div>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Invite User</DialogTitle>
