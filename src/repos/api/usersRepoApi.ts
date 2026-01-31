@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 export type ProfileRow = {
   id: string;
   email: string;
+  username?: string | null;
   full_name?: string | null;
   role?: string | null;
   is_active?: boolean | null;
@@ -94,7 +95,7 @@ export async function listUsers(): Promise<UserRow[]> {
     const [profilesResult, rolesResult] = await Promise.all([
       supabase
         .from('user_profiles')
-        .select('id,email,full_name,is_active,created_at')
+        .select('id,email,username,full_name,is_active,created_at')
         .in('id', memberIds),
       supabase.from('user_roles').select('user_id, role:roles(key)').in('user_id', memberIds),
     ]);

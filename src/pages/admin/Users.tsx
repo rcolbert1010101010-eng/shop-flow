@@ -125,9 +125,12 @@ export default function AdminUsers() {
   const [createPasswordConfirm, setCreatePasswordConfirm] = useState('');
   const [createRole, setCreateRole] = useState('TECHNICIAN');
   const [createName, setCreateName] = useState('');
-  const [editOpen, setEditOpen] = useState(false);
-  const [editUserId, setEditUserId] = useState<string | null>(null);
-  const [editName, setEditName] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<{ full_name: string; role: string; is_active: boolean }>({
+    full_name: '',
+    role: 'TECHNICIAN',
+    is_active: true,
+  });
   const [removeOpen, setRemoveOpen] = useState(false);
   const [removeUser, setRemoveUser] = useState<UserRow | null>(null);
 
@@ -162,27 +165,6 @@ export default function AdminUsers() {
     }
   };
 
-  const handleEditOpen = (row: UserRow) => {
-    setEditUserId(row.id);
-    setEditName(row.full_name || '');
-    setEditOpen(true);
-  };
-
-  const handleEditSave = async () => {
-    if (!editUserId) return;
-    try {
-      await updateProfileMutation.mutateAsync({
-        id: editUserId,
-        full_name: editName.trim() || null,
-      });
-      setEditOpen(false);
-      setEditUserId(null);
-      setEditName('');
-    } catch {
-      // Errors are handled via updateProfileMutation onError
-    }
-  };
-
   const handleRemoveOpen = (row: UserRow) => {
     setRemoveUser(row);
     setRemoveOpen(true);
@@ -194,6 +176,41 @@ export default function AdminUsers() {
       await removeUserMutation.mutateAsync(removeUser.id);
     } catch {
       // Errors are handled via removeUserMutation onError
+    }
+  };
+
+  const handleRowEditStart = (row: UserRow) => {
+    setEditingId(row.id);
+    setEditDraft({
+      full_name: row.full_name || '',
+      role: (row.role || 'TECHNICIAN').toUpperCase(),
+      is_active: !!row.is_active,
+    });
+  };
+
+  const handleRowEditCancel = () => {
+    setEditingId(null);
+    setEditDraft({ full_name: '', role: 'TECHNICIAN', is_active: true });
+  };
+
+  const handleRowEditSave = async (row: UserRow) => {
+    try {
+      const nextFullName = editDraft.full_name.trim() || null;
+      const nextIsActive = editDraft.is_active;
+      const nextRole = editDraft.role.toUpperCase();
+      if (nextFullName !== (row.full_name ?? null) || nextIsActive !== !!row.is_active) {
+        await updateProfileMutation.mutateAsync({
+          id: row.id,
+          full_name: nextFullName,
+          is_active: nextIsActive,
+        });
+      }
+      if (nextRole !== (row.role ?? 'TECHNICIAN').toUpperCase()) {
+        await updateRoleMutation.mutateAsync({ id: row.id, role: nextRole });
+      }
+      handleRowEditCancel();
+    } catch {
+      // Errors are handled via mutation onError
     }
   };
 
@@ -227,7 +244,7 @@ export default function AdminUsers() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Email</TableHead>
+                  <TableHead>Username</TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Status</TableHead>
@@ -243,54 +260,91 @@ export default function AdminUsers() {
                     </TableCell>
                   </TableRow>
                 )}
-                {rows.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell>{row.email}</TableCell>
-                    <TableCell>{row.full_name || '—'}</TableCell>
-                    <TableCell>
-                      <Select
-                        value={(row.role || 'TECHNICIAN').toUpperCase()}
-                        onValueChange={(val) => updateRoleMutation.mutate({ id: row.id, role: val.toUpperCase() })}
-                      >
-                        <SelectTrigger className="w-[160px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {roleOptions.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={row.is_active ? 'default' : 'secondary'}>
-                        {row.is_active ? 'Active' : 'Inactive'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{row.created_at ? new Date(row.created_at).toLocaleString() : '—'}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground">Active</span>
-                          <Switch
-                            checked={!!row.is_active}
-                            onCheckedChange={(checked) =>
-                              updateProfileMutation.mutate({ id: row.id, is_active: checked })
-                            }
+                {rows.map((row) => {
+                  const isEditing = editingId === row.id;
+                  return (
+                    <TableRow key={row.id}>
+                      <TableCell>{row.username || '—'}</TableCell>
+                      <TableCell>
+                        {isEditing ? (
+                          <Input
+                            value={editDraft.full_name}
+                            onChange={(e) => setEditDraft((prev) => ({ ...prev, full_name: e.target.value }))}
+                            placeholder="Full name"
                           />
+                        ) : (
+                          row.full_name || '—'
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Select
+                          value={isEditing ? editDraft.role : (row.role || 'TECHNICIAN').toUpperCase()}
+                          onValueChange={(val) =>
+                            isEditing
+                              ? setEditDraft((prev) => ({ ...prev, role: val.toUpperCase() }))
+                              : updateRoleMutation.mutate({ id: row.id, role: val.toUpperCase() })
+                          }
+                          disabled={!isEditing}
+                        >
+                          <SelectTrigger className="w-[160px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {roleOptions.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={row.is_active ? 'default' : 'secondary'}>
+                          {row.is_active ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{row.created_at ? new Date(row.created_at).toLocaleString() : '—'}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">Active</span>
+                            <Switch
+                              checked={isEditing ? editDraft.is_active : !!row.is_active}
+                              onCheckedChange={(checked) =>
+                                isEditing
+                                  ? setEditDraft((prev) => ({ ...prev, is_active: checked }))
+                                  : updateProfileMutation.mutate({ id: row.id, is_active: checked })
+                              }
+                              disabled={!isEditing}
+                            />
+                          </div>
+                          {isEditing ? (
+                            <>
+                              <Button variant="outline" size="sm" onClick={() => handleRowEditSave(row)}>
+                                Save
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={handleRowEditCancel}>
+                                Cancel
+                              </Button>
+                            </>
+                          ) : (
+                            <Button variant="outline" size="sm" onClick={() => handleRowEditStart(row)}>
+                              Edit
+                            </Button>
+                          )}
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => handleRemoveOpen(row)}
+                            disabled={isEditing}
+                          >
+                            Remove
+                          </Button>
                         </div>
-                        <Button variant="outline" size="sm" onClick={() => handleEditOpen(row)}>
-                          Edit
-                        </Button>
-                        <Button variant="destructive" size="sm" onClick={() => handleRemoveOpen(row)}>
-                          Remove
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </CardContent>
@@ -354,42 +408,6 @@ export default function AdminUsers() {
               disabled={createUserMutation.isPending}
             >
               {createUserMutation.isPending ? 'Creating...' : 'Create User'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={editOpen}
-        onOpenChange={(open) => {
-          setEditOpen(open);
-          if (!open) {
-            setEditUserId(null);
-            setEditName('');
-          }
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit User</DialogTitle>
-            <DialogDescription>Update the user's profile details.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label>Full name</Label>
-              <Input
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                placeholder="Full name"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              onClick={handleEditSave}
-              disabled={!editUserId || updateProfileMutation.isPending}
-            >
-              {updateProfileMutation.isPending ? 'Saving...' : 'Save'}
             </Button>
           </DialogFooter>
         </DialogContent>
