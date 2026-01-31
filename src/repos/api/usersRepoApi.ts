@@ -20,22 +20,43 @@ async function requireAccessToken(): Promise<string> {
 }
 
 export async function listUsers(): Promise<UserRow[]> {
-  let profiles;
-  let profilesError;
+  let membershipRows;
+  let membershipsError;
   let userRoles;
   let rolesError;
 
   try {
-    [
-      { data: profiles, error: profilesError },
-      { data: userRoles, error: rolesError },
-    ] = await Promise.all([
-      supabase
-        .from('user_profiles')
-        .select('id,email,full_name,is_active,created_at')
-        .order('created_at', { ascending: false }),
-      supabase.from('user_roles').select('user_id, role:roles(key)'),
-    ]);
+    const { data: tenantId, error: tenantError } = await supabase.rpc('current_tenant_id');
+    if (tenantError) {
+      throw new Error(tenantError.message || 'No active tenant selected');
+    }
+    if (!tenantId) {
+      throw new Error('No active tenant selected');
+    }
+
+    // tenant membership controls visibility; RLS enforces tenant isolation
+    const membershipResult = await supabase
+      .from('tenant_users')
+      .select('user_id, created_at, user_profiles!inner(id,email,full_name,is_active,created_at)')
+      .eq('tenant_id', tenantId);
+    membershipRows = membershipResult.data;
+    membershipsError = membershipResult.error;
+
+    const memberIds = (membershipRows ?? [])
+      .map((row: any) => row?.user_profiles?.id ?? row?.user_id)
+      .filter(Boolean);
+
+    if (memberIds.length > 0) {
+      const rolesResult = await supabase
+        .from('user_roles')
+        .select('user_id, role:roles(key)')
+        .in('user_id', memberIds);
+      userRoles = rolesResult.data;
+      rolesError = rolesResult.error;
+    } else {
+      userRoles = [];
+      rolesError = null;
+    }
   } catch (err: any) {
     const message = (err?.message || '').toString().toLowerCase();
     if (err?.name === 'AbortError' || message.includes('signal is aborted') || message.includes('aborted')) {
@@ -44,8 +65,21 @@ export async function listUsers(): Promise<UserRow[]> {
     throw err;
   }
 
-  if (profilesError) throw new Error(profilesError.message);
+  if (membershipsError) throw new Error(membershipsError.message);
   if (rolesError) throw new Error(rolesError.message);
+
+  const profiles = (membershipRows ?? [])
+    .map((row: any) => {
+      const profile = row?.user_profiles ?? {};
+      return {
+        id: profile.id ?? row?.user_id,
+        email: profile.email ?? '',
+        full_name: profile.full_name ?? null,
+        is_active: profile.is_active ?? null,
+        created_at: profile.created_at ?? row?.created_at ?? null,
+      } as UserRow;
+    })
+    .filter((row: any) => row?.id);
 
   const roleByUser: Record<string, string> = {};
   (userRoles ?? []).forEach((row: any) => {
@@ -55,7 +89,13 @@ export async function listUsers(): Promise<UserRow[]> {
     }
   });
 
-  return (profiles ?? []).map((p) => ({
+  const sortedProfiles = profiles.sort((a, b) => {
+    const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+    return bTime - aTime;
+  });
+
+  return sortedProfiles.map((p) => ({
     ...p,
     role: roleByUser[p.id] ?? 'TECHNICIAN',
   }));

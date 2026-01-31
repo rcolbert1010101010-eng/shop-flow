@@ -182,6 +182,31 @@ serve(async (req) => {
       });
     }
 
+    const { data: targetMembership, error: targetMembershipError } = await sbAdmin
+      .from('tenant_users')
+      .select('tenant_id, user_id')
+      .eq('tenant_id', tenantId)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (targetMembershipError) {
+      return new Response(
+        JSON.stringify({ error: 'tenant_lookup_failed', details: targetMembershipError.message }),
+        {
+          status: 500,
+          headers: corsHeaders,
+        },
+      );
+    }
+    if (!targetMembership?.tenant_id) {
+      return new Response(
+        JSON.stringify({ error: 'forbidden', details: 'target_not_in_tenant' }),
+        {
+          status: 403,
+          headers: corsHeaders,
+        },
+      );
+    }
+
     if (action === 'remove') {
       const { error: deactivateError } = await sbAdmin
         .from('user_profiles')
