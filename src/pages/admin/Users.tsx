@@ -244,7 +244,6 @@ export default function AdminUsers() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Username</TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Status</TableHead>
@@ -255,7 +254,7 @@ export default function AdminUsers() {
               <TableBody>
                 {rows.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground">
+                    <TableCell colSpan={5} className="text-center text-muted-foreground">
                       No users found.
                     </TableCell>
                   </TableRow>
@@ -264,7 +263,6 @@ export default function AdminUsers() {
                   const isEditing = editingId === row.id;
                   return (
                     <TableRow key={row.id}>
-                      <TableCell>{row.username || '—'}</TableCell>
                       <TableCell>
                         {isEditing ? (
                           <Input
