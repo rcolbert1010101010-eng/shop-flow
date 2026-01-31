@@ -24,11 +24,14 @@ const allowedRoles = new Set([
   'GUEST',
 ]);
 
-if (!SUPABASE_URL || !SERVICE_ROLE_KEY || !ANON_KEY) {
-  throw new Error('Missing SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, or SUPABASE_ANON_KEY');
-}
-
 serve(async (req) => {
+  if (!SUPABASE_URL || !SERVICE_ROLE_KEY || !ANON_KEY) {
+    return new Response(JSON.stringify({ error: 'Missing SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, or SUPABASE_ANON_KEY' }), {
+      status: 500,
+      headers: corsHeaders,
+    });
+  }
+
   if (req.method !== 'POST') {
     if (req.method === 'OPTIONS') {
       return new Response(null, {

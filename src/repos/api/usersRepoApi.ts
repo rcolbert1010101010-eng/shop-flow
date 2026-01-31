@@ -67,6 +67,9 @@ export async function inviteUser(payload: { email: string; role: string; full_na
   const { data, error } = await supabase.functions.invoke('admin-invite-user', {
     body: { ...payload, role: payload.role.toString().toUpperCase() },
   });
-  if (error) throw new Error(error.message);
+  if (error) {
+    const message = (data as any)?.error || error.message;
+    throw new Error(message);
+  }
   return data;
 }
