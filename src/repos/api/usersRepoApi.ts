@@ -19,6 +19,33 @@ async function requireAccessToken(): Promise<string> {
   return accessToken;
 }
 
+async function extractEdgeErrorMessage(data: any, error: any): Promise<string> {
+  if (data?.error) {
+    return `${data.error}${data.details ? `: ${data.details}` : ''}`;
+  }
+
+  const response = error?.context?.response;
+  if (response) {
+    try {
+      const contentType = response?.headers?.get?.('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const body = await response.json();
+        if (body?.error) {
+          return `${body.error}${body.details ? `: ${body.details}` : ''}`;
+        }
+        if (body?.message) return body.message;
+      } else {
+        const text = await response.text();
+        if (text) return text;
+      }
+    } catch {
+      // ignore parse errors and fall back to generic message
+    }
+  }
+
+  return error?.message || 'Unknown error';
+}
+
 export async function listUsers(): Promise<UserRow[]> {
   let membershipRows;
   let membershipsError;
@@ -114,7 +141,7 @@ export async function updateUserProfile(id: string, fields: Partial<UserRow>) {
     },
   });
   if (error) {
-    const message = (data as any)?.error || error.message;
+    const message = await extractEdgeErrorMessage(data, error);
     throw new Error(message);
   }
 }
@@ -128,7 +155,7 @@ export async function setUserRole(userId: string, roleKeyUpper: string) {
     },
   });
   if (error) {
-    const message = (data as any)?.error || error.message;
+    const message = await extractEdgeErrorMessage(data, error);
     throw new Error(message);
   }
 }
@@ -142,7 +169,7 @@ export async function removeUserFromTenant(userId: string) {
     },
   });
   if (error) {
-    const message = (data as any)?.error || error.message;
+    const message = await extractEdgeErrorMessage(data, error);
     throw new Error(message);
   }
 }
@@ -162,7 +189,7 @@ export async function createUser(payload: {
     },
   });
   if (error) {
-    const message = (data as any)?.error || error.message;
+    const message = await extractEdgeErrorMessage(data, error);
     throw new Error(message);
   }
   return data;
