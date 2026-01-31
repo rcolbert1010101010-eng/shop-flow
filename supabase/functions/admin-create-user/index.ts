@@ -228,19 +228,82 @@ serve(async (req) => {
       email_confirm: true,
       user_metadata: { username, full_name },
     });
-    if (createError || !createdUser?.user?.id) {
+    let userId = createdUser?.user?.id ?? null;
+    let reused = false;
+    if (createError || !userId) {
       const message = createError?.message ?? 'Create user failed';
-      const status = /already exists|duplicate/i.test(message) ? 409 : 400;
+      if (/already been registered|already exists|duplicate/i.test(message)) {
+        let existingUserId: string | null = null;
+        for (let page = 1; page <= 20; page += 1) {
+          const { data: usersPage, error: listError } = await sbAdmin.auth.admin.listUsers({
+            page,
+            perPage: 1000,
+          });
+          if (listError) {
+            return new Response(
+              JSON.stringify({ error: 'create_user_failed', details: listError.message }),
+              {
+                status: 500,
+                headers: corsHeaders,
+              },
+            );
+          }
+          const users = usersPage?.users ?? [];
+          if (users.length === 0) break;
+          const match = users.find((u) => (u?.email ?? '').toLowerCase() === email.toLowerCase());
+          if (match?.id) {
+            existingUserId = match.id;
+            break;
+          }
+        }
+
+        if (!existingUserId) {
+          return new Response(
+            JSON.stringify({ error: 'create_user_failed', details: message }),
+            {
+              status: 400,
+              headers: corsHeaders,
+            },
+          );
+        }
+
+        const { error: updateError } = await sbAdmin.auth.admin.updateUserById(existingUserId, {
+          password,
+          user_metadata: { username, full_name },
+        });
+        if (updateError) {
+          return new Response(
+            JSON.stringify({ error: 'update_user_failed', details: updateError.message }),
+            {
+              status: 500,
+              headers: corsHeaders,
+            },
+          );
+        }
+
+        userId = existingUserId;
+        reused = true;
+      } else {
+        const status = /already exists|duplicate/i.test(message) ? 409 : 400;
+        return new Response(
+          JSON.stringify({ error: 'create_user_failed', details: message }),
+          {
+            status,
+            headers: corsHeaders,
+          },
+        );
+      }
+    }
+
+    if (!userId) {
       return new Response(
-        JSON.stringify({ error: 'create_user_failed', details: message }),
+        JSON.stringify({ error: 'create_user_failed', details: 'Missing user id' }),
         {
-          status,
+          status: 400,
           headers: corsHeaders,
         },
       );
     }
-
-    const userId = createdUser.user.id;
 
     const { error: tenantUserError } = await sbAdmin
       .from('tenant_users')
@@ -310,7 +373,7 @@ serve(async (req) => {
       );
     }
 
-    return new Response(JSON.stringify({ success: true, user_id: userId }), {
+    return new Response(JSON.stringify({ success: true, user_id: userId, reused }), {
       status: 200,
       headers: corsHeaders,
     });
