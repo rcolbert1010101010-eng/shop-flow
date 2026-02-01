@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { docPathByModuleKey } from '@/help/docsRegistry';
+import { docMetaByModuleKey } from '@/help/docsRegistry';
 
 const labelOverrides: Record<string, string> = {
   plasma_projects: 'Plasma Projects',
@@ -30,10 +30,10 @@ export default function DocsHome() {
 
   const entries = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    return Object.entries(docPathByModuleKey)
-      .map(([key, path]) => {
-        const label = labelOverrides[key] ?? toTitle(key);
-        return { key, path, label };
+    return Object.entries(docMetaByModuleKey)
+      .map(([key, meta]) => {
+        const label = meta.title || labelOverrides[key] || toTitle(key);
+        return { key, path: meta.path, label, updatedAt: meta.updatedAt };
       })
       .filter((entry) =>
         normalizedQuery ? entry.label.toLowerCase().includes(normalizedQuery) : true
@@ -61,7 +61,10 @@ export default function DocsHome() {
                 <CardTitle className="text-base">{entry.label}</CardTitle>
               </CardHeader>
               <CardContent className="text-sm text-muted-foreground">
-                Open the {entry.label} documentation.
+                <div>Open the {entry.label} documentation.</div>
+                <div className="mt-2 text-xs text-muted-foreground">
+                  Last updated: {entry.updatedAt}
+                </div>
               </CardContent>
             </Card>
           </Link>

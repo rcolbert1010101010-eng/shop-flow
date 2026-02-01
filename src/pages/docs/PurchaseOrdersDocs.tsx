@@ -1,17 +1,10 @@
-import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { DocsLayout } from '@/components/docs/DocsLayout';
 
 export default function PurchaseOrdersDocs() {
   return (
-    <div className="page-container space-y-6">
-      <PageHeader title="Purchase Orders" backTo="/purchase-orders" />
-
-      <div className="flex items-center justify-end">
-        <Button variant="outline" onClick={() => window.print()}>
-          Print / Save as PDF
-        </Button>
-      </div>
+    <DocsLayout moduleKey="purchase_orders">
+      <div className="space-y-6">
 
       <Card>
         <CardHeader>
@@ -120,5 +113,6 @@ export default function PurchaseOrdersDocs() {
         </CardContent>
       </Card>
     </div>
+    </DocsLayout>
   );
 }

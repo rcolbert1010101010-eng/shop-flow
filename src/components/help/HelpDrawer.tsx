@@ -4,7 +4,7 @@ import { Separator } from '@/components/ui/separator';
 import { HelpChat } from './HelpChat';
 import type { HelpContext } from '@/help/types';
 import { AutoHelpPanel } from './AutoHelp';
-import { docPathByModuleKey } from '@/help/docsRegistry';
+import { docMetaByModuleKey } from '@/help/docsRegistry';
 import { customersHelpContent } from './customersHelpContent';
 import { salesOrdersHelpContent } from './salesOrdersHelpContent';
 import { workOrdersHelpContent } from './workOrdersHelpContent';
@@ -22,7 +22,7 @@ interface HelpDrawerProps {
 
 export function HelpDrawer({ moduleKey, open, onOpenChange, context }: HelpDrawerProps) {
   const helpContent = getModuleHelp(moduleKey);
-  const docPath = docPathByModuleKey[moduleKey];
+  const docPath = docMetaByModuleKey[moduleKey]?.path;
   const resolvedContent =
     moduleKey === 'customers'
       ? customersHelpContent

@@ -1,17 +1,10 @@
-import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { DocsLayout } from '@/components/docs/DocsLayout';
 
 export default function ReceivingDocs() {
   return (
-    <div className="page-container space-y-6">
-      <PageHeader title="Receiving" backTo="/receiving" />
-
-      <div className="flex items-center justify-end">
-        <Button variant="outline" onClick={() => window.print()}>
-          Print / Save as PDF
-        </Button>
-      </div>
+    <DocsLayout moduleKey="receiving">
+      <div className="space-y-6">
 
       <Card>
         <CardHeader>
@@ -129,5 +122,6 @@ export default function ReceivingDocs() {
         </CardContent>
       </Card>
     </div>
+    </DocsLayout>
   );
 }
