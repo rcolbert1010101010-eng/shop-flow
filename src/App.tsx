@@ -30,6 +30,8 @@ import CycleCountsDocs from "@/pages/docs/CycleCountsDocs";
 import PaymentsDocs from "@/pages/docs/PaymentsDocs";
 import WarrantyReturnsDocs from "@/pages/docs/WarrantyReturnsDocs";
 import ReturnsWarrantyReportDocs from "@/pages/docs/ReturnsWarrantyReportDocs";
+import PlasmaProjectsDocs from "@/pages/docs/PlasmaProjectsDocs";
+import PlasmaTemplatesDocs from "@/pages/docs/PlasmaTemplatesDocs";
 import Units from "@/pages/Units";
 import UnitForm from "@/pages/UnitForm";
 import UnitTypes from "@/pages/UnitTypes";
@@ -128,6 +130,8 @@ const App = () => {
               <Route path="/docs/payments" element={<PaymentsDocs />} />
               <Route path="/docs/warranty-returns" element={<WarrantyReturnsDocs />} />
               <Route path="/docs/returns-warranty-report" element={<ReturnsWarrantyReportDocs />} />
+              <Route path="/docs/plasma-projects" element={<PlasmaProjectsDocs />} />
+              <Route path="/docs/plasma-templates" element={<PlasmaTemplatesDocs />} />
               <Route path="/print/work-orders/:id" element={<WorkOrderPrintOverview />} />
               <Route element={<ProtectedRoute />}>
                 <Route element={<MainLayout />}>

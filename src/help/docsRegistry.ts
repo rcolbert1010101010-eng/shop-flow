@@ -9,6 +9,8 @@ export const docPathByModuleKey: Record<string, string> = {
   payments: '/docs/payments',
   warranty_returns: '/docs/warranty-returns',
   returns_warranty_report: '/docs/returns-warranty-report',
+  plasma_projects: '/docs/plasma-projects',
+  plasma_templates: '/docs/plasma-templates',
   customers: '/docs/customers',
   sales_orders: '/docs/sales-orders',
   work_orders: '/docs/work-orders',
