@@ -8,6 +8,23 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import Dashboard from "@/pages/Dashboard";
 import Customers from "@/pages/Customers";
 import CustomerDetail from "@/pages/CustomerDetail";
+import CustomersDocs from "@/pages/docs/CustomersDocs";
+import SalesOrdersDocs from "@/pages/docs/SalesOrdersDocs";
+import WorkOrdersDocs from "@/pages/docs/WorkOrdersDocs";
+import InventoryDocs from "@/pages/docs/InventoryDocs";
+import PurchaseOrdersDocs from "@/pages/docs/PurchaseOrdersDocs";
+import InvoicesDocs from "@/pages/docs/InvoicesDocs";
+import SchedulingDocs from "@/pages/docs/SchedulingDocs";
+import UsersDocs from "@/pages/docs/UsersDocs";
+import SettingsDocs from "@/pages/docs/SettingsDocs";
+import PartsDocs from "@/pages/docs/PartsDocs";
+import VendorsDocs from "@/pages/docs/VendorsDocs";
+import ReturnsWarrantyDocs from "@/pages/docs/ReturnsWarrantyDocs";
+import DashboardDocs from "@/pages/docs/DashboardDocs";
+import UnitsDocs from "@/pages/docs/UnitsDocs";
+import TechniciansDocs from "@/pages/docs/TechniciansDocs";
+import ReceivingDocs from "@/pages/docs/ReceivingDocs";
+import ReceivingHistoryDocs from "@/pages/docs/ReceivingHistoryDocs";
 import Units from "@/pages/Units";
 import UnitForm from "@/pages/UnitForm";
 import UnitTypes from "@/pages/UnitTypes";
@@ -84,6 +101,23 @@ const App = () => {
                   </LoginRedirect>
                 }
               />
+              <Route path="/docs/customers" element={<CustomersDocs />} />
+              <Route path="/docs/sales-orders" element={<SalesOrdersDocs />} />
+              <Route path="/docs/work-orders" element={<WorkOrdersDocs />} />
+              <Route path="/docs/inventory" element={<InventoryDocs />} />
+              <Route path="/docs/purchase-orders" element={<PurchaseOrdersDocs />} />
+              <Route path="/docs/invoices" element={<InvoicesDocs />} />
+              <Route path="/docs/scheduling" element={<SchedulingDocs />} />
+              <Route path="/docs/users" element={<UsersDocs />} />
+              <Route path="/docs/settings" element={<SettingsDocs />} />
+              <Route path="/docs/parts" element={<PartsDocs />} />
+              <Route path="/docs/vendors" element={<VendorsDocs />} />
+              <Route path="/docs/returns-warranty" element={<ReturnsWarrantyDocs />} />
+              <Route path="/docs/dashboard" element={<DashboardDocs />} />
+              <Route path="/docs/units" element={<UnitsDocs />} />
+              <Route path="/docs/technicians" element={<TechniciansDocs />} />
+              <Route path="/docs/receiving" element={<ReceivingDocs />} />
+              <Route path="/docs/receiving-history" element={<ReceivingHistoryDocs />} />
               <Route path="/print/work-orders/:id" element={<WorkOrderPrintOverview />} />
               <Route element={<ProtectedRoute />}>
                 <Route element={<MainLayout />}>

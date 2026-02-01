@@ -4,6 +4,7 @@ import { Separator } from '@/components/ui/separator';
 import { HelpChat } from './HelpChat';
 import type { HelpContext } from '@/help/types';
 import { AutoHelpPanel } from './AutoHelp';
+import { docPathByModuleKey } from '@/help/docsRegistry';
 import { customersHelpContent } from './customersHelpContent';
 import { salesOrdersHelpContent } from './salesOrdersHelpContent';
 import { workOrdersHelpContent } from './workOrdersHelpContent';
@@ -21,6 +22,7 @@ interface HelpDrawerProps {
 
 export function HelpDrawer({ moduleKey, open, onOpenChange, context }: HelpDrawerProps) {
   const helpContent = getModuleHelp(moduleKey);
+  const docPath = docPathByModuleKey[moduleKey];
   const resolvedContent =
     moduleKey === 'customers'
       ? customersHelpContent
@@ -55,6 +57,18 @@ export function HelpDrawer({ moduleKey, open, onOpenChange, context }: HelpDrawe
 
         <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4">
           <AutoHelpPanel moduleKey={moduleKey} context={context} />
+          {docPath && (
+            <div>
+              <a
+                href={docPath}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center rounded-md border border-border bg-background px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted/60"
+              >
+                Open Documentation
+              </a>
+            </div>
+          )}
 
           {resolvedContent.tips.length > 0 && (
             <section className="space-y-2">
