@@ -7,24 +7,49 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuthStore } from '@/stores/authStore';
 
 export default function Login() {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const signIn = useAuthStore((state) => state.signIn);
   const navigate = useNavigate();
 
+  const normalizeUsername = (value: string) =>
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, '')
+      .replace(/[^a-z0-9._-]/g, '');
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     try {
-      await signIn(email, password);
+      const rawInput = username;
+      const hasAt = rawInput.includes('@');
+      const normalized = hasAt ? '' : normalizeUsername(rawInput);
+      const emailInput = hasAt ? rawInput : `${normalized}@local.shopflow`;
+      await signIn(emailInput, password);
       navigate('/');
     } catch (error: any) {
+      let finalError = error;
+      const rawInput = username;
+      const hasAt = rawInput.includes('@');
+      if (!hasAt) {
+        try {
+          const normalized = normalizeUsername(rawInput);
+          const fallbackEmail = `${normalized}@shopflow.local`;
+          await signIn(fallbackEmail, password);
+          navigate('/');
+          return;
+        } catch (fallbackError: any) {
+          finalError = fallbackError;
+        }
+      }
       toast({
         title: 'Sign in failed',
-        description: error?.message || 'Invalid email or password',
+        description: finalError?.message || 'Invalid email or password',
         variant: 'destructive',
       });
     } finally {
@@ -38,20 +63,21 @@ export default function Login() {
         <div className="text-center">
           <h1 className="text-2xl font-bold">Sign in to ShopFlow</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Enter your email and password to continue
+            Enter your username and password to continue
           </p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="username">Username</Label>
             <Input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              id="username"
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="username"
               required
               disabled={isLoading}
-              autoComplete="email"
+              autoComplete="username"
             />
           </div>
           <div className="space-y-2">
