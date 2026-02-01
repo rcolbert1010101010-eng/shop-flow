@@ -25,6 +25,11 @@ import UnitsDocs from "@/pages/docs/UnitsDocs";
 import TechniciansDocs from "@/pages/docs/TechniciansDocs";
 import ReceivingDocs from "@/pages/docs/ReceivingDocs";
 import ReceivingHistoryDocs from "@/pages/docs/ReceivingHistoryDocs";
+import PartCategoriesDocs from "@/pages/docs/PartCategoriesDocs";
+import CycleCountsDocs from "@/pages/docs/CycleCountsDocs";
+import PaymentsDocs from "@/pages/docs/PaymentsDocs";
+import WarrantyReturnsDocs from "@/pages/docs/WarrantyReturnsDocs";
+import ReturnsWarrantyReportDocs from "@/pages/docs/ReturnsWarrantyReportDocs";
 import Units from "@/pages/Units";
 import UnitForm from "@/pages/UnitForm";
 import UnitTypes from "@/pages/UnitTypes";
@@ -118,6 +123,11 @@ const App = () => {
               <Route path="/docs/technicians" element={<TechniciansDocs />} />
               <Route path="/docs/receiving" element={<ReceivingDocs />} />
               <Route path="/docs/receiving-history" element={<ReceivingHistoryDocs />} />
+              <Route path="/docs/part-categories" element={<PartCategoriesDocs />} />
+              <Route path="/docs/cycle-counts" element={<CycleCountsDocs />} />
+              <Route path="/docs/payments" element={<PaymentsDocs />} />
+              <Route path="/docs/warranty-returns" element={<WarrantyReturnsDocs />} />
+              <Route path="/docs/returns-warranty-report" element={<ReturnsWarrantyReportDocs />} />
               <Route path="/print/work-orders/:id" element={<WorkOrderPrintOverview />} />
               <Route element={<ProtectedRoute />}>
                 <Route element={<MainLayout />}>

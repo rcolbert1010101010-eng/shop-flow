@@ -4,6 +4,11 @@ export const docPathByModuleKey: Record<string, string> = {
   technicians: '/docs/technicians',
   receiving: '/docs/receiving',
   receiving_history: '/docs/receiving-history',
+  part_categories: '/docs/part-categories',
+  cycle_counts: '/docs/cycle-counts',
+  payments: '/docs/payments',
+  warranty_returns: '/docs/warranty-returns',
+  returns_warranty_report: '/docs/returns-warranty-report',
   customers: '/docs/customers',
   sales_orders: '/docs/sales-orders',
   work_orders: '/docs/work-orders',
@@ -16,5 +21,4 @@ export const docPathByModuleKey: Record<string, string> = {
   settings: '/docs/settings',
   users: '/docs/users',
   admin_users: '/docs/users',
-  warranty_returns: '/docs/returns-warranty',
 };
