@@ -256,6 +256,7 @@ export default function AdminUsers() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
+                  <TableHead>Username</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Created</TableHead>
@@ -265,7 +266,7 @@ export default function AdminUsers() {
               <TableBody>
                 {rows.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center text-muted-foreground">
                       No users found.
                     </TableCell>
                   </TableRow>
@@ -285,6 +286,7 @@ export default function AdminUsers() {
                           row.full_name || '—'
                         )}
                       </TableCell>
+                      <TableCell>{row.username || '—'}</TableCell>
                       <TableCell>
                         <Select
                           value={isEditing ? editDraft.role : (row.role || 'TECHNICIAN').toUpperCase()}
