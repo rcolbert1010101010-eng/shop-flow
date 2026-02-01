@@ -24,6 +24,13 @@ const allowedRoles = new Set([
   'GUEST',
 ]);
 
+const normalizeUsername = (raw: string) =>
+  raw
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/[^a-z0-9._-]/g, '');
+
 serve(async (req) => {
   try {
     if (!SUPABASE_URL || !SERVICE_ROLE_KEY || !ANON_KEY) {
@@ -97,19 +104,38 @@ serve(async (req) => {
       });
     }
 
-    const username = (payload?.username ?? '').toString().trim().toLowerCase();
+    const usernameRaw = (payload?.username ?? '').toString();
+    const usernameNormalized = normalizeUsername(usernameRaw);
     const password = (payload?.password ?? '').toString();
     const role = (payload?.role ?? '').toString().trim().toUpperCase();
     const full_name = (payload?.full_name ?? '').toString().trim() || null;
-    const email = `${username}@shopflow.local`;
+    const email = `${usernameNormalized}@local.shopflow`;
 
-    console.log('create user called', { hasAuthHeader: !!authHeader, username });
+    console.log('create user called', {
+      hasAuthHeader: !!authHeader,
+      username_raw: usernameRaw,
+      username_normalized: usernameNormalized,
+    });
 
-    if (!username || !password || !role) {
+    if (!usernameNormalized || !password || !role) {
       return new Response(JSON.stringify({ error: 'username_password_role_required' }), {
         status: 400,
         headers: corsHeaders,
       });
+    }
+
+    const rawLower = usernameRaw.trim().toLowerCase();
+    if (!usernameNormalized || usernameNormalized !== rawLower) {
+      return new Response(
+        JSON.stringify({
+          error: 'invalid_username',
+          details: 'Username must be letters/numbers and ._- only (no spaces)',
+        }),
+        {
+          status: 400,
+          headers: corsHeaders,
+        },
+      );
     }
 
     if (!allowedRoles.has(role)) {
@@ -200,10 +226,12 @@ serve(async (req) => {
       });
     }
 
-    const { data: usernameMatches, error: usernameMatchError } = await sbAdmin
+    let emailUsed = email;
+    const { data: usernameMatch, error: usernameMatchError } = await sbAdmin
       .from('user_profiles')
-      .select('id')
-      .ilike('username', username);
+      .select('id,email,username')
+      .eq('username', usernameNormalized)
+      .maybeSingle();
 
     if (usernameMatchError) {
       return new Response(
@@ -215,83 +243,95 @@ serve(async (req) => {
       );
     }
 
-    if ((usernameMatches ?? []).length > 0) {
-      return new Response(JSON.stringify({ error: 'username_exists' }), {
-        status: 409,
-        headers: corsHeaders,
-      });
-    }
-
-    const { data: createdUser, error: createError } = await sbAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: { username, full_name },
-    });
-    let userId = createdUser?.user?.id ?? null;
+    let userId = usernameMatch?.id ?? null;
     let reused = false;
-    if (createError || !userId) {
-      const message = createError?.message ?? 'Create user failed';
-      if (/already been registered|already exists|duplicate/i.test(message)) {
-        let existingUserId: string | null = null;
-        for (let page = 1; page <= 20; page += 1) {
-          const { data: usersPage, error: listError } = await sbAdmin.auth.admin.listUsers({
-            page,
-            perPage: 1000,
-          });
-          if (listError) {
+    if (userId) {
+      reused = true;
+      emailUsed = usernameMatch?.email ?? email;
+      const { error: updateError } = await sbAdmin.auth.admin.updateUserById(userId, {
+        password,
+        user_metadata: { username: usernameNormalized, full_name },
+      });
+      if (updateError) {
+        return new Response(
+          JSON.stringify({ error: 'update_user_failed', details: updateError.message }),
+          {
+            status: 500,
+            headers: corsHeaders,
+          },
+        );
+      }
+    } else {
+      const { data: createdUser, error: createError } = await sbAdmin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { username: usernameNormalized, full_name },
+      });
+      userId = createdUser?.user?.id ?? null;
+      if (createError || !userId) {
+        const message = createError?.message ?? 'Create user failed';
+        if (/already been registered|already exists|duplicate/i.test(message)) {
+          let existingUserId: string | null = null;
+          for (let page = 1; page <= 20; page += 1) {
+            const { data: usersPage, error: listError } = await sbAdmin.auth.admin.listUsers({
+              page,
+              perPage: 1000,
+            });
+            if (listError) {
+              return new Response(
+                JSON.stringify({ error: 'create_user_failed', details: listError.message }),
+                {
+                  status: 500,
+                  headers: corsHeaders,
+                },
+              );
+            }
+            const users = usersPage?.users ?? [];
+            if (users.length === 0) break;
+            const match = users.find((u) => (u?.email ?? '').toLowerCase() === email.toLowerCase());
+            if (match?.id) {
+              existingUserId = match.id;
+              break;
+            }
+          }
+
+          if (!existingUserId) {
             return new Response(
-              JSON.stringify({ error: 'create_user_failed', details: listError.message }),
+              JSON.stringify({ error: 'create_user_failed', details: message }),
+              {
+                status: 400,
+                headers: corsHeaders,
+              },
+            );
+          }
+
+          const { error: updateError } = await sbAdmin.auth.admin.updateUserById(existingUserId, {
+            password,
+            user_metadata: { username: usernameNormalized, full_name },
+          });
+          if (updateError) {
+            return new Response(
+              JSON.stringify({ error: 'update_user_failed', details: updateError.message }),
               {
                 status: 500,
                 headers: corsHeaders,
               },
             );
           }
-          const users = usersPage?.users ?? [];
-          if (users.length === 0) break;
-          const match = users.find((u) => (u?.email ?? '').toLowerCase() === email.toLowerCase());
-          if (match?.id) {
-            existingUserId = match.id;
-            break;
-          }
-        }
 
-        if (!existingUserId) {
+          userId = existingUserId;
+          reused = true;
+        } else {
+          const status = /already exists|duplicate/i.test(message) ? 409 : 400;
           return new Response(
             JSON.stringify({ error: 'create_user_failed', details: message }),
             {
-              status: 400,
+              status,
               headers: corsHeaders,
             },
           );
         }
-
-        const { error: updateError } = await sbAdmin.auth.admin.updateUserById(existingUserId, {
-          password,
-          user_metadata: { username, full_name },
-        });
-        if (updateError) {
-          return new Response(
-            JSON.stringify({ error: 'update_user_failed', details: updateError.message }),
-            {
-              status: 500,
-              headers: corsHeaders,
-            },
-          );
-        }
-
-        userId = existingUserId;
-        reused = true;
-      } else {
-        const status = /already exists|duplicate/i.test(message) ? 409 : 400;
-        return new Response(
-          JSON.stringify({ error: 'create_user_failed', details: message }),
-          {
-            status,
-            headers: corsHeaders,
-          },
-        );
       }
     }
 
@@ -323,10 +363,10 @@ serve(async (req) => {
 
     const userProfilePayload: Record<string, any> = {
       id: userId,
-      email,
+      email: emailUsed,
       full_name,
       is_active: true,
-      username,
+      username: usernameNormalized,
     };
     const { error: userProfileError } = await sbAdmin
       .from('user_profiles')
