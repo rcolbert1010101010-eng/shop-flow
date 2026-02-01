@@ -50,6 +50,13 @@ const roleOptions = [
   { value: 'GUEST', label: 'Guest' },
 ];
 
+const normalizeUsername = (value: string) =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/[^a-z0-9._-]/g, '');
+
 export default function AdminUsers() {
   const { can, role } = usePermissions();
   const isAdmin = role === 'ADMIN' || can('settings.edit');
@@ -137,14 +144,18 @@ export default function AdminUsers() {
   const rows: UserRow[] = useMemo(() => profilesQuery.data || [], [profilesQuery.data]);
 
   const handleCreateUser = async () => {
-    const username = createUsername.trim().toLowerCase();
+    const username = normalizeUsername(createUsername);
     const password = createPassword;
     const confirmPassword = createPasswordConfirm;
     const role = createRole.toUpperCase();
     const full_name = createName || null;
 
     if (!username) {
-      toast({ title: 'Username is required', variant: 'destructive' });
+      toast({
+        title: 'Invalid username',
+        description: 'Username must be letters/numbers and . _ - only (no spaces)',
+        variant: 'destructive',
+      });
       return;
     }
 
@@ -358,9 +369,10 @@ export default function AdminUsers() {
               <Label>Username</Label>
               <Input
                 value={createUsername}
-                onChange={(e) => setCreateUsername(e.target.value)}
+                onChange={(e) => setCreateUsername(normalizeUsername(e.target.value))}
                 placeholder="username"
               />
+              <p className="text-xs text-muted-foreground">letters/numbers + . _ - only (no spaces)</p>
             </div>
             <div className="space-y-1">
               <Label>Full name (optional)</Label>
