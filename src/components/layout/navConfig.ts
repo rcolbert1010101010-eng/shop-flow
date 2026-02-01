@@ -20,12 +20,11 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { Capability } from '@/security/rbac';
-import { FEATURES } from '@/config/features';
 
 export type NavLink = { type: 'link'; path: string; label: string; icon: LucideIcon };
 export type NavGroup = {
   type: 'group';
-  key: 'serviceOrders' | 'inventory' | 'returnsWarranty' | 'purchaseOrders' | 'manufacturing' | 'manufacturingV2';
+  key: 'serviceOrders' | 'inventory' | 'returnsWarranty' | 'purchaseOrders';
   label: string;
   icon: LucideIcon;
   children: NavLink[];
@@ -73,16 +72,6 @@ const purchaseOrdersGroup: NavGroup = {
     { type: 'link', path: '/receiving-history', label: 'Receiving History', icon: ClipboardList },
   ],
 };
-const manufacturingGroup: NavGroup = {
-  type: 'group',
-  key: 'manufacturing',
-  label: 'Manufacturing',
-  icon: HardHat,
-  children: [
-    { type: 'link', path: '/manufacturing/templates', label: 'Templates', icon: HardHat },
-    { type: 'link', path: '/manufacturing/jobs', label: 'Jobs', icon: HardHat },
-  ],
-};
 const schedulingLink: NavLink = { type: 'link', path: '/scheduling', label: 'Scheduling', icon: Calendar };
 const plannerLink: NavLink = { type: 'link', path: '/planner', label: 'Planner', icon: CalendarCheck };
 const invoicesLink: NavLink = { type: 'link', path: '/invoices', label: 'Invoices', icon: FileText };
@@ -99,17 +88,6 @@ const returnsWarrantyGroup: NavGroup = {
     { type: 'link', path: '/reports/returns-warranty', label: 'Returns/Warranty Report', icon: BarChart2 },
   ],
 };
-const manufacturingV2Group: NavGroup = {
-  type: 'group',
-  key: 'manufacturingV2',
-  label: 'Manufacturing (v2)',
-  icon: HardHat,
-  children: [
-    { type: 'link', path: '/manufacturing-v2', label: 'Overview', icon: HardHat },
-    { type: 'link', path: '/manufacturing-v2/products', label: 'Products', icon: HardHat },
-    { type: 'link', path: '/manufacturing-v2/builds', label: 'Builds', icon: HardHat },
-  ],
-};
 const reportsLink: NavLink = { type: 'link', path: '/reports', label: 'Reports', icon: BarChart2 };
 const settingsLink: NavLink = { type: 'link', path: '/settings', label: 'Settings', icon: Settings };
 
@@ -122,8 +100,6 @@ export const navSections: NavSection[] = [
   { label: 'Purchasing', items: [purchaseOrdersGroup] },
   { label: 'Scheduling', items: [schedulingLink, plannerLink] },
   { label: 'Accounting', items: [invoicesLink, paymentsLink, returnsWarrantyGroup] },
-  { label: 'Manufacturing', items: [manufacturingGroup] },
-  ...(FEATURES.manufacturingV2 ? [{ label: 'Manufacturing', items: [manufacturingV2Group] }] : []),
   { label: 'Reports', items: [reportsLink] },
   { label: 'Admin', items: [usersLink, settingsLink] },
 ];
@@ -135,7 +111,6 @@ function requiredCapabilityForPath(path: string): Capability | null {
   if (path === '/reports' || path.startsWith('/reports')) return 'reports.view';
   if (path === '/receiving' || path.startsWith('/receiving/')) return 'inventory.receive';
   if (path === '/receiving-history' || path.startsWith('/receiving-history/')) return 'inventory.receive';
-  if (path === '/manufacturing' || path.startsWith('/manufacturing/')) return 'inventory.adjust_qoh';
   if (path === '/users' || path.startsWith('/users')) return 'admin.users';
   return null;
 }
