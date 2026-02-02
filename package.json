@@ -10,7 +10,9 @@
     "lint": "eslint src vite.config.ts tailwind.config.ts",
     "lint:all": "eslint .",
     "preview": "vite preview",
-    "seed:demo": "ts-node --esm --transpile-only scripts/seedDemoData.ts"
+    "seed:demo": "ts-node --esm --transpile-only scripts/seedDemoData.ts",
+    "docs:check": "node scripts/docs-check.mjs",
+    "docs:drift": "node scripts/docs-drift-check.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { PageHeader } from '@/components/layout/PageHeader';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { docMetaByModuleKey } from '@/help/docsRegistry';
+import { DocsLayout } from '@/components/docs/DocsLayout';
 
 const labelOverrides: Record<string, string> = {
   plasma_projects: 'Plasma Projects',
@@ -31,6 +31,7 @@ export default function DocsHome() {
   const entries = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return Object.entries(docMetaByModuleKey)
+      .filter(([key]) => key !== 'documentation')
       .map(([key, meta]) => {
         const label = meta.title || labelOverrides[key] || toTitle(key);
         return { key, path: meta.path, label, updatedAt: meta.updatedAt };
@@ -42,37 +43,38 @@ export default function DocsHome() {
   }, [query]);
 
   return (
-    <div className="page-container space-y-6">
-      <PageHeader title="Documentation" backTo="/dashboard" />
+    <DocsLayout moduleKey="documentation">
+      <div className="space-y-6">
+        <h2 className="text-lg font-semibold text-foreground">All Modules</h2>
+        <div className="max-w-md">
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search documentation..."
+          />
+        </div>
 
-      <div className="max-w-md">
-        <Input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search documentation..."
-        />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {entries.map((entry) => (
+            <Link key={entry.key} to={entry.path} className="group">
+              <Card className="h-full transition-colors group-hover:bg-muted/40">
+                <CardHeader>
+                  <CardTitle className="text-base">{entry.label}</CardTitle>
+                </CardHeader>
+                <CardContent className="text-sm text-muted-foreground">
+                  <div>Open the {entry.label} documentation.</div>
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    Last updated: {entry.updatedAt}
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
+          {entries.length === 0 && (
+            <div className="text-sm text-muted-foreground">No documentation matches your search.</div>
+          )}
+        </div>
       </div>
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {entries.map((entry) => (
-          <Link key={entry.key} to={entry.path} className="group">
-            <Card className="h-full transition-colors group-hover:bg-muted/40">
-              <CardHeader>
-                <CardTitle className="text-base">{entry.label}</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-muted-foreground">
-                <div>Open the {entry.label} documentation.</div>
-                <div className="mt-2 text-xs text-muted-foreground">
-                  Last updated: {entry.updatedAt}
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
-        {entries.length === 0 && (
-          <div className="text-sm text-muted-foreground">No documentation matches your search.</div>
-        )}
-      </div>
-    </div>
+    </DocsLayout>
   );
 }

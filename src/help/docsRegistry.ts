@@ -3,6 +3,7 @@ type DocMeta = { path: string; title: string; updatedAt: string };
 const UPDATED_AT = '2026-02-01';
 
 export const docMetaByModuleKey: Record<string, DocMeta> = {
+  documentation: { path: '/docs', title: 'Documentation', updatedAt: UPDATED_AT },
   dashboard: { path: '/docs/dashboard', title: 'Dashboard', updatedAt: UPDATED_AT },
   units: { path: '/docs/units', title: 'Units', updatedAt: UPDATED_AT },
   technicians: { path: '/docs/technicians', title: 'Technicians', updatedAt: UPDATED_AT },
@@ -17,6 +18,7 @@ export const docMetaByModuleKey: Record<string, DocMeta> = {
     title: 'Returns & Warranty Report',
     updatedAt: UPDATED_AT,
   },
+  returns_warranty: { path: '/docs/returns-warranty', title: 'Returns and Warranty', updatedAt: UPDATED_AT },
   plasma_projects: { path: '/docs/plasma-projects', title: 'Plasma Projects', updatedAt: UPDATED_AT },
   plasma_templates: { path: '/docs/plasma-templates', title: 'Plasma Templates', updatedAt: UPDATED_AT },
   customers: { path: '/docs/customers', title: 'Customers', updatedAt: UPDATED_AT },
@@ -30,8 +32,6 @@ export const docMetaByModuleKey: Record<string, DocMeta> = {
   vendors: { path: '/docs/vendors', title: 'Vendors', updatedAt: UPDATED_AT },
   settings: { path: '/docs/settings', title: 'Settings', updatedAt: UPDATED_AT },
   users: { path: '/docs/users', title: 'Users', updatedAt: UPDATED_AT },
-  admin_users: { path: '/docs/users', title: 'Users', updatedAt: UPDATED_AT },
-  returns_warranty: { path: '/docs/returns-warranty', title: 'Returns and Warranty', updatedAt: UPDATED_AT },
 };
 
 export const getDocMeta = (moduleKey: string) => docMetaByModuleKey[moduleKey] ?? null;
