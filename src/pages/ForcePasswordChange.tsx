@@ -15,8 +15,8 @@ export default function ForcePasswordChange() {
   const [saving, setSaving] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
-  const loadProfile = useAuthStore((state) => state.loadProfile);
-
+  const session = useAuthStore((state) => state.session);
+  const setMustChangePassword = useAuthStore((state) => state.setMustChangePassword);
   const withTimeout = async <T,>(
     promise: Promise<T>,
     ms = 15000,
@@ -55,50 +55,64 @@ export default function ForcePasswordChange() {
       return;
     }
 
+    let watchdog: ReturnType<typeof setTimeout> | null = null;
     setSaving(true);
     try {
+      watchdog = setTimeout(() => {
+        setError((prev) => prev || 'Password update timed out. Please try again.');
+        setSaving(false);
+      }, 16000);
       if (!supabase) {
         throw new Error('Supabase is not configured');
       }
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError) {
-        throw sessionError;
-      }
-      const sessionUser = sessionData?.session?.user;
+      const sessionUser = session?.user;
       if (!sessionUser) {
         throw new Error('Session expired. Please log in again.');
       }
-      await withTimeout(
-        (async () => {
-          const { error: refreshError } = await supabase.auth.refreshSession();
-          if (refreshError) {
-            throw refreshError;
-          }
-          console.info('ForcePasswordChange: updating auth password...');
-          const { error: updateError } = await supabase.auth.updateUser({ password });
-          if (updateError) {
-            throw updateError;
-          }
-        })(),
-        15000
+      const { error: initialUpdateError } = await withTimeout(
+        supabase.auth.updateUser({ password }),
+        15000,
+        'Password update timed out. Please try again.'
       );
-      console.info('ForcePasswordChange: auth password updated');
-      console.info('ForcePasswordChange: clearing must_change_password...');
+      if (initialUpdateError) {
+        const message = initialUpdateError?.message?.toLowerCase?.() || '';
+        const code = (initialUpdateError as any)?.code;
+        const isAuthError =
+          message.includes('jwt') ||
+          message.includes('token') ||
+          message.includes('invalid') ||
+          message.includes('expired') ||
+          code === 'invalid_jwt' ||
+          code === 'jwt_expired' ||
+          code === 'auth_invalid_token';
+        if (!isAuthError) {
+          throw initialUpdateError;
+        }
+        setError('Session is stale. Please sign in again.');
+        try {
+          await withTimeout(supabase.auth.signOut(), 5000, 'Sign out timed out.');
+        } catch {
+          // ignore sign out errors
+        }
+        navigate('/login', { replace: true });
+        return;
+      }
       const { error: profileError } = await withTimeout(
-        supabase
-          .from('profiles')
-          .update({ must_change_password: false })
-          .eq('id', sessionUser.id),
+        supabase.rpc('clear_my_must_change_password'),
         15000,
         'Profile update timed out. Please try again.'
       );
       if (profileError) {
         throw profileError;
       }
-      console.info('ForcePasswordChange: profile updated');
-      await loadProfile(sessionUser.id);
+      setMustChangePassword(false);
       toast({ title: 'Password updated' });
       navigate('/dashboard', { replace: true });
+      setTimeout(() => {
+        if (window.location.pathname === '/force-password-change') {
+          window.location.href = '/dashboard';
+        }
+      }, 250);
     } catch (err: any) {
       const message =
         err?.code === 'same_password'
@@ -107,6 +121,9 @@ export default function ForcePasswordChange() {
       setError(message);
       toast({ title: 'Update failed', description: message, variant: 'destructive' });
     } finally {
+      if (watchdog) {
+        clearTimeout(watchdog);
+      }
       setSaving(false);
     }
   };
