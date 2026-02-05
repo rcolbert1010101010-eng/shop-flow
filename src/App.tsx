@@ -84,6 +84,9 @@ import PlannerCalendar from "@/modules/planner/PlannerCalendar";
 import QuickBooksIntegration from "@/pages/settings/QuickBooksIntegration";
 import AdminUsers from "@/pages/admin/Users";
 import Login from "@/pages/Login";
+import ForgotPassword from "@/pages/ForgotPassword";
+import ResetPassword from "@/pages/ResetPassword";
+import ForcePasswordChange from "@/pages/ForcePasswordChange";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { LoginRedirect } from "@/components/auth/LoginRedirect";
 import { useTheme } from "@/hooks/useTheme";
@@ -109,6 +112,8 @@ const App = () => {
                   </LoginRedirect>
                 }
               />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/docs/customers" element={<CustomersDocs />} />
               <Route path="/docs/sales-orders" element={<SalesOrdersDocs />} />
               <Route path="/docs/work-orders" element={<WorkOrdersDocs />} />
@@ -136,6 +141,7 @@ const App = () => {
               <Route path="/docs" element={<DocsHome />} />
               <Route path="/print/work-orders/:id" element={<WorkOrderPrintOverview />} />
               <Route element={<ProtectedRoute />}>
+                <Route path="/force-password-change" element={<ForcePasswordChange />} />
                 <Route element={<MainLayout />}>
                   <Route index element={<Navigate to="/dashboard" replace />} />
                   <Route path="/dashboard" element={<Dashboard />} />
