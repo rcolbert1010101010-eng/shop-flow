@@ -1,17 +1,19 @@
 # Forced Password Change
 
 ## Purpose
-Force first-time users (or users flagged by admins) to update their password before they can access the app. The UI blocks all other routes, requires a new password, clears the server-side flag, then routes to the dashboard.
+Force first-time users (or users flagged by admins) to update their password before accessing the app. The flow updates the auth password, clears the server-side flag, updates local state, and routes to the dashboard.
 
-## Key lessons
-- **Never await Supabase queries inside `supabase.auth.onAuthStateChange`.** It can deadlock auth-js. Schedule profile loads after the callback returns.
-- **Avoid `getSession()` / `refreshSession()` in the force-change submit path.** These calls can hang and freeze the UI. Use the Zustand session snapshot instead.
-- **`profiles.must_change_password` is protected by RLS.** Clear it via a **SECURITY DEFINER** RPC (not a direct `profiles` update from the client).
-- **Use timeouts + a watchdog** so the submit button never stays stuck on “Saving…”.
+## Root Causes We Hit
+- **Supabase auth deadlock when awaiting Supabase calls inside `supabase.auth.onAuthStateChange`.** The callback can re-enter auth internals and wedge session state.
+- **`getSession()` / `refreshSession()` can hang in wedged auth clients.** This froze the submit flow and left the UI stuck on “Saving…”.
+- **RLS prevents client update to `profiles.must_change_password`.** Direct client updates are denied without a SECURITY DEFINER path.
 
-## DB/RPC
-Use a SECURITY DEFINER function to clear the flag for the current user:
+## Authoritative Fixes
+- **Keep `onAuthStateChange` synchronous; defer profile loading via `setTimeout(..., 0)`** to avoid deadlocks.
+- **Avoid mandatory `getSession()` / `refreshSession()` in the submit path;** use the store session and rely on timeouts/watchdog to keep UI responsive.
+- **Clear the flag via SECURITY DEFINER RPC `clear_my_must_change_password()`** instead of a direct `profiles` update.
 
+## DB: RPC SQL
 ```sql
 create or replace function public.clear_my_must_change_password()
 returns void
@@ -30,8 +32,7 @@ revoke all on function public.clear_my_must_change_password() from public;
 grant execute on function public.clear_my_must_change_password() to authenticated;
 ```
 
-## Frontend flow
-Submit sequence:
+## Frontend Submit Sequence
 - `updateUser({ password })`
 - `rpc('clear_my_must_change_password')`
 - `setMustChangePassword(false)` (local store update)
@@ -39,7 +40,7 @@ Submit sequence:
 - conditional hard redirect if SPA didn’t move
 
 ## Troubleshooting
-- **Hangs before `updateUser` logs:** session is missing or auth state is stuck.
-- **Hangs after `updateUser start` without `updateUser end`:** Supabase auth request is hung; timeout/watchdog should recover UI.
-- **Hangs at profile update:** check RPC permissions and RLS; ensure SECURITY DEFINER function exists.
-- **Redirect loop back to `/force-password-change`:** store `mustChangePassword` not cleared locally; ensure `setMustChangePassword(false)` runs before navigation.
+- **Hangs before update call:** session snapshot missing or auth store not initialized.
+- **Hangs during update:** auth client wedged; timeouts/watchdog should recover UI.
+- **RPC fails:** missing SECURITY DEFINER function or grants; verify migration applied.
+- **Redirect loop back to `/force-password-change`:** local `mustChangePassword` not cleared before navigation.
