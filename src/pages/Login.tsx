@@ -5,6 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useAuthStore } from '@/stores/authStore';
+import { toAuthEmailFromUsername } from '@/lib/auth';
+import { Link } from 'react-router-dom';
 
 export default function Login() {
   const [username, setUsername] = useState('');
@@ -14,42 +16,20 @@ export default function Login() {
   const signIn = useAuthStore((state) => state.signIn);
   const navigate = useNavigate();
 
-  const normalizeUsername = (value: string) =>
-    value
-      .trim()
-      .toLowerCase()
-      .replace(/\s+/g, '')
-      .replace(/[^a-z0-9._-]/g, '');
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     try {
-      const rawInput = username;
-      const hasAt = rawInput.includes('@');
-      const normalized = hasAt ? '' : normalizeUsername(rawInput);
-      const emailInput = hasAt ? rawInput : `${normalized}@local.shopflow`;
+      const emailInput = username.includes('@')
+        ? username
+        : toAuthEmailFromUsername(username);
       await signIn(emailInput, password);
       navigate('/');
     } catch (error: any) {
-      let finalError = error;
-      const rawInput = username;
-      const hasAt = rawInput.includes('@');
-      if (!hasAt) {
-        try {
-          const normalized = normalizeUsername(rawInput);
-          const fallbackEmail = `${normalized}@shopflow.local`;
-          await signIn(fallbackEmail, password);
-          navigate('/');
-          return;
-        } catch (fallbackError: any) {
-          finalError = fallbackError;
-        }
-      }
       toast({
         title: 'Sign in failed',
-        description: finalError?.message || 'Invalid email or password',
+        description: error?.message || 'Invalid username or password',
         variant: 'destructive',
       });
     } finally {
@@ -68,13 +48,13 @@ export default function Login() {
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="username">Username</Label>
+            <Label htmlFor="username">Email or username</Label>
             <Input
               id="username"
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="username"
+              placeholder="Email or username"
               required
               disabled={isLoading}
               autoComplete="username"
@@ -91,6 +71,11 @@ export default function Login() {
               disabled={isLoading}
               autoComplete="current-password"
             />
+          </div>
+          <div className="text-right">
+            <Link to="/forgot-password" className="text-sm text-muted-foreground underline">
+              Forgot password?
+            </Link>
           </div>
           <Button type="submit" className="w-full" disabled={isLoading}>
             {isLoading ? 'Signing in...' : 'Sign in'}
