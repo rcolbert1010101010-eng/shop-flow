@@ -150,68 +150,69 @@ export async function listUsers(): Promise<UserRow[]> {
 }
 
 export async function updateUserProfile(id: string, fields: Partial<UserRow>) {
-  const accessToken = await requireAccessToken();
   const payload: Partial<UserRow> = {
     full_name: fields.full_name,
     is_active: fields.is_active,
   };
-  const { data, error } = await supabase.functions.invoke('admin-update-user', {
-    body: { user_id: id, ...payload },
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
-  if (error) {
-    const message = await extractEdgeErrorMessage(data, error);
-    throw new Error(message);
-  }
+  throw new Error(
+    [
+      'Browser admin-update-user is disabled.',
+      `user_id="${id}" action="update_profile" payload=${JSON.stringify(payload)}`,
+      'Use Supabase Dashboard or SQL to modify role/active status/tenant membership for now.',
+      'Future fix: move to server-side /api/admin/users endpoint.',
+    ].join(' '),
+  );
 }
 
 export async function setUserRole(userId: string, roleKeyUpper: string) {
-  const accessToken = await requireAccessToken();
-  const { data, error } = await supabase.functions.invoke('admin-update-user', {
-    body: { user_id: userId, role: roleKeyUpper },
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
-  if (error) {
-    const message = await extractEdgeErrorMessage(data, error);
-    throw new Error(message);
-  }
+  throw new Error(
+    [
+      'Browser admin-update-user is disabled.',
+      `user_id="${userId}" action="set_role" role="${(roleKeyUpper ?? '').toString().trim().toUpperCase() || 'n/a'}"`,
+      'Use Supabase Dashboard or SQL to modify role/active status/tenant membership for now.',
+      'Future fix: move to server-side /api/admin/users endpoint.',
+    ].join(' '),
+  );
 }
 
 export async function removeUserFromTenant(userId: string) {
-  const accessToken = await requireAccessToken();
-  const { data, error } = await supabase.functions.invoke('admin-update-user', {
-    body: { user_id: userId, action: 'remove' },
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
-  if (error) {
-    const message = await extractEdgeErrorMessage(data, error);
-    throw new Error(message);
-  }
+  throw new Error(
+    [
+      'Browser admin-update-user is disabled.',
+      `user_id="${userId}" action="remove_tenant_membership"`,
+      'Use Supabase Dashboard or SQL to modify role/active status/tenant membership for now.',
+      'Future fix: move to server-side /api/admin/users endpoint.',
+    ].join(' '),
+  );
 }
 
 export async function createUser(payload: {
-  username: string;
-  password: string;
+  email?: string;
+  username?: string;
+  password?: string;
   role: string;
   full_name?: string | null;
 }) {
-  const accessToken = await requireAccessToken();
+  const email = (payload.email ?? '').toString().trim().toLowerCase();
+  const username = (payload.username ?? '').toString().trim();
+  const role = (payload.role ?? '').toString().trim().toUpperCase() || 'TECHNICIAN';
+  const emailTemplate = 'node tools/admin/create-user.mjs --email "<email>" --tenant "<tenant_uuid>" --role "<role>" --send-invite';
+  const usernameTemplate =
+    'AUTH_EMAIL_DOMAIN="shopflow.local" node tools/admin/create-user.mjs --username "<username>" --tenant "<tenant_uuid>" --role "<role>" --send-invite';
+  const suggestedCommand = email
+    ? `node tools/admin/create-user.mjs --email "${email}" --tenant "<tenant_uuid>" --role "${role}" --send-invite`
+    : username
+      ? `AUTH_EMAIL_DOMAIN="shopflow.local" node tools/admin/create-user.mjs --username "${username}" --tenant "<tenant_uuid>" --role "${role}" --send-invite`
+      : `node tools/admin/create-user.mjs --email "<email>" --tenant "<tenant_uuid>" --role "${role}" --send-invite`;
 
-  const { data, error } = await supabase.functions.invoke('admin-create-user', {
-    body: { ...payload, role: payload.role.toString().toUpperCase() },
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
-  if (error) {
-    const message = await extractEdgeErrorMessage(data, error);
-    throw new Error(message);
-  }
-  return data;
+  throw new Error(
+    [
+      'Browser admin-create-user is disabled.',
+      `Email template: ${emailTemplate}`,
+      `Username template: ${usernameTemplate}`,
+      `Suggested with current values: ${suggestedCommand}`,
+      'Paste the target tenant UUID in place of "<tenant_uuid>" (do not leave placeholder).',
+      `Provided payload: email="${email || 'n/a'}", username="${username || 'n/a'}", role="${role}"`,
+    ].join(' '),
+  );
 }

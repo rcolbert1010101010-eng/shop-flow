@@ -12,7 +12,12 @@
     "preview": "vite preview",
     "seed:demo": "ts-node --esm --transpile-only scripts/seedDemoData.ts",
     "docs:check": "node scripts/docs-check.mjs",
-    "docs:drift": "node scripts/docs-drift-check.mjs"
+    "docs:drift": "node scripts/docs-drift-check.mjs",
+    "check:no-edge-frontend": "bash tools/check-no-edge-in-frontend.sh",
+    "admin:create-user": "node tools/admin/create-user.mjs",
+    "env:widner": "node tools/admin/use-env.mjs widner",
+    "bootstrap:customer": "node tools/admin/customer-bootstrap.mjs",
+    "bootstrap:widner": "node tools/admin/widner-bootstrap.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

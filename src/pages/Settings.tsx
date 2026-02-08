@@ -453,27 +453,15 @@ export default function Settings() {
     }
     setTenantCreating(true);
     try {
-      const { data, error } = await supabase.functions.invoke('tenant-create', {
-        body: { name },
-      });
-      if (error) {
-        toast({
-          title: 'Unable to create tenant',
-          description: error.message,
-          variant: 'destructive',
-        });
-        return;
-      }
-      if (!data?.tenant_id) {
-        toast({
-          title: 'Unable to create tenant',
-          description: 'No tenant id returned',
-          variant: 'destructive',
-        });
-        return;
-      }
-      setTenantName('');
-      window.location.reload();
+      const sqlSafeName = name.replace(/'/g, "''");
+      throw new Error(
+        [
+          'Browser tenant-create is disabled.',
+          `Provided tenant name: "${name}".`,
+          `Run in SQL editor: insert into public.tenants (name) values ('${sqlSafeName}') returning id;`,
+          'Then attach your admin user to the new tenant via public.tenant_users and update public.profiles.active_tenant_id.',
+        ].join(' '),
+      );
     } catch (err: any) {
       toast({
         title: 'Unable to create tenant',

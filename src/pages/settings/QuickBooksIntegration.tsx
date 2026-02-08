@@ -131,17 +131,13 @@ export default function QuickBooksIntegration() {
   const handleRunSender = async () => {
     setSenderRunning(true);
     try {
-      const { data, error } = await supabase.functions.invoke('qb-sender?limit=10');
-      if (error) {
-        toast({ title: 'Sender failed', description: error.message, variant: 'destructive' });
-      } else {
-        toast({
-          title: 'Live transfer ran',
-          description: `Claimed ${data?.claimed ?? 0}, sent ${data?.sent ?? 0}, failed ${data?.failed ?? 0}, retried ${data?.retried ?? 0}`,
-        });
-        const rows = await listRecentExports(25);
-        setExports(rows);
-      }
+      throw new Error(
+        [
+          'Browser QuickBooks Edge calls are disabled.',
+          'Run these edge functions only from server-side OR via a local admin script.',
+          'Future endpoint: /api/integrations/quickbooks/*',
+        ].join(' '),
+      );
     } catch (err: any) {
       toast({ title: 'Live transfer failed', description: err?.message || 'Unknown error', variant: 'destructive' });
     } finally {
@@ -151,16 +147,13 @@ export default function QuickBooksIntegration() {
 
   const handleConnect = async () => {
     try {
-      const { data, error } = await supabase.functions.invoke('qb-oauth-start');
-      if (error || !data?.url) {
-        toast({
-          title: 'Unable to start connect',
-          description: error?.message || 'No URL returned',
-          variant: 'destructive',
-        });
-        return;
-      }
-      window.location.href = data.url as string;
+      throw new Error(
+        [
+          'Browser QuickBooks Edge calls are disabled.',
+          'Run these edge functions only from server-side OR via a local admin script.',
+          'Future endpoint: /api/integrations/quickbooks/*',
+        ].join(' '),
+      );
     } catch (err: any) {
       toast({ title: 'Unable to start connect', description: err?.message || 'Unknown error', variant: 'destructive' });
     }
