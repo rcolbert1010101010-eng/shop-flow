@@ -109,7 +109,14 @@ serve(async (req) => {
     const password = (payload?.password ?? '').toString();
     const role = (payload?.role ?? '').toString().trim().toUpperCase();
     const full_name = (payload?.full_name ?? '').toString().trim() || null;
-    const email = `${usernameNormalized}@local.shopflow`;
+    const emailRaw = (payload?.email ?? '').toString().trim();
+    if (!emailRaw || !emailRaw.includes('@')) {
+      return new Response(JSON.stringify({ error: 'invalid_email' }), {
+        status: 400,
+        headers: corsHeaders,
+      });
+    }
+    const email = emailRaw.toLowerCase();
 
     console.log('create user called', {
       hasAuthHeader: !!authHeader,
