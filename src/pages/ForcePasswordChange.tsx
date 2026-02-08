@@ -55,13 +55,8 @@ export default function ForcePasswordChange() {
       return;
     }
 
-    let watchdog: ReturnType<typeof setTimeout> | null = null;
     setSaving(true);
     try {
-      watchdog = setTimeout(() => {
-        setError((prev) => prev || 'Password update timed out. Please try again.');
-        setSaving(false);
-      }, 16000);
       if (!supabase) {
         throw new Error('Supabase is not configured');
       }
@@ -121,9 +116,6 @@ export default function ForcePasswordChange() {
       setError(message);
       toast({ title: 'Update failed', description: message, variant: 'destructive' });
     } finally {
-      if (watchdog) {
-        clearTimeout(watchdog);
-      }
       setSaving(false);
     }
   };

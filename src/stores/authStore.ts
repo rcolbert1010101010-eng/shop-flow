@@ -30,6 +30,7 @@ type Profile = {
   id: string;
   role: Role;
   roleKey?: string | null;
+  mustChangePassword?: boolean;
 };
 
 type AuthState = {
@@ -42,6 +43,7 @@ type AuthState = {
   signOut: () => Promise<void>;
   initialize: () => Promise<void>;
   loadProfile: (userId: string) => Promise<void>;
+  setMustChangePassword: (value: boolean) => void;
 };
 
 const loadProfile = async (userId: string, set: (state: Partial<AuthState>) => void) => {
@@ -51,26 +53,34 @@ const loadProfile = async (userId: string, set: (state: Partial<AuthState>) => v
   }
 
   let roleKey: string | null | undefined = null;
+  let mustChangePassword = false;
 
-  const { data: userRoleRow } = await supabase
+  const { data: userRoleRow, error: userRoleError } = await supabase
     .from('user_roles')
     .select('roles!inner(key)')
     .eq('user_id', userId)
     .maybeSingle();
 
-  roleKey = (userRoleRow as any)?.roles?.key ?? null;
+  if (!userRoleError) {
+    roleKey = (userRoleRow as any)?.roles?.key ?? null;
+  }
 
+  const { data: legacyProfile, error: legacyProfileError } = await supabase
+    .from('profiles')
+    .select('role,must_change_password')
+    .eq('id', userId)
+    .maybeSingle();
   if (!roleKey) {
-    const { data: legacyProfile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', userId)
-      .maybeSingle();
-    roleKey = (legacyProfile as any)?.role ?? null;
+    if (!legacyProfileError) {
+      roleKey = (legacyProfile as any)?.role ?? null;
+    }
+  }
+  if (!legacyProfileError) {
+    mustChangePassword = !!(legacyProfile as any)?.must_change_password;
   }
 
   const mappedRole = mapDbRoleKeyToRole(roleKey);
-  set({ profile: { id: userId, role: mappedRole, roleKey } });
+  set({ profile: { id: userId, role: mappedRole, roleKey, mustChangePassword } });
 };
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -94,18 +104,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     // Load profile if user exists
     if (session?.user) {
-      await loadProfile(session.user.id, set);
+      try {
+        await loadProfile(session.user.id, set);
+      } catch {
+        // ignore profile load errors
+      }
     }
 
     set({ loading: false });
 
     // Listen for auth changes
     set({ initialized: true });
-    supabase.auth.onAuthStateChange(async (event, session) => {
+    supabase.auth.onAuthStateChange((event, session) => {
       set({ session, user: session?.user ?? null });
       
       if (session?.user) {
-        await loadProfile(session.user.id, set);
+        const userId = session.user.id;
+        setTimeout(() => {
+          void loadProfile(userId, set);
+        }, 0);
       } else {
         set({ profile: null });
       }
@@ -114,6 +131,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   loadProfile: async (userId: string) => {
     await loadProfile(userId, set);
+  },
+  setMustChangePassword: (value: boolean) => {
+    set((state) => ({
+      profile: state.profile ? { ...state.profile, mustChangePassword: value } : state.profile,
+    }));
   },
 
   signIn: async (email: string, password: string) => {
