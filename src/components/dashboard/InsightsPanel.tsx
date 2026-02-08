@@ -111,7 +111,7 @@ export function InsightsPanel() {
     }
   }, [helpRole, insights, viewed]);
 
-  if (helpRole !== 'Manager/Admin' || insights.length === 0) return null;
+  if (helpRole !== 'Manager/Admin') return null;
 
   const handleDismiss = (insight: Insight) => {
     setDismissed((prev) => new Set(prev).add(insight.id));
@@ -144,14 +144,28 @@ export function InsightsPanel() {
         </p>
       </CardHeader>
       <CardContent className="space-y-2">
-        {insights.map((insight) => (
-          <InsightRow
-            key={insight.id}
-            insight={insight}
-            onDismiss={() => handleDismiss(insight)}
-            onActed={() => handleActed(insight)}
-          />
-        ))}
+        {insights.length === 0 ? (
+          <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground space-y-2">
+            <div className="text-foreground font-medium">No insights yet.</div>
+            <ul className="list-disc pl-4 space-y-1">
+              <li>Create a work order and log labor/parts activity.</li>
+              <li>Add parts or update inventory counts.</li>
+              <li>Record technician time entries as work progresses.</li>
+              <li>Create a purchase order for needed stock.</li>
+              <li>Receive inventory against open purchase orders.</li>
+              <li>Sync QuickBooks if your integration is enabled.</li>
+            </ul>
+          </div>
+        ) : (
+          insights.map((insight) => (
+            <InsightRow
+              key={insight.id}
+              insight={insight}
+              onDismiss={() => handleDismiss(insight)}
+              onActed={() => handleActed(insight)}
+            />
+          ))
+        )}
       </CardContent>
     </Card>
   );

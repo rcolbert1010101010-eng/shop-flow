@@ -18,6 +18,8 @@ export function MainLayout() {
   const navigate = useNavigate();
   const signOut = useAuthStore((s) => s.signOut);
   const toast = useToast().toast;
+  const isPasswordFlow =
+    location.pathname === '/force-password-change' || location.pathname === '/reset-password';
 
   const handleSignOut = async () => {
     setMobileNavOpen(false);
@@ -31,6 +33,9 @@ export function MainLayout() {
         variant: 'destructive',
       });
     } finally {
+      if (isPasswordFlow) {
+        return;
+      }
       navigate('/login', { replace: true });
       if (location.pathname !== '/login') {
         window.location.href = '/login';
