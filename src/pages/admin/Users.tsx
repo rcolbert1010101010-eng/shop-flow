@@ -31,6 +31,7 @@ import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useToast } from '@/components/ui/use-toast';
 import { usePermissions } from '@/security/usePermissions';
+import { normalizeAuthUsername } from '@/lib/auth';
 import {
   createUser,
   listUsers,
@@ -49,13 +50,6 @@ const roleOptions = [
   { value: 'SALES_COUNTER', label: 'Sales Counter' },
   { value: 'GUEST', label: 'Guest' },
 ];
-
-const normalizeUsername = (value: string) =>
-  value
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, '')
-    .replace(/[^a-z0-9._-]/g, '');
 
 export default function AdminUsers() {
   const { can, role } = usePermissions();
@@ -102,9 +96,11 @@ export default function AdminUsers() {
       toast({ title: 'User created' });
       setCreateOpen(false);
       setCreateUsername('');
+      setCreateEmail('');
       setCreatePassword('');
       setCreatePasswordConfirm('');
       setCreateName('');
+      setCreateEmailError('');
     },
     onError: (err: any) => {
       toast({ title: 'Create failed', description: err?.message || 'Error creating user', variant: 'destructive' });
@@ -128,6 +124,8 @@ export default function AdminUsers() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createUsername, setCreateUsername] = useState('');
+  const [createEmail, setCreateEmail] = useState('');
+  const [createEmailError, setCreateEmailError] = useState('');
   const [createPassword, setCreatePassword] = useState('');
   const [createPasswordConfirm, setCreatePasswordConfirm] = useState('');
   const [createRole, setCreateRole] = useState('TECHNICIAN');
@@ -144,7 +142,8 @@ export default function AdminUsers() {
   const rows: UserRow[] = useMemo(() => profilesQuery.data || [], [profilesQuery.data]);
 
   const handleCreateUser = async () => {
-    const username = normalizeUsername(createUsername);
+    const username = normalizeAuthUsername(createUsername);
+    const email = createEmail.trim().toLowerCase();
     const password = createPassword;
     const confirmPassword = createPasswordConfirm;
     const role = createRole.toUpperCase();
@@ -156,6 +155,11 @@ export default function AdminUsers() {
         description: 'Username must be letters/numbers and . _ - only (no spaces)',
         variant: 'destructive',
       });
+      return;
+    }
+    if (!email || !email.includes('@')) {
+      setCreateEmailError('Enter a valid email address.');
+      toast({ title: 'Invalid email', description: 'Enter a valid email address.', variant: 'destructive' });
       return;
     }
 
@@ -170,7 +174,7 @@ export default function AdminUsers() {
     }
 
     try {
-      await createUserMutation.mutateAsync({ username, password, role, full_name });
+      await createUserMutation.mutateAsync({ email, username, password, role, full_name });
     } catch {
       // Errors are handled via createUserMutation onError
     }
@@ -371,10 +375,24 @@ export default function AdminUsers() {
               <Label>Username</Label>
               <Input
                 value={createUsername}
-                onChange={(e) => setCreateUsername(normalizeUsername(e.target.value))}
+                onChange={(e) => setCreateUsername(normalizeAuthUsername(e.target.value))}
                 placeholder="username"
               />
               <p className="text-xs text-muted-foreground">letters/numbers + . _ - only (no spaces)</p>
+            </div>
+            <div className="space-y-1">
+              <Label>Email</Label>
+              <Input
+                value={createEmail}
+                onChange={(e) => {
+                  setCreateEmail(e.target.value);
+                  if (createEmailError) setCreateEmailError('');
+                }}
+                placeholder="name@example.com"
+                type="email"
+                required
+              />
+              {createEmailError && <p className="text-xs text-destructive">{createEmailError}</p>}
             </div>
             <div className="space-y-1">
               <Label>Full name (optional)</Label>
