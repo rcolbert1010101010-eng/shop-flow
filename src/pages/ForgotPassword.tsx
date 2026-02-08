@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { toAuthEmailFromUsername } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -54,9 +53,11 @@ export default function ForgotPassword() {
       }
 
       const trimmed = identifier.trim();
-      const email = trimmed.includes('@')
-        ? trimmed.toLowerCase()
-        : toAuthEmailFromUsername(trimmed);
+      if (!trimmed.includes('@')) {
+        setError('Enter the email address for your account.');
+        return;
+      }
+      const email = trimmed.toLowerCase();
 
       const { error: resetError } = await withTimeout(
         supabase.auth.resetPasswordForEmail(email, {
@@ -86,13 +87,13 @@ export default function ForgotPassword() {
         <CardHeader>
           <CardTitle className="text-lg">Reset your password</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Enter your email or username and we’ll send a reset link.
+            Enter your email address and we’ll send a reset link.
           </p>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="identifier">Email or username</Label>
+              <Label htmlFor="identifier">Email address</Label>
               <Input
                 id="identifier"
                 type="text"

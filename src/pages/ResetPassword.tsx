@@ -16,6 +16,7 @@ export default function ResetPassword() {
   const [checking, setChecking] = useState(true);
   const [linkError, setLinkError] = useState('');
   const session = useAuthStore((state) => state.session);
+  const initialize = useAuthStore((state) => state.initialize);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -36,6 +37,10 @@ export default function ResetPassword() {
       }
     }
   };
+
+  useEffect(() => {
+    void initialize();
+  }, [initialize]);
 
   useEffect(() => {
     let active = true;
