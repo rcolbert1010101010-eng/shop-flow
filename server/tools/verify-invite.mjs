@@ -3,7 +3,7 @@
 const baseUrl = (process.env.SHOPFLOW_API_BASE_URL || process.env.API_BASE_URL || "http://localhost:4000").replace(/\/+$/, "");
 const adminKey = process.env.SHOPFLOW_ADMIN_API_KEY || "";
 const tenantId = process.env["X-Tenant-Id"] || process.env.X_TENANT_ID || process.env.TENANT_ID || "";
-const email = String(process.env.VERIFY_INVITE_EMAIL || `verify+${Date.now()}@shopflow.local`)
+const email = String(process.env.VERIFY_INVITE_EMAIL || `verify.${Date.now()}@example.com`)
   .trim()
   .toLowerCase();
 const roleKey = String(process.env.VERIFY_INVITE_ROLE_KEY || "TECHNICIAN")
@@ -61,6 +61,7 @@ async function callInvite() {
   }
 
   try {
+    console.log("VERIFY_INVITE_EMAIL", email);
     const first = await callInvite();
     const second = await callInvite();
 
