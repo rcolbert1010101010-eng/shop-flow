@@ -33,11 +33,12 @@ import { useToast } from '@/components/ui/use-toast';
 import { usePermissions } from '@/security/usePermissions';
 import { normalizeAuthUsername } from '@/lib/auth';
 import {
-  createUser,
+  inviteUser,
   listUsers,
   removeUserFromTenant,
   setUserRole,
   updateUserProfile,
+  type InviteUserResponse,
   type UserRow,
 } from '@/repos/api/usersRepoApi';
 
@@ -90,10 +91,15 @@ export default function AdminUsers() {
   });
 
   const createUserMutation = useMutation({
-    mutationFn: createUser,
-    onSuccess: () => {
+    mutationFn: inviteUser,
+    onSuccess: (result: InviteUserResponse) => {
       void qc.invalidateQueries({ queryKey: ['admin-users'] });
-      toast({ title: 'User created' });
+      const description = result.created
+        ? `User created without invite email${result.temp_password ? ` (temp password: ${result.temp_password})` : ''}.`
+        : result.invited
+          ? 'Invite email sent.'
+          : 'User already existed; tenant membership and role were updated.';
+      toast({ title: 'User provisioned', description });
       setCreateOpen(false);
       setCreateUsername('');
       setCreateEmail('');
@@ -144,12 +150,10 @@ export default function AdminUsers() {
   const handleCreateUser = async () => {
     const username = normalizeAuthUsername(createUsername);
     const email = createEmail.trim().toLowerCase();
-    const password = createPassword;
-    const confirmPassword = createPasswordConfirm;
     const role = createRole.toUpperCase();
     const full_name = createName || null;
 
-    if (!username) {
+    if (createUsername.trim() && !username) {
       toast({
         title: 'Invalid username',
         description: 'Username must be letters/numbers and . _ - only (no spaces)',
@@ -163,18 +167,8 @@ export default function AdminUsers() {
       return;
     }
 
-    if (!password) {
-      toast({ title: 'Password is required', variant: 'destructive' });
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      toast({ title: 'Passwords do not match', variant: 'destructive' });
-      return;
-    }
-
     try {
-      await createUserMutation.mutateAsync({ email, username, password, role, full_name });
+      await createUserMutation.mutateAsync({ email, role_key: role, full_name });
     } catch {
       // Errors are handled via createUserMutation onError
     }
@@ -406,6 +400,7 @@ export default function AdminUsers() {
                 onChange={(e) => setCreatePassword(e.target.value)}
                 placeholder="Password"
               />
+              <p className="text-xs text-muted-foreground">Password is set by the user on first login/invite.</p>
             </div>
             <div className="space-y-1">
               <Label>Confirm password</Label>
@@ -415,6 +410,7 @@ export default function AdminUsers() {
                 onChange={(e) => setCreatePasswordConfirm(e.target.value)}
                 placeholder="Confirm password"
               />
+              <p className="text-xs text-muted-foreground">This field is currently not sent to the backend.</p>
             </div>
             <div className="space-y-1">
               <Label>Role</Label>

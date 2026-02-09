@@ -12,6 +12,22 @@ export type ProfileRow = {
 
 export type UserRow = ProfileRow;
 
+export type InviteUserResponse = {
+  ok: boolean;
+  user_id: string;
+  email: string;
+  tenant_id: string;
+  role_key_effective: string;
+  invited: boolean;
+  created: boolean;
+  rid?: string;
+  temp_password?: string | null;
+};
+
+function isUuid(v: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
+}
+
 async function requireAccessToken(): Promise<string> {
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
   if (sessionError) throw new Error(sessionError.message);
@@ -193,26 +209,77 @@ export async function createUser(payload: {
   role: string;
   full_name?: string | null;
 }) {
-  const email = (payload.email ?? '').toString().trim().toLowerCase();
-  const username = (payload.username ?? '').toString().trim();
-  const role = (payload.role ?? '').toString().trim().toUpperCase() || 'TECHNICIAN';
-  const emailTemplate = 'node tools/admin/create-user.mjs --email "<email>" --tenant "<tenant_uuid>" --role "<role>" --send-invite';
-  const usernameTemplate =
-    'AUTH_EMAIL_DOMAIN="shopflow.local" node tools/admin/create-user.mjs --username "<username>" --tenant "<tenant_uuid>" --role "<role>" --send-invite';
-  const suggestedCommand = email
-    ? `node tools/admin/create-user.mjs --email "${email}" --tenant "<tenant_uuid>" --role "${role}" --send-invite`
-    : username
-      ? `AUTH_EMAIL_DOMAIN="shopflow.local" node tools/admin/create-user.mjs --username "${username}" --tenant "<tenant_uuid>" --role "${role}" --send-invite`
-      : `node tools/admin/create-user.mjs --email "<email>" --tenant "<tenant_uuid>" --role "${role}" --send-invite`;
+  return inviteUser({
+    email: payload.email,
+    role_key: payload.role,
+    full_name: payload.full_name,
+  });
+}
 
-  throw new Error(
-    [
-      'Browser admin-create-user is disabled.',
-      `Email template: ${emailTemplate}`,
-      `Username template: ${usernameTemplate}`,
-      `Suggested with current values: ${suggestedCommand}`,
-      'Paste the target tenant UUID in place of "<tenant_uuid>" (do not leave placeholder).',
-      `Provided payload: email="${email || 'n/a'}", username="${username || 'n/a'}", role="${role}"`,
-    ].join(' '),
-  );
+export async function inviteUser(payload: {
+  email?: string;
+  role_key?: string;
+  full_name?: string | null;
+}): Promise<InviteUserResponse> {
+  const email = (payload.email ?? '').toString().trim().toLowerCase();
+  const role_key = (payload.role_key ?? '').toString().trim().toUpperCase() || 'TECHNICIAN';
+  const full_name = payload.full_name?.toString().trim() || undefined;
+  const adminApiKey = (import.meta.env.VITE_SHOPFLOW_ADMIN_API_KEY ?? '').toString().trim();
+  const base = (import.meta.env.VITE_API_URL ?? 'http://localhost:4000').toString().replace(/\/+$/, '');
+
+  const { data: tenantData, error: tenantError } = await supabase.rpc('current_tenant_id');
+  if (tenantError) {
+    throw new Error(tenantError.message || 'No active tenant selected.');
+  }
+  const tenantId = (tenantData ?? '').toString().trim();
+
+  if (!email || !email.includes('@')) {
+    throw new Error('A valid email is required.');
+  }
+  if (!tenantId || !isUuid(tenantId)) {
+    throw new Error('Invalid tenant id; expected UUID');
+  }
+  if (!adminApiKey) {
+    throw new Error('Missing VITE_SHOPFLOW_ADMIN_API_KEY.');
+  }
+  if (import.meta.env.DEV) {
+    console.info('INVITE_USER_TENANT', { tenantId });
+  }
+
+  const response = await fetch(`${base}/api/v1/admin/users/invite`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-shopflow-admin-key': adminApiKey,
+      'X-Tenant-Id': tenantId,
+    },
+    body: JSON.stringify({
+      email,
+      role_key,
+      full_name,
+    }),
+  });
+
+  const raw = await response.text();
+  let data: any = null;
+  try {
+    data = raw ? JSON.parse(raw) : null;
+  } catch {
+    data = null;
+  }
+
+  if (!response.ok) {
+    const ridSuffix = data?.rid ? ` [rid=${data.rid}]` : '';
+    const errorMessage =
+      data?.message ||
+      data?.error ||
+      raw ||
+      `Request failed with status ${response.status}${ridSuffix}`;
+    if (ridSuffix && !String(errorMessage).includes('[rid=')) {
+      throw new Error(`${errorMessage}${ridSuffix}`);
+    }
+    throw new Error(errorMessage);
+  }
+
+  return data as InviteUserResponse;
 }
