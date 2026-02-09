@@ -33,12 +33,14 @@ import { useToast } from '@/components/ui/use-toast';
 import { usePermissions } from '@/security/usePermissions';
 import { normalizeAuthUsername } from '@/lib/auth';
 import {
+  deactivateUser,
   inviteUser,
   listUsers,
-  removeUserFromTenant,
+  reactivateUser,
   setUserRole,
   updateUserProfile,
   type InviteUserResponse,
+  type UserLifecycleResponse,
   type UserRow,
 } from '@/repos/api/usersRepoApi';
 
@@ -111,18 +113,27 @@ export default function AdminUsers() {
     },
   });
 
-  const removeUserMutation = useMutation({
-    mutationFn: async (userId: string) => {
-      await removeUserFromTenant(userId);
+  const lifecycleMutation = useMutation({
+    mutationFn: async (payload: { userId: string; action: 'deactivate' | 'reactivate' }) => {
+      if (payload.action === 'deactivate') {
+        return deactivateUser(payload.userId);
+      }
+      return reactivateUser(payload.userId);
     },
-    onSuccess: () => {
+    onSuccess: (result: UserLifecycleResponse) => {
       void qc.invalidateQueries({ queryKey: ['admin-users'] });
-      toast({ title: 'User removed' });
-      setRemoveOpen(false);
-      setRemoveUser(null);
+      const title = result.action === 'deactivate' ? 'User deactivated' : 'User reactivated';
+      const description = result.already_in_state
+        ? 'No change was needed.'
+        : result.changed
+          ? 'User status updated.'
+          : undefined;
+      toast({ title, description });
+      setLifecycleOpen(false);
+      setLifecycleUser(null);
     },
     onError: (err: any) => {
-      toast({ title: 'Remove failed', description: err?.message || 'Error removing user', variant: 'destructive' });
+      toast({ title: 'Status update failed', description: err?.message || 'Error updating user status', variant: 'destructive' });
     },
   });
 
@@ -138,8 +149,9 @@ export default function AdminUsers() {
     role: 'TECHNICIAN',
     is_active: true,
   });
-  const [removeOpen, setRemoveOpen] = useState(false);
-  const [removeUser, setRemoveUser] = useState<UserRow | null>(null);
+  const [lifecycleOpen, setLifecycleOpen] = useState(false);
+  const [lifecycleUser, setLifecycleUser] = useState<UserRow | null>(null);
+  const [lifecycleAction, setLifecycleAction] = useState<'deactivate' | 'reactivate'>('deactivate');
 
   const rows: UserRow[] = useMemo(() => profilesQuery.data || [], [profilesQuery.data]);
 
@@ -170,17 +182,18 @@ export default function AdminUsers() {
     }
   };
 
-  const handleRemoveOpen = (row: UserRow) => {
-    setRemoveUser(row);
-    setRemoveOpen(true);
+  const handleLifecycleOpen = (row: UserRow, action: 'deactivate' | 'reactivate') => {
+    setLifecycleUser(row);
+    setLifecycleAction(action);
+    setLifecycleOpen(true);
   };
 
-  const handleRemoveConfirm = async () => {
-    if (!removeUser?.id) return;
+  const handleLifecycleConfirm = async () => {
+    if (!lifecycleUser?.id) return;
     try {
-      await removeUserMutation.mutateAsync(removeUser.id);
+      await lifecycleMutation.mutateAsync({ userId: lifecycleUser.id, action: lifecycleAction });
     } catch {
-      // Errors are handled via removeUserMutation onError
+      // Errors are handled via lifecycleMutation onError
     }
   };
 
@@ -305,7 +318,7 @@ export default function AdminUsers() {
                       </TableCell>
                       <TableCell>
                         <Badge variant={row.is_active ? 'default' : 'secondary'}>
-                          {row.is_active ? 'Active' : 'Inactive'}
+                          {row.is_active ? 'Active' : 'Deactivated'}
                         </Badge>
                       </TableCell>
                       <TableCell>{row.created_at ? new Date(row.created_at).toLocaleString() : '—'}</TableCell>
@@ -338,12 +351,12 @@ export default function AdminUsers() {
                             </Button>
                           )}
                           <Button
-                            variant="destructive"
+                            variant={row.is_active ? 'destructive' : 'outline'}
                             size="sm"
-                            onClick={() => handleRemoveOpen(row)}
+                            onClick={() => handleLifecycleOpen(row, row.is_active ? 'deactivate' : 'reactivate')}
                             disabled={isEditing}
                           >
-                            Remove
+                            {row.is_active ? 'Deactivate' : 'Reactivate'}
                           </Button>
                         </div>
                       </TableCell>
@@ -415,21 +428,39 @@ export default function AdminUsers() {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={removeOpen} onOpenChange={setRemoveOpen}>
+      <AlertDialog
+        open={lifecycleOpen}
+        onOpenChange={(open) => {
+          setLifecycleOpen(open);
+          if (!open) {
+            setLifecycleUser(null);
+          }
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove user?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {lifecycleAction === 'deactivate' ? 'Deactivate user?' : 'Reactivate user?'}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              This will deactivate the user and remove them from the current tenant. This action cannot be undone.
+              {lifecycleAction === 'deactivate'
+                ? `This will deactivate ${lifecycleUser?.full_name || lifecycleUser?.email || 'this user'} for the current tenant.`
+                : `This will reactivate ${lifecycleUser?.full_name || lifecycleUser?.email || 'this user'} for the current tenant.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleRemoveConfirm}
-              disabled={removeUserMutation.isPending}
+              onClick={handleLifecycleConfirm}
+              disabled={lifecycleMutation.isPending}
             >
-              {removeUserMutation.isPending ? 'Removing...' : 'Remove'}
+              {lifecycleMutation.isPending
+                ? lifecycleAction === 'deactivate'
+                  ? 'Deactivating...'
+                  : 'Reactivating...'
+                : lifecycleAction === 'deactivate'
+                  ? 'Deactivate'
+                  : 'Reactivate'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

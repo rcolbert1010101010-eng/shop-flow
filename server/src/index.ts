@@ -15,6 +15,7 @@ import { adminUsersRouter } from "./routes/adminUsers";
 
 const express = require("express") as typeof import("express");
 const cors = require("cors") as typeof import("cors");
+const { createClient } = require("@supabase/supabase-js") as typeof import("@supabase/supabase-js");
 
 const app = express();
 const API_PREFIX = "/api/v1";
@@ -26,6 +27,47 @@ const adminApiKeyEnv = process.env.SHOPFLOW_ADMIN_API_KEY || "";
 const serviceRoleFingerprint = serviceRoleKeyEnv
   ? `${serviceRoleKeyEnv.slice(0, 10)}...${serviceRoleKeyEnv.slice(-6)}`
   : null;
+
+async function logAdminSchemaDiscovery() {
+  if (process.env.NODE_ENV === "production") return;
+  if (!supabaseUrlEnv || !serviceRoleKeyEnv) {
+    console.warn("SCHEMA_DISCOVERY_SKIPPED", { reason: "missing_supabase_env" });
+    return;
+  }
+
+  const sb = createClient(supabaseUrlEnv, serviceRoleKeyEnv, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+
+  const tables = ["tenant_users", "profiles", "user_roles", "roles", "audit_log"];
+  for (const tableName of tables) {
+    try {
+      const { data, error } = await sb
+        .schema("information_schema")
+        .from("columns")
+        .select("column_name,ordinal_position")
+        .eq("table_schema", "public")
+        .eq("table_name", tableName)
+        .order("ordinal_position", { ascending: true });
+
+      if (error) {
+        console.warn("SCHEMA_DISCOVERY_TABLE_ERROR", { table: tableName, message: error.message });
+        continue;
+      }
+
+      const columns = (data ?? [])
+        .map((row: any) => String(row?.column_name || "").trim())
+        .filter(Boolean);
+
+      console.log("SCHEMA_DISCOVERY_TABLE", { table: tableName, columns });
+    } catch (err: any) {
+      console.warn("SCHEMA_DISCOVERY_TABLE_ERROR", {
+        table: tableName,
+        message: err?.message ?? String(err),
+      });
+    }
+  }
+}
 
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
@@ -187,4 +229,5 @@ app.listen(PORT, () => {
   });
   // eslint-disable-next-line no-console
   console.log(`API server listening on http://localhost:${PORT}${API_PREFIX}/health`);
+  void logAdminSchemaDiscovery();
 });

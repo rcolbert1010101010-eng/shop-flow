@@ -24,8 +24,90 @@ export type InviteUserResponse = {
   temp_password?: string | null;
 };
 
+export type UserLifecycleResponse = {
+  ok: boolean;
+  user_id: string;
+  tenant_id: string;
+  action: 'deactivate' | 'reactivate';
+  changed: boolean;
+  already_in_state: boolean;
+  rid?: string;
+};
+
 function isUuid(v: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
+}
+
+async function getAdminRequestContext() {
+  const adminApiKey = (import.meta.env.VITE_SHOPFLOW_ADMIN_API_KEY ?? '').toString().trim();
+  const base = (import.meta.env.VITE_API_URL ?? 'http://localhost:4000').toString().replace(/\/+$/, '');
+
+  const { data: tenantData, error: tenantError } = await supabase.rpc('current_tenant_id');
+  if (tenantError) {
+    throw new Error(tenantError.message || 'No active tenant selected.');
+  }
+  const tenantId = (tenantData ?? '').toString().trim();
+
+  if (!tenantId || !isUuid(tenantId)) {
+    throw new Error('Invalid tenant id; expected UUID');
+  }
+  if (!adminApiKey) {
+    throw new Error('Missing VITE_SHOPFLOW_ADMIN_API_KEY.');
+  }
+
+  return { base, adminApiKey, tenantId };
+}
+
+async function parseResponseOrThrow(response: Response): Promise<any> {
+  const raw = await response.text();
+  let data: any = null;
+  try {
+    data = raw ? JSON.parse(raw) : null;
+  } catch {
+    data = null;
+  }
+
+  if (!response.ok) {
+    const ridSuffix = data?.rid ? ` [rid=${data.rid}]` : '';
+    const errorMessage =
+      data?.message ||
+      data?.error ||
+      raw ||
+      `Request failed with status ${response.status}${ridSuffix}`;
+    if (ridSuffix && !String(errorMessage).includes('[rid=')) {
+      throw new Error(`${errorMessage}${ridSuffix}`);
+    }
+    throw new Error(errorMessage);
+  }
+
+  return data;
+}
+
+async function fetchTenantMembershipRows(tenantId: string) {
+  const selectCandidates = [
+    'user_id, created_at, is_active, active, deactivated_at, disabled_at, deleted_at',
+    'user_id, created_at, deactivated_at',
+    'user_id, created_at, is_active',
+    'user_id, created_at',
+  ];
+
+  let lastResult: { data: any; error: any } = { data: null, error: null };
+  for (const selectClause of selectCandidates) {
+    const result = await supabase.from('tenant_users').select(selectClause).eq('tenant_id', tenantId);
+    lastResult = result;
+    if (!result.error) {
+      return result;
+    }
+
+    const message = String(result.error.message || '').toLowerCase();
+    const isMissingColumnError =
+      message.includes('could not find') && message.includes('column') && message.includes('schema cache');
+    if (!isMissingColumnError) {
+      return result;
+    }
+  }
+
+  return lastResult;
 }
 
 async function requireAccessToken(): Promise<string> {
@@ -93,10 +175,7 @@ export async function listUsers(): Promise<UserRow[]> {
     }
 
     // tenant membership controls visibility; RLS enforces tenant isolation
-    const membershipResult = await supabase
-      .from('tenant_users')
-      .select('user_id, created_at')
-      .eq('tenant_id', tenantId);
+    const membershipResult = await fetchTenantMembershipRows(tenantId);
     membershipRows = membershipResult.data;
     membershipsError = membershipResult.error;
 
@@ -132,9 +211,23 @@ export async function listUsers(): Promise<UserRow[]> {
   if (rolesError) throw new Error(rolesError.message);
 
   const membershipCreatedAtByUser: Record<string, string | null> = {};
+  const membershipActiveByUser: Record<string, boolean> = {};
   (membershipRows ?? []).forEach((row: any) => {
     if (row?.user_id) {
       membershipCreatedAtByUser[row.user_id] = row?.created_at ?? null;
+      let isActive = true;
+      if (Object.prototype.hasOwnProperty.call(row, 'is_active')) {
+        isActive = row?.is_active !== false;
+      } else if (Object.prototype.hasOwnProperty.call(row, 'active')) {
+        isActive = row?.active !== false;
+      } else if (Object.prototype.hasOwnProperty.call(row, 'deactivated_at')) {
+        isActive = !row?.deactivated_at;
+      } else if (Object.prototype.hasOwnProperty.call(row, 'disabled_at')) {
+        isActive = !row?.disabled_at;
+      } else if (Object.prototype.hasOwnProperty.call(row, 'deleted_at')) {
+        isActive = !row?.deleted_at;
+      }
+      membershipActiveByUser[row.user_id] = isActive;
     }
   });
 
@@ -150,6 +243,7 @@ export async function listUsers(): Promise<UserRow[]> {
     .map((profile: any) => ({
       ...profile,
       created_at: profile?.created_at ?? membershipCreatedAtByUser[profile?.id] ?? null,
+      is_active: membershipActiveByUser[profile?.id] ?? profile?.is_active ?? true,
     }))
     .filter((row: any) => row?.id);
 
@@ -192,14 +286,7 @@ export async function setUserRole(userId: string, roleKeyUpper: string) {
 }
 
 export async function removeUserFromTenant(userId: string) {
-  throw new Error(
-    [
-      'Browser admin-update-user is disabled.',
-      `user_id="${userId}" action="remove_tenant_membership"`,
-      'Use Supabase Dashboard or SQL to modify role/active status/tenant membership for now.',
-      'Future fix: move to server-side /api/admin/users endpoint.',
-    ].join(' '),
-  );
+  return deactivateUser(userId);
 }
 
 export async function createUser(payload: {
@@ -224,14 +311,7 @@ export async function inviteUser(payload: {
   const email = (payload.email ?? '').toString().trim().toLowerCase();
   const role_key = (payload.role_key ?? '').toString().trim().toUpperCase() || 'TECHNICIAN';
   const full_name = payload.full_name?.toString().trim() || undefined;
-  const adminApiKey = (import.meta.env.VITE_SHOPFLOW_ADMIN_API_KEY ?? '').toString().trim();
-  const base = (import.meta.env.VITE_API_URL ?? 'http://localhost:4000').toString().replace(/\/+$/, '');
-
-  const { data: tenantData, error: tenantError } = await supabase.rpc('current_tenant_id');
-  if (tenantError) {
-    throw new Error(tenantError.message || 'No active tenant selected.');
-  }
-  const tenantId = (tenantData ?? '').toString().trim();
+  const { base, adminApiKey, tenantId } = await getAdminRequestContext();
 
   if (!email || !email.includes('@')) {
     throw new Error('A valid email is required.');
@@ -259,27 +339,39 @@ export async function inviteUser(payload: {
       full_name,
     }),
   });
+  return (await parseResponseOrThrow(response)) as InviteUserResponse;
+}
 
-  const raw = await response.text();
-  let data: any = null;
-  try {
-    data = raw ? JSON.parse(raw) : null;
-  } catch {
-    data = null;
+export async function deactivateUser(userId: string): Promise<UserLifecycleResponse> {
+  const normalizedUserId = (userId ?? '').toString().trim();
+  if (!isUuid(normalizedUserId)) {
+    throw new Error('Invalid user id; expected UUID');
   }
+  const { base, adminApiKey, tenantId } = await getAdminRequestContext();
+  const response = await fetch(`${base}/api/v1/admin/users/${normalizedUserId}/deactivate`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-shopflow-admin-key': adminApiKey,
+      'X-Tenant-Id': tenantId,
+    },
+  });
+  return (await parseResponseOrThrow(response)) as UserLifecycleResponse;
+}
 
-  if (!response.ok) {
-    const ridSuffix = data?.rid ? ` [rid=${data.rid}]` : '';
-    const errorMessage =
-      data?.message ||
-      data?.error ||
-      raw ||
-      `Request failed with status ${response.status}${ridSuffix}`;
-    if (ridSuffix && !String(errorMessage).includes('[rid=')) {
-      throw new Error(`${errorMessage}${ridSuffix}`);
-    }
-    throw new Error(errorMessage);
+export async function reactivateUser(userId: string): Promise<UserLifecycleResponse> {
+  const normalizedUserId = (userId ?? '').toString().trim();
+  if (!isUuid(normalizedUserId)) {
+    throw new Error('Invalid user id; expected UUID');
   }
-
-  return data as InviteUserResponse;
+  const { base, adminApiKey, tenantId } = await getAdminRequestContext();
+  const response = await fetch(`${base}/api/v1/admin/users/${normalizedUserId}/reactivate`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-shopflow-admin-key': adminApiKey,
+      'X-Tenant-Id': tenantId,
+    },
+  });
+  return (await parseResponseOrThrow(response)) as UserLifecycleResponse;
 }
