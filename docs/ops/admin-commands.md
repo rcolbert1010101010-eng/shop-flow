@@ -20,6 +20,48 @@ export AUTH_EMAIL_DOMAIN="shopflow.local"
 # export DEFAULT_TENANT_ID="<tenant-uuid>"  # optional
 ```
 
+## Server Env Setup
+
+For server-side admin endpoints (`/api/v1/admin/*`), create server env values:
+
+```bash
+cp server/.env.example server/.env
+```
+
+Set at least:
+
+- `SHOPFLOW_ADMIN_API_KEY`
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+Run the server from `server/`:
+
+```bash
+cd server
+npm run dev
+```
+
+## Server Invite Endpoint (Idempotent)
+
+Valid `role_key` values:
+
+- `ADMIN`
+- `MANAGER`
+- `SERVICE_WRITER`
+- `TECHNICIAN`
+
+Call invite endpoint:
+
+```bash
+curl -i -X POST "http://localhost:4000/api/v1/admin/users/invite" \
+  -H "Content-Type: application/json" \
+  -H "x-shopflow-admin-key: ${SHOPFLOW_ADMIN_API_KEY}" \
+  -H "X-Tenant-Id: <tenant-uuid>" \
+  --data '{"email":"tech1@shopflow.local","role_key":"TECHNICIAN","full_name":"ShopFlow Tech 1"}'
+```
+
+Idempotency check: run the same command a second time for the same email.
+
 ## Create User (Invite)
 
 ```bash
@@ -84,7 +126,7 @@ select
   '<user-uuid>'::uuid,
   r.id
 from public.roles r
-where r.key = lower('TECHNICIAN')
+where r.key = 'TECHNICIAN'
 on conflict (user_id)
 do update set role_id = excluded.role_id;
 ```

@@ -1,0 +1,12 @@
+import { Request, Response, NextFunction } from "express";
+
+export function adminKeyGate(req: Request, res: Response, next: NextFunction) {
+  const providedKey = req.header("x-shopflow-admin-key");
+  const expectedKey = process.env.SHOPFLOW_ADMIN_API_KEY;
+
+  if (!expectedKey || !providedKey || providedKey !== expectedKey) {
+    return res.status(401).json({ error: "unauthorized" });
+  }
+
+  return next();
+}
