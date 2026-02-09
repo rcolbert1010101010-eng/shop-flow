@@ -76,7 +76,7 @@ const schedulingLink: NavLink = { type: 'link', path: '/scheduling', label: 'Sch
 const plannerLink: NavLink = { type: 'link', path: '/planner', label: 'Planner', icon: CalendarCheck };
 const invoicesLink: NavLink = { type: 'link', path: '/invoices', label: 'Invoices', icon: FileText };
 const paymentsLink: NavLink = { type: 'link', path: '/payments', label: 'Payments', icon: CreditCard };
-const usersLink: NavLink = { type: 'link', path: '/users', label: 'Users', icon: Users };
+const teamLink: NavLink = { type: 'link', path: '/settings/team', label: 'Team', icon: Users };
 const returnsWarrantyGroup: NavGroup = {
   type: 'group',
   key: 'returnsWarranty',
@@ -101,7 +101,7 @@ export const navSections: NavSection[] = [
   { label: 'Scheduling', items: [schedulingLink, plannerLink] },
   { label: 'Accounting', items: [invoicesLink, paymentsLink, returnsWarrantyGroup] },
   { label: 'Reports', items: [reportsLink] },
-  { label: 'Admin', items: [usersLink, settingsLink] },
+  { label: 'Settings', items: [settingsLink, teamLink] },
 ];
 
 export const navItems: NavItem[] = navSections.flatMap((section) => section.items);
@@ -112,6 +112,8 @@ function requiredCapabilityForPath(path: string): Capability | null {
   if (path === '/receiving' || path.startsWith('/receiving/')) return 'inventory.receive';
   if (path === '/receiving-history' || path.startsWith('/receiving-history/')) return 'inventory.receive';
   if (path === '/users' || path.startsWith('/users')) return 'admin.users';
+  if (path === '/settings/team' || path.startsWith('/settings/team')) return 'admin.users';
+  if (path === '/settings/users' || path.startsWith('/settings/users')) return 'admin.users';
   return null;
 }
 

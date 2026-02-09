@@ -103,8 +103,6 @@ export default function AdminUsers() {
       setCreateOpen(false);
       setCreateUsername('');
       setCreateEmail('');
-      setCreatePassword('');
-      setCreatePasswordConfirm('');
       setCreateName('');
       setCreateEmailError('');
     },
@@ -132,8 +130,6 @@ export default function AdminUsers() {
   const [createUsername, setCreateUsername] = useState('');
   const [createEmail, setCreateEmail] = useState('');
   const [createEmailError, setCreateEmailError] = useState('');
-  const [createPassword, setCreatePassword] = useState('');
-  const [createPasswordConfirm, setCreatePasswordConfirm] = useState('');
   const [createRole, setCreateRole] = useState('TECHNICIAN');
   const [createName, setCreateName] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -246,7 +242,7 @@ export default function AdminUsers() {
               <CardTitle>User Management</CardTitle>
             </div>
             <DialogTrigger asChild>
-              <Button>Create User (username/password)</Button>
+              <Button>Invite User</Button>
             </DialogTrigger>
           </CardHeader>
           <CardContent>
@@ -361,8 +357,8 @@ export default function AdminUsers() {
 
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create User</DialogTitle>
-            <DialogDescription>Create a user with a username and password.</DialogDescription>
+            <DialogTitle>Invite User</DialogTitle>
+            <DialogDescription>User will set their password on first login.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1">
@@ -372,7 +368,7 @@ export default function AdminUsers() {
                 onChange={(e) => setCreateUsername(normalizeAuthUsername(e.target.value))}
                 placeholder="username"
               />
-              <p className="text-xs text-muted-foreground">letters/numbers + . _ - only (no spaces)</p>
+              <p className="text-xs text-muted-foreground">Optional metadata only. Not sent to backend.</p>
             </div>
             <div className="space-y-1">
               <Label>Email</Label>
@@ -391,26 +387,6 @@ export default function AdminUsers() {
             <div className="space-y-1">
               <Label>Full name (optional)</Label>
               <Input value={createName} onChange={(e) => setCreateName(e.target.value)} placeholder="Full name" />
-            </div>
-            <div className="space-y-1">
-              <Label>Password</Label>
-              <Input
-                type="password"
-                value={createPassword}
-                onChange={(e) => setCreatePassword(e.target.value)}
-                placeholder="Password"
-              />
-              <p className="text-xs text-muted-foreground">Password is set by the user on first login/invite.</p>
-            </div>
-            <div className="space-y-1">
-              <Label>Confirm password</Label>
-              <Input
-                type="password"
-                value={createPasswordConfirm}
-                onChange={(e) => setCreatePasswordConfirm(e.target.value)}
-                placeholder="Confirm password"
-              />
-              <p className="text-xs text-muted-foreground">This field is currently not sent to the backend.</p>
             </div>
             <div className="space-y-1">
               <Label>Role</Label>
@@ -433,7 +409,7 @@ export default function AdminUsers() {
               onClick={handleCreateUser}
               disabled={createUserMutation.isPending}
             >
-              {createUserMutation.isPending ? 'Creating...' : 'Create User'}
+              {createUserMutation.isPending ? 'Inviting...' : 'Invite User'}
             </Button>
           </DialogFooter>
         </DialogContent>
