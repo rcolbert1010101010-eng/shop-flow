@@ -1,49 +1,9 @@
 // BREAK-GLASS: uses service role key. Do not run casually.
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import { createClient } from '@supabase/supabase-js';
+import { getAdminEnv } from './_env.mjs';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const envPath = path.join(process.cwd(), '.env.local');
-if (!fs.existsSync(envPath)) {
-  console.error('Missing .env.local in repo root');
-  process.exit(1);
-}
-
-const parseEnv = (content) => {
-  const env = {};
-  const lines = content.split(/\r?\n/);
-  for (const raw of lines) {
-    const line = raw.trim();
-    if (!line || line.startsWith('#')) continue;
-    const cleaned = line.startsWith('export ') ? line.slice(7).trim() : line;
-    const idx = cleaned.indexOf('=');
-    if (idx === -1) continue;
-    const key = cleaned.slice(0, idx).trim();
-    let value = cleaned.slice(idx + 1).trim();
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-      value = value.slice(1, -1);
-    }
-    env[key] = value;
-  }
-  return env;
-};
-
-const env = parseEnv(fs.readFileSync(envPath, 'utf8'));
-const SUPABASE_URL = env.VITE_SUPABASE_URL;
-const SERVICE_ROLE_KEY = env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!SUPABASE_URL) {
-  console.error('Missing VITE_SUPABASE_URL in .env.local');
-  process.exit(1);
-}
-if (!SERVICE_ROLE_KEY) {
-  console.error('Missing SUPABASE_SERVICE_ROLE_KEY in .env.local');
-  process.exit(1);
-}
+const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = getAdminEnv();
+const SERVICE_ROLE_KEY = SUPABASE_SERVICE_ROLE_KEY;
 
 const args = process.argv.slice(2);
 const getArg = (name) => {

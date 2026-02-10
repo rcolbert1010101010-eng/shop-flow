@@ -31,3 +31,4 @@ scripts/
 .vercel
 supabase/.temp/
 server/.env
+.env.admin
