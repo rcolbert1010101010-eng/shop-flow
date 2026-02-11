@@ -22,7 +22,10 @@ const corsHeaders = {
 const jsonResponse = (status: number, payload: Record<string, unknown>) =>
   new Response(JSON.stringify(payload), { status, headers: corsHeaders });
 
-serve(async (req) => {
+const isUuid = (value: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+
+export const handler = async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders });
   }
@@ -33,7 +36,7 @@ serve(async (req) => {
 
   const authHeader = req.headers.get('Authorization') ?? req.headers.get('authorization');
   if (!authHeader?.startsWith('Bearer ')) {
-    return jsonResponse(401, { error: 'Unauthorized' });
+    return jsonResponse(403, { error: 'not_admin' });
   }
 
   const callerClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
@@ -44,76 +47,47 @@ serve(async (req) => {
   const { data: authData, error: authError } = await callerClient.auth.getUser();
   const caller = authData?.user;
   if (authError || !caller) {
-    return jsonResponse(401, { error: 'Unauthorized' });
+    return jsonResponse(403, { error: 'not_admin' });
   }
 
-  let payload: { user_id?: string; is_active?: boolean } = {};
+  let payload: { user_id?: string; is_active?: unknown } = {};
   try {
     payload = await req.json();
   } catch {
     return jsonResponse(400, { error: 'Invalid JSON payload' });
   }
 
-  const userId = (payload.user_id ?? '').toString().trim();
+  const userId = typeof payload.user_id === 'string' ? payload.user_id.trim() : '';
   const isActive = payload.is_active;
-  if (!userId || typeof isActive !== 'boolean') {
-    return jsonResponse(400, { error: 'user_id and is_active are required' });
+
+  if (!userId) {
+    return jsonResponse(400, { error: 'user_id is required' });
+  }
+  if (!isUuid(userId)) {
+    return jsonResponse(400, { error: 'user_id must be a UUID' });
+  }
+  if (typeof isActive !== 'boolean') {
+    return jsonResponse(400, { error: 'is_active must be a boolean' });
   }
 
-  const { data: isAdmin, error: isAdminError } = await adminClient.rpc('is_admin', { uid: caller.id });
+  const { data: isAdmin, error: isAdminError } = await callerClient.rpc('is_admin', { uid: caller.id });
   if (isAdminError) {
     return jsonResponse(500, { error: 'Admin check failed' });
   }
   if (!isAdmin) {
-    return jsonResponse(403, { error: 'Forbidden' });
+    return jsonResponse(403, { error: 'not_admin' });
   }
 
-  const { data: tenantId, error: tenantError } = await callerClient.rpc('current_tenant_id');
-  if (tenantError || !tenantId) {
-    return jsonResponse(403, { error: tenantError?.message || 'Tenant not found' });
-  }
-
-  const { data: callerMembership, error: callerMembershipError } = await adminClient
-    .from('tenant_users')
-    .select('tenant_id')
-    .eq('tenant_id', tenantId)
-    .eq('user_id', caller.id)
-    .maybeSingle();
-
-  if (callerMembershipError) {
-    return jsonResponse(500, { error: 'Tenant membership lookup failed' });
-  }
-  if (!callerMembership?.tenant_id) {
-    return jsonResponse(403, { error: 'Forbidden' });
-  }
-
-  const { data: targetMembership, error: targetMembershipError } = await adminClient
-    .from('tenant_users')
-    .select('user_id')
-    .eq('tenant_id', tenantId)
-    .eq('user_id', userId)
-    .maybeSingle();
-
-  if (targetMembershipError) {
-    return jsonResponse(500, { error: 'Target membership lookup failed' });
-  }
-  if (!targetMembership?.user_id) {
-    return jsonResponse(403, { error: 'Target user is not a tenant member' });
-  }
-
-  const { data: updated, error: updateError } = await adminClient
+  const { error: updateError } = await adminClient
     .from('user_profiles')
     .update({ is_active: isActive })
-    .eq('id', userId)
-    .select('id,is_active')
-    .maybeSingle();
+    .eq('id', userId);
 
   if (updateError) {
-    return jsonResponse(500, { error: updateError.message || 'Unable to update user profile' });
-  }
-  if (!updated?.id) {
-    return jsonResponse(404, { error: 'User profile not found' });
+    return jsonResponse(500, { error: updateError.message || 'Unable to update user status' });
   }
 
-  return jsonResponse(200, { user_id: updated.id, is_active: updated.is_active });
-});
+  return jsonResponse(200, { user_id: userId, is_active: isActive });
+};
+
+serve(handler);

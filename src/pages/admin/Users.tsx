@@ -1,26 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/components/ui/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/stores/authStore';
-import {
-  inviteUser,
-  listUsers,
-  toggleUserActive,
-  updateUserRole,
-  type UserRow,
-} from '@/repos/api/usersRepoApi';
+import { listUsers, type UserRow } from '@/repos/api/usersRepoApi';
 
 const roleOptions = [
   { value: 'admin', label: 'Admin' },
@@ -29,21 +15,60 @@ const roleOptions = [
   { value: 'technician', label: 'Technician' },
 ];
 
+type UpdateRoleResponse = {
+  user_id: string;
+  role_key: string;
+};
+
+type ToggleActiveResponse = {
+  user_id: string;
+  is_active: boolean;
+};
+
+const extractEdgeErrorMessage = async (data: any, error: any): Promise<string> => {
+  if (data?.error) {
+    return data.details ? `${data.error}: ${data.details}` : data.error;
+  }
+
+  const response = error?.context?.response;
+  if (response) {
+    try {
+      const clone = response.clone();
+      const raw = await clone.text();
+      try {
+        const body = JSON.parse(raw);
+        if (body?.error) {
+          return body.details ? `${body.error}: ${body.details}` : body.error;
+        }
+      } catch {
+        // ignore JSON parse errors
+      }
+      return response.statusText || 'Edge function error';
+    } catch {
+      return response.statusText || 'Edge function error';
+    }
+  }
+
+  return error?.message || 'Edge function error';
+};
+
+const invokeEdge = async <T,>(name: string, body: Record<string, unknown>): Promise<T> => {
+  const { data, error } = await supabase.functions.invoke(name, { body });
+  if (error) {
+    const message = await extractEdgeErrorMessage(data, error);
+    throw new Error(message || 'Edge function error');
+  }
+  return data as T;
+};
+
 export default function AdminUsers() {
   const { toast } = useToast();
   const profile = useAuthStore((state) => state.profile);
-  const currentRoleKey = (profile?.roleKey ?? profile?.role ?? '').toString().toLowerCase();
-  const isAdmin = currentRoleKey === 'admin';
 
   const [rows, setRows] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
-
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState('technician');
-  const [inviteBusy, setInviteBusy] = useState(false);
 
   const rowsSorted = useMemo(() => {
     return [...rows].sort((a, b) => {
@@ -52,6 +77,12 @@ export default function AdminUsers() {
       return aCreated - bCreated;
     });
   }, [rows]);
+
+  const currentUserId = profile?.id ?? '';
+  const currentUserRow = rows.find((row) => row.user_id === currentUserId);
+  const rowRoleKey = (currentUserRow?.role_key ?? '').toString().toLowerCase();
+  const profileRoleKey = (profile?.roleKey ?? profile?.role ?? '').toString().toLowerCase();
+  const isAdmin = (rowRoleKey || profileRoleKey) === 'admin';
 
   const loadUsers = async () => {
     setLoading(true);
@@ -84,7 +115,11 @@ export default function AdminUsers() {
 
   const handleRoleChange = async (row: UserRow, nextRole: string) => {
     if (!isAdmin) return;
-    if (!row.tenant_id) {
+    const nextRoleKey = nextRole.toLowerCase();
+    const currentRoleKey = (row.role_key ?? row.membership_role ?? '').toString().toLowerCase();
+    if (nextRoleKey === currentRoleKey) return;
+    const tenantId = row.tenant_id ?? '';
+    if (!tenantId) {
       toast({
         title: 'Missing tenant',
         description: 'Cannot update role without tenant_id from directory view.',
@@ -94,10 +129,10 @@ export default function AdminUsers() {
     }
     setBusy(row.user_id, true);
     try {
-      await updateUserRole({
-        tenant_id: row.tenant_id,
+      await invokeEdge<UpdateRoleResponse>('users-update-role', {
+        tenant_id: tenantId,
         user_id: row.user_id,
-        role_key: nextRole,
+        role_key: nextRoleKey,
       });
       toast({ title: 'Role updated' });
       await loadUsers();
@@ -114,9 +149,13 @@ export default function AdminUsers() {
 
   const handleToggleActive = async (row: UserRow, nextActive: boolean) => {
     if (!isAdmin) return;
+    if (nextActive === !!row.is_active) return;
     setBusy(row.user_id, true);
     try {
-      await toggleUserActive({ user_id: row.user_id, is_active: nextActive });
+      await invokeEdge<ToggleActiveResponse>('users-toggle-active', {
+        user_id: row.user_id,
+        is_active: nextActive,
+      });
       toast({ title: nextActive ? 'User activated' : 'User deactivated' });
       await loadUsers();
     } catch (err: any) {
@@ -130,85 +169,13 @@ export default function AdminUsers() {
     }
   };
 
-  const handleInvite = async () => {
-    if (!isAdmin) return;
-    const email = inviteEmail.trim().toLowerCase();
-    if (!email || !email.includes('@')) {
-      toast({
-        title: 'Invalid email',
-        description: 'Enter a valid email address.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setInviteBusy(true);
-    try {
-      await inviteUser({ email, role_key: inviteRole });
-      toast({ title: 'Invite sent', description: 'User created and password reset email sent.' });
-      setInviteOpen(false);
-      setInviteEmail('');
-      setInviteRole('technician');
-      await loadUsers();
-    } catch (err: any) {
-      toast({
-        title: 'Invite failed',
-        description: err?.message || 'Unable to invite user',
-        variant: 'destructive',
-      });
-    } finally {
-      setInviteBusy(false);
-    }
-  };
-
   return (
     <div className="page-container space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Users</h1>
-        <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
-          <DialogTrigger asChild>
-            <Button disabled={!isAdmin}>Invite User</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Invite User</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Email</label>
-                <Input
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                  placeholder="name@example.com"
-                  type="email"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Role</label>
-                <Select value={inviteRole} onValueChange={setInviteRole}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {roleOptions.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {!isAdmin && (
-                <div className="text-sm text-muted-foreground">Admin role required to invite users.</div>
-              )}
-            </div>
-            <DialogFooter>
-              <Button onClick={handleInvite} disabled={!isAdmin || inviteBusy}>
-                {inviteBusy ? 'Inviting...' : 'Send Invite'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <div className="flex items-center gap-2">
+          <Button disabled>Invite User (Coming next)</Button>
+        </div>
       </div>
 
       {!isAdmin && (
