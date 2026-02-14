@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:widner": "bash -lc 'SHOPFLOW_ENV_FILE=.env.widner.local npm --prefix server run dev & BACKEND_PID=$!; npm run dev -- --mode widner; EXIT_CODE=$?; kill $BACKEND_PID >/dev/null 2>&1 || true; wait $BACKEND_PID 2>/dev/null || true; exit $EXIT_CODE'",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint src vite.config.ts tailwind.config.ts",

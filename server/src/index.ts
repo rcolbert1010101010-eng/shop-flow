@@ -1,4 +1,3 @@
-import "dotenv/config";
 import type { NextFunction, Request, Response } from "express";
 
 import { tenantMiddleware } from "./middleware/tenant";
@@ -15,7 +14,41 @@ import { adminUsersRouter } from "./routes/adminUsers";
 
 const express = require("express") as typeof import("express");
 const cors = require("cors") as typeof import("cors");
-const { createClient } = require("@supabase/supabase-js") as typeof import("@supabase/supabase-js");
+const { execSync } = require("child_process") as typeof import("child_process");
+const path = require("path") as typeof import("path");
+const fs = require("fs") as typeof import("fs");
+const dotenv = require("dotenv") as typeof import("dotenv");
+
+function loadEnvFile(filePath: string) {
+  if (!fs.existsSync(filePath)) return false;
+  dotenv.config({ path: filePath, override: false });
+  return true;
+}
+
+function resolveEnvPath(repoRoot: string, candidate: string): string {
+  if (path.isAbsolute(candidate)) return candidate;
+  const fromRepoRoot = path.resolve(repoRoot, candidate);
+  if (fs.existsSync(fromRepoRoot)) return fromRepoRoot;
+  return path.resolve(process.cwd(), candidate);
+}
+
+function initializeEnv() {
+  const repoRoot = path.resolve(__dirname, "..", "..");
+  const selectedEnvFile = String(process.env.SHOPFLOW_ENV_FILE || "").trim();
+  if (selectedEnvFile) {
+    const selectedPath = resolveEnvPath(repoRoot, selectedEnvFile);
+    if (!loadEnvFile(selectedPath)) {
+      console.warn("ENV_FILE_NOT_FOUND", { selected: selectedEnvFile, resolved: selectedPath });
+    }
+  }
+
+  // Fallback defaults only fill missing values (no override).
+  loadEnvFile(path.join(repoRoot, ".env.local"));
+  loadEnvFile(path.join(repoRoot, "server", ".env"));
+  loadEnvFile(path.join(repoRoot, ".env"));
+}
+
+initializeEnv();
 
 const app = express();
 const API_PREFIX = "/api/v1";
@@ -23,51 +56,29 @@ const adminRouter = express.Router();
 
 const supabaseUrlEnv = process.env.SUPABASE_URL || process.env.SUPABASE_PROJECT_URL || "";
 const serviceRoleKeyEnv = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE || "";
-const adminApiKeyEnv = process.env.SHOPFLOW_ADMIN_API_KEY || "";
+const adminApiKeyEnv = process.env.SHOPFLOW_ADMIN_API_KEY || process.env.X_SHOPFLOW_ADMIN_KEY || "";
 const serviceRoleFingerprint = serviceRoleKeyEnv
   ? `${serviceRoleKeyEnv.slice(0, 10)}...${serviceRoleKeyEnv.slice(-6)}`
   : null;
-
-async function logAdminSchemaDiscovery() {
-  if (process.env.NODE_ENV === "production") return;
-  if (!supabaseUrlEnv || !serviceRoleKeyEnv) {
-    console.warn("SCHEMA_DISCOVERY_SKIPPED", { reason: "missing_supabase_env" });
-    return;
+const supabaseHost = (() => {
+  if (!supabaseUrlEnv) return null;
+  try {
+    return new URL(supabaseUrlEnv).hostname || null;
+  } catch {
+    return null;
   }
-
-  const sb = createClient(supabaseUrlEnv, serviceRoleKeyEnv, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-
-  const tables = ["tenant_users", "profiles", "user_roles", "roles", "audit_log"];
-  for (const tableName of tables) {
-    try {
-      const { data, error } = await sb
-        .schema("information_schema")
-        .from("columns")
-        .select("column_name,ordinal_position")
-        .eq("table_schema", "public")
-        .eq("table_name", tableName)
-        .order("ordinal_position", { ascending: true });
-
-      if (error) {
-        console.warn("SCHEMA_DISCOVERY_TABLE_ERROR", { table: tableName, message: error.message });
-        continue;
-      }
-
-      const columns = (data ?? [])
-        .map((row: any) => String(row?.column_name || "").trim())
-        .filter(Boolean);
-
-      console.log("SCHEMA_DISCOVERY_TABLE", { table: tableName, columns });
-    } catch (err: any) {
-      console.warn("SCHEMA_DISCOVERY_TABLE_ERROR", {
-        table: tableName,
-        message: err?.message ?? String(err),
-      });
-    }
+})();
+const gitBranch = (() => {
+  const envBranch = String(process.env.GIT_BRANCH || "").trim();
+  if (envBranch) {
+    return envBranch;
   }
-}
+  try {
+    return execSync("git rev-parse --abbrev-ref HEAD", { encoding: "utf8" }).trim() || null;
+  } catch {
+    return null;
+  }
+})();
 
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
@@ -190,7 +201,9 @@ app.get(`${API_PREFIX}/health`, (req: Request, res: Response) => {
   res.json({
     status: "ok",
     service: "repair-hub-pro-api",
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    supabase_host: supabaseHost,
+    git_branch: gitBranch,
   });
 });
 
@@ -229,5 +242,4 @@ app.listen(PORT, () => {
   });
   // eslint-disable-next-line no-console
   console.log(`API server listening on http://localhost:${PORT}${API_PREFIX}/health`);
-  void logAdminSchemaDiscovery();
 });
