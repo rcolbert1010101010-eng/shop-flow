@@ -1,11 +1,13 @@
 import { useEffect } from 'react';
 import { Navigate, useLocation, Outlet } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
+import { useEnsureActiveTenant } from '@/hooks/useEnsureActiveTenant';
 
 export function ProtectedRoute() {
-  const { session, loading, initialize, profile } = useAuthStore();
+  const { session, loading, initialize } = useAuthStore();
   const location = useLocation();
   const isForcePasswordChange = location.pathname === '/force-password-change';
+  useEnsureActiveTenant();
 
   useEffect(() => {
     initialize();
@@ -25,10 +27,6 @@ export function ProtectedRoute() {
 
   if (isForcePasswordChange) {
     return <Outlet />;
-  }
-
-  if (profile?.mustChangePassword && location.pathname !== '/force-password-change') {
-    return <Navigate to="/force-password-change" replace />;
   }
 
   return <Outlet />;
