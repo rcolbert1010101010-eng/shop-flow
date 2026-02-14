@@ -9,12 +9,12 @@ type InviteBody = {
   full_name?: string;
 };
 
-type MembershipAction = "deactivate" | "reactivate";
-
-type MembershipStatusStrategy =
-  | { kind: "boolean"; column: "is_active" | "active" }
-  | { kind: "timestamp"; column: "deactivated_at" | "disabled_at" | "deleted_at" }
-  | { kind: "none" };
+type CreateUserBody = {
+  email?: string;
+  password?: string;
+  role_key?: string;
+  full_name?: string;
+};
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -54,6 +54,12 @@ function shouldFallbackToInsert(error: any): boolean {
   return message.includes("on conflict") || message.includes("unique") || message.includes("constraint");
 }
 
+function isForeignKeyConstraintError(error: any): boolean {
+  const message = normalizeErrorMessage(error);
+  const code = String((error as any)?.code || "").toUpperCase();
+  return code === "23503" || message.includes("foreign key") || message.includes("violates");
+}
+
 function generateTempPassword(minLength = 24): string {
   const raw = randomBytes(64).toString("base64url").replace(/[^A-Za-z0-9]/g, "");
   const seeded = `A1${raw}`;
@@ -70,6 +76,23 @@ function errorJson(res: Response, status: number, error: string, message?: strin
     message,
     rid: res.locals?.rid,
   });
+}
+
+function createUserError(
+  res: Response,
+  status: number,
+  error: string,
+  details?: unknown,
+  context?: Record<string, unknown>
+) {
+  const payload: Record<string, unknown> = { error };
+  if (details !== undefined) {
+    payload.details = details;
+  }
+  if (context !== undefined) {
+    payload.context = context;
+  }
+  return res.status(status).type("application/json").json(payload);
 }
 
 function badRequest(res: Response, code: string, message: string, details?: unknown) {
@@ -110,82 +133,6 @@ function logInvite400(
     tenantId,
     bodyKeys,
   });
-}
-
-const tableColumnsCache = new Map<string, Set<string>>();
-
-async function getTableColumns(
-  supabaseAdmin: ReturnType<typeof createClient>,
-  tableName: string,
-  fallbackColumns: string[] = []
-): Promise<Set<string>> {
-  const cacheKey = tableName.toLowerCase();
-  const cached = tableColumnsCache.get(cacheKey);
-  if (cached) {
-    return cached;
-  }
-
-  const fallback = new Set<string>(fallbackColumns.map((c) => c.toLowerCase()));
-
-  try {
-    const { data, error } = await supabaseAdmin
-      .schema("information_schema")
-      .from("columns")
-      .select("column_name")
-      .eq("table_schema", "public")
-      .eq("table_name", tableName);
-
-    if (error || !data) {
-      tableColumnsCache.set(cacheKey, fallback);
-      return fallback;
-    }
-
-    const columns = new Set<string>(
-      data
-        .map((row: any) => String(row?.column_name || "").trim().toLowerCase())
-        .filter(Boolean)
-    );
-
-    if (columns.size === 0) {
-      tableColumnsCache.set(cacheKey, fallback);
-      return fallback;
-    }
-
-    tableColumnsCache.set(cacheKey, columns);
-    return columns;
-  } catch {
-    tableColumnsCache.set(cacheKey, fallback);
-    return fallback;
-  }
-}
-
-function resolveMembershipStatusStrategy(columns: Set<string>): MembershipStatusStrategy {
-  if (columns.has("is_active")) {
-    return { kind: "boolean", column: "is_active" };
-  }
-  if (columns.has("active")) {
-    return { kind: "boolean", column: "active" };
-  }
-  if (columns.has("deactivated_at")) {
-    return { kind: "timestamp", column: "deactivated_at" };
-  }
-  if (columns.has("disabled_at")) {
-    return { kind: "timestamp", column: "disabled_at" };
-  }
-  if (columns.has("deleted_at")) {
-    return { kind: "timestamp", column: "deleted_at" };
-  }
-  return { kind: "none" };
-}
-
-function isMembershipActive(row: any, strategy: MembershipStatusStrategy): boolean {
-  if (strategy.kind === "boolean") {
-    return Boolean(row?.[strategy.column]);
-  }
-  if (strategy.kind === "timestamp") {
-    return !row?.[strategy.column];
-  }
-  return true;
 }
 
 async function resolveAuthUserIdByEmail(
@@ -248,19 +195,6 @@ async function writeAuditLog(
     details?: Record<string, unknown>;
   }
 ): Promise<void> {
-  const auditColumns = await getTableColumns(sb, "audit_log", []);
-  if (auditColumns.size === 0) {
-    return;
-  }
-
-  if (!auditColumns.has("tenant_id") || !auditColumns.has("action") || !auditColumns.has("entity_type") || !auditColumns.has("entity_id")) {
-    console.warn("AUDIT_LOG_SKIPPED", {
-      reason: "missing_required_columns",
-      columns: Array.from(auditColumns).sort(),
-    });
-    return;
-  }
-
   const insertPayload: Record<string, unknown> = {
     tenant_id: payload.tenantId,
     action: payload.action,
@@ -268,15 +202,13 @@ async function writeAuditLog(
     entity_id: payload.entityId,
   };
 
-  if (auditColumns.has("actor_user_id") && payload.actorUserId && isUuid(payload.actorUserId)) {
+  if (payload.actorUserId && isUuid(payload.actorUserId)) {
     insertPayload.actor_user_id = payload.actorUserId;
   }
-  if (auditColumns.has("details") && payload.details) {
+  if (payload.details) {
     insertPayload.details = payload.details;
   }
-  if (auditColumns.has("created_at")) {
-    insertPayload.created_at = new Date().toISOString();
-  }
+  insertPayload.created_at = new Date().toISOString();
 
   const { error } = await sb.from("audit_log").insert(insertPayload);
   if (error) {
@@ -299,46 +231,44 @@ async function fetchRoleKeyForUser(sb: ReturnType<typeof createClient>, userId: 
   return key || null;
 }
 
-async function countActiveAdminIdsForTenant(
+function isTenantMembershipAdminRole(role: unknown): boolean {
+  const normalized = String(role ?? "").trim().toLowerCase();
+  return normalized === "admin";
+}
+
+function resolveActorUserId(req: Request, res: Response): string | null {
+  const actorUserIdHeader = String(req.header("x-actor-user-id") || "").trim();
+  if (isUuid(actorUserIdHeader)) {
+    return actorUserIdHeader;
+  }
+
+  const localUserId = String(res.locals?.userId || "").trim();
+  if (isUuid(localUserId)) {
+    return localUserId;
+  }
+
+  return null;
+}
+
+async function listTenantAdminUserIds(
   sb: ReturnType<typeof createClient>,
-  tenantId: string,
-  strategy: MembershipStatusStrategy
+  tenantId: string
 ): Promise<Set<string>> {
-  const membershipSelect = strategy.kind === "none" ? "user_id" : `user_id,${strategy.column}`;
   const { data: membershipRows, error: membershipError } = await sb
     .from("tenant_users")
-    .select(membershipSelect)
+    .select("user_id,role")
     .eq("tenant_id", tenantId);
 
   if (membershipError) {
     throw new Error(`tenant_membership_query_failed: ${membershipError.message}`);
   }
 
-  const activeUserIds = (membershipRows ?? [])
-    .filter((row: any) => isMembershipActive(row, strategy))
-    .map((row: any) => String(row?.user_id || "").trim())
-    .filter(Boolean);
-
-  if (activeUserIds.length === 0) {
-    return new Set<string>();
-  }
-
-  const { data: roleRows, error: roleError } = await sb
-    .from("user_roles")
-    .select("user_id, role:roles(key,is_active)")
-    .in("user_id", activeUserIds);
-
-  if (roleError) {
-    throw new Error(`active_admin_count_failed: ${roleError.message}`);
-  }
-
   const adminIds = new Set<string>();
-  for (const row of roleRows ?? []) {
+  for (const row of membershipRows ?? []) {
     const userId = String((row as any)?.user_id || "").trim();
-    const roleKey = String((row as any)?.role?.key || "").trim().toUpperCase();
-    const roleIsActive = (row as any)?.role?.is_active;
-    if (!userId) continue;
-    if (roleKey === "ADMIN" && roleIsActive !== false) {
+    const role = (row as any)?.role;
+    if (!isUuid(userId)) continue;
+    if (isTenantMembershipAdminRole(role)) {
       adminIds.add(userId);
     }
   }
@@ -346,31 +276,122 @@ async function countActiveAdminIdsForTenant(
   return adminIds;
 }
 
-async function handleMembershipLifecycle(req: Request, res: Response, action: MembershipAction) {
+adminUsersRouter.get("/users", async (req: Request, res: Response) => {
   try {
-    const tenantId = String(res.locals.tenantId || "").trim();
+    const tenantId = String(res.locals?.tenantId || "").trim();
     if (!tenantId) {
-      return badRequest(res, "missing_tenant_id", "X-Tenant-Id header is required");
+      return createUserError(res, 400, "missing_tenant_id", { header: "X-Tenant-Id" }, { step: "tenant" });
     }
     if (!isUuid(tenantId)) {
-      return badRequest(res, "invalid_tenant_id", "X-Tenant-Id must be a UUID");
+      return createUserError(res, 400, "invalid_tenant_id", "X-Tenant-Id must be a UUID", { step: "tenant" });
     }
 
-    const userId = String(req.params.user_id || "").trim();
-    if (!isUuid(userId)) {
-      return badRequest(res, "invalid_user_id", "user_id must be a UUID");
+    const adminClient = getAdminClientOrError(res);
+    if (adminClient.errorResponse) {
+      return adminClient.errorResponse;
+    }
+    const sb = adminClient.sb;
+    const actorUserId = resolveActorUserId(req, res);
+
+    const { data: membershipRowsRaw, error: membershipRowsError } = await sb
+      .from("tenant_users")
+      .select("tenant_id,user_id,role,created_at,updated_at")
+      .eq("tenant_id", tenantId);
+    if (membershipRowsError) {
+      return createUserError(res, 500, "users_list_failed", membershipRowsError.message, { step: "users_list" });
     }
 
-    const actorUserIdHeader = String(req.header("x-actor-user-id") || "").trim();
-    const actorUserId = isUuid(actorUserIdHeader) ? actorUserIdHeader : null;
+    const membershipRows = (membershipRowsRaw ?? []) as any[];
+    const tenantAdminUserIds = await listTenantAdminUserIds(sb, tenantId);
+    const userIds = Array.from(
+      new Set(
+        membershipRows
+          .map((row) => String(row?.user_id || "").trim())
+          .filter((value) => isUuid(value))
+      )
+    );
 
-    if (action === "deactivate" && actorUserId && actorUserId === userId) {
-      return res.status(409).json({
-        ok: false,
-        error: "cannot_deactivate_self",
-        message: "Cannot deactivate yourself",
-        rid: res.locals?.rid,
-      });
+    const directoryByUserId = new Map<string, any>();
+    if (userIds.length > 0) {
+      const { data: directoryRows, error: directoryError } = await sb
+        .from("tenant_user_directory_v")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .in("user_id", userIds);
+      if (directoryError) {
+        return createUserError(res, 500, "users_list_failed", directoryError.message, { step: "users_list" });
+      }
+      for (const row of directoryRows ?? []) {
+        const userId = String((row as any)?.user_id || "").trim();
+        if (userId) {
+          directoryByUserId.set(userId, row);
+        }
+      }
+    }
+
+    const payload = membershipRows.map((membershipRow: any) => {
+      const userId = String(membershipRow?.user_id || "").trim();
+      const directoryRow = directoryByUserId.get(userId) || null;
+      const { is_active: _ignoreDirectoryIsActive, ...directoryWithoutIsActive } = (directoryRow ?? {}) as Record<
+        string,
+        unknown
+      >;
+      const hasUserId = isUuid(userId);
+      const hasCurrentTenantMembership = String(membershipRow?.tenant_id || "").trim() === tenantId;
+      const isSelf = Boolean(actorUserId && hasUserId && actorUserId === userId);
+      const isAdminMembership = isTenantMembershipAdminRole(membershipRow?.role);
+      const adminCountAfterRemove = tenantAdminUserIds.size - (isAdminMembership ? 1 : 0);
+      const wouldLeaveNoAdmin = adminCountAfterRemove <= 0;
+      const canRemoveFromTenant = hasCurrentTenantMembership && hasUserId && !isSelf && !wouldLeaveNoAdmin;
+      let removeDisabledReason: string | null = null;
+      if (!canRemoveFromTenant) {
+        if (!hasUserId) {
+          removeDisabledReason = "No removable id is available for this row.";
+        } else if (isSelf) {
+          removeDisabledReason = "Cannot remove your own membership from this tenant.";
+        } else if (wouldLeaveNoAdmin) {
+          removeDisabledReason = "Cannot remove the last ADMIN from this tenant.";
+        } else if (!hasCurrentTenantMembership) {
+          removeDisabledReason = "User is not a member of this tenant.";
+        } else {
+          removeDisabledReason = "Remove is blocked by membership safety checks.";
+        }
+      }
+
+      return {
+        ...directoryWithoutIsActive,
+        tenant_id: tenantId,
+        id: hasUserId ? userId : null,
+        user_id: hasUserId ? userId : null,
+        role: membershipRow?.role ?? null,
+        membership_role: membershipRow?.role ?? directoryRow?.membership_role ?? null,
+        created_at: membershipRow?.created_at ?? directoryRow?.created_at ?? null,
+        updated_at: membershipRow?.updated_at ?? null,
+        is_owner: false,
+        can_remove_from_tenant: canRemoveFromTenant,
+        remove_disabled_reason: removeDisabledReason,
+      };
+    });
+
+    return res.status(200).json(payload);
+  } catch (err: any) {
+    console.error("ADMIN_USERS_LIST_ERROR", {
+      rid: res.locals?.rid,
+      method: req.method,
+      path: req.originalUrl,
+      message: err?.message,
+      name: err?.name,
+      stack: err?.stack,
+    });
+    return createUserError(res, 500, "admin_users_list_failed", err?.message ?? String(err), { step: "unhandled" });
+  }
+});
+
+adminUsersRouter.post("/tenants/:tenantId/bootstrap-membership", async (req: Request, res: Response) => {
+  try {
+    const tenantId = String(req.params.tenantId || "").trim();
+    if (!isUuid(tenantId)) {
+      return createUserError(res, 400, "invalid_tenant_id", "tenantId must be a UUID", { step: "tenant" });
     }
 
     const adminClient = getAdminClientOrError(res);
@@ -379,130 +400,91 @@ async function handleMembershipLifecycle(req: Request, res: Response, action: Me
     }
     const sb = adminClient.sb;
 
-    const tenantUsersColumns = await getTableColumns(sb, "tenant_users", ["tenant_id", "user_id"]);
-    if (!tenantUsersColumns.has("tenant_id") || !tenantUsersColumns.has("user_id")) {
-      return errorJson(
-        res,
-        500,
-        "unsupported_schema",
-        `tenant_users is missing required columns (tenant_users_columns=[${Array.from(tenantUsersColumns).sort().join(",")}])`
-      );
-    }
-
-    const strategy = resolveMembershipStatusStrategy(tenantUsersColumns);
-    if (strategy.kind === "none") {
-      return errorJson(
-        res,
-        500,
-        "unsupported_schema",
-        "tenant_users must include one of is_active/active/deactivated_at/disabled_at/deleted_at for lifecycle actions"
-      );
-    }
-
-    const membershipSelect = `tenant_id,user_id,${strategy.column}`;
-    const { data: membershipRow, error: membershipError } = await sb
-      .from("tenant_users")
-      .select(membershipSelect)
-      .eq("tenant_id", tenantId)
-      .eq("user_id", userId)
+    const { data: tenantRow, error: tenantLookupError } = await sb
+      .from("tenants")
+      .select("id")
+      .eq("id", tenantId)
+      .limit(1)
       .maybeSingle();
 
-    if (membershipError) {
-      throw new Error(`tenant_membership_lookup_failed: ${membershipError.message}`);
+    if (tenantLookupError) {
+      return createUserError(res, 500, "tenant_lookup_failed", tenantLookupError.message, { step: "tenant_lookup" });
+    }
+    if (!tenantRow) {
+      return res.status(404).type("application/json").json({ error: "tenant_not_found" });
     }
 
-    if (!membershipRow) {
-      return res.status(404).json({
-        ok: false,
-        error: "membership_not_found",
-        message: "User is not a member of this tenant",
-        rid: res.locals?.rid,
+    const { data: authUsers, error: authUsersError } = await sb
+      .schema("auth")
+      .from("users")
+      .select("id")
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (authUsersError) {
+      return createUserError(res, 500, "auth_users_lookup_failed", authUsersError.message, {
+        step: "auth_users_lookup",
       });
     }
 
-    const currentActive = isMembershipActive(membershipRow, strategy);
-    const desiredActive = action === "reactivate";
-
-    if (currentActive === desiredActive) {
-      return res.status(200).json({
-        ok: true,
-        user_id: userId,
-        tenant_id: tenantId,
-        action,
-        changed: false,
-        already_in_state: true,
-        rid: res.locals?.rid,
-      });
+    const bootUserId = String((authUsers ?? [])[0]?.id || "").trim();
+    if (!isUuid(bootUserId)) {
+      return res.status(400).type("application/json").json({ error: "no_auth_users_found" });
     }
 
-    if (action === "deactivate") {
-      const activeAdminIds = await countActiveAdminIdsForTenant(sb, tenantId, strategy);
-      if (activeAdminIds.has(userId) && activeAdminIds.size <= 1) {
-        return res.status(409).json({
-          ok: false,
-          error: "last_admin_guard",
-          message: "Cannot deactivate the last ADMIN for this tenant",
-          rid: res.locals?.rid,
-        });
-      }
-    }
+    const now = new Date().toISOString();
+    const membershipPayload = {
+      tenant_id: tenantId,
+      user_id: bootUserId,
+      role: "ADMIN",
+      is_active: true,
+      created_at: now,
+      updated_at: now,
+    };
 
-    const updatePayload: Record<string, unknown> = {};
-    if (strategy.kind === "boolean") {
-      updatePayload[strategy.column] = desiredActive;
-    } else {
-      updatePayload[strategy.column] = desiredActive ? null : new Date().toISOString();
-    }
-    if (tenantUsersColumns.has("updated_at")) {
-      updatePayload.updated_at = new Date().toISOString();
-    }
-
-    const { error: updateError } = await sb
+    let membershipError: any = null;
+    const membershipUpsert = await sb
       .from("tenant_users")
-      .update(updatePayload)
-      .eq("tenant_id", tenantId)
-      .eq("user_id", userId);
+      .upsert(membershipPayload, { onConflict: "tenant_id,user_id" });
+    membershipError = membershipUpsert.error ?? null;
 
-    if (updateError) {
-      throw new Error(`tenant_membership_update_failed: ${updateError.message}`);
+    if (membershipError && shouldFallbackToInsert(membershipError)) {
+      const membershipInsert = await sb.from("tenant_users").insert(membershipPayload);
+      if (!membershipInsert.error || isDuplicateError(membershipInsert.error)) {
+        membershipError = null;
+      } else {
+        membershipError = membershipInsert.error;
+      }
+    } else if (membershipError && isDuplicateError(membershipError)) {
+      membershipError = null;
     }
 
-    await writeAuditLog(sb, {
-      tenantId,
-      actorUserId,
-      action: action === "deactivate" ? "user.deactivated" : "user.reactivated",
-      entityType: "USER",
-      entityId: userId,
-      details: {
-        rid: res.locals?.rid,
-        strategy_kind: strategy.kind,
-        strategy_column: strategy.column,
-        previous_active: currentActive,
-        current_active: desiredActive,
-      },
-    });
+    if (membershipError) {
+      return createUserError(res, 500, "tenant_membership_bootstrap_failed", membershipError.message, {
+        step: "tenant_membership_bootstrap",
+      });
+    }
 
     return res.status(200).json({
-      ok: true,
-      user_id: userId,
       tenant_id: tenantId,
-      action,
-      changed: true,
-      already_in_state: false,
-      rid: res.locals?.rid,
+      user_id: bootUserId,
+      role: "ADMIN",
+      is_active: true,
+      bootstrapped: true,
     });
   } catch (err: any) {
-    console.error("ADMIN_USER_LIFECYCLE_ERROR", {
-      action,
+    console.error("ADMIN_TENANT_BOOTSTRAP_MEMBERSHIP_ERROR", {
       method: req.method,
       path: req.originalUrl,
       message: err?.message,
       name: err?.name,
       stack: err?.stack,
     });
-    return errorJson(res, 500, "admin_user_lifecycle_failed", err?.message ?? String(err));
+    return createUserError(res, 500, "admin_tenant_bootstrap_membership_failed", err?.message ?? String(err), {
+      step: "unhandled",
+    });
   }
-}
+});
 
 adminUsersRouter.post("/users/invite", async (req: Request, res: Response) => {
   try {
@@ -626,48 +608,30 @@ adminUsersRouter.post("/users/invite", async (req: Request, res: Response) => {
       );
     }
 
-    const tenantUsersColumns = await getTableColumns(sb, "tenant_users", ["tenant_id", "user_id"]);
-    const tenantUserBase: Record<string, any> = { tenant_id: tenantId, user_id: userId };
-    const tenantStatusStrategy = resolveMembershipStatusStrategy(tenantUsersColumns);
-    if (tenantStatusStrategy.kind === "boolean") {
-      tenantUserBase[tenantStatusStrategy.column] = true;
-    } else if (tenantStatusStrategy.kind === "timestamp") {
-      tenantUserBase[tenantStatusStrategy.column] = null;
-    }
-
-    const tenantUserPayload: Record<string, any> = {};
-    for (const [key, value] of Object.entries(tenantUserBase)) {
-      if (tenantUsersColumns.has(key)) {
-        tenantUserPayload[key] = value;
-      }
-    }
-
-    const hasTenantAndUser = tenantUsersColumns.has("tenant_id") && tenantUsersColumns.has("user_id");
-    const onConflict = hasTenantAndUser ? "tenant_id,user_id" : undefined;
+    const tenantUserPayload: Record<string, any> = {
+      tenant_id: tenantId,
+      user_id: userId,
+      is_active: true,
+      updated_at: new Date().toISOString(),
+    };
 
     let tenantUsersError: any = null;
-    if (Object.keys(tenantUserPayload).length === 0) {
-      tenantUsersError = new Error("tenant_users payload is empty after column filtering");
-    } else {
-      const upsertResult = await sb
-        .from("tenant_users")
-        .upsert(tenantUserPayload, onConflict ? { onConflict } : undefined);
-      tenantUsersError = upsertResult.error ?? null;
+    const upsertResult = await sb
+      .from("tenant_users")
+      .upsert(tenantUserPayload, { onConflict: "tenant_id,user_id" });
+    tenantUsersError = upsertResult.error ?? null;
 
-      if (tenantUsersError && shouldFallbackToInsert(tenantUsersError)) {
-        const insertResult = await sb.from("tenant_users").insert(tenantUserPayload);
-        if (!insertResult.error || isDuplicateError(insertResult.error)) {
-          tenantUsersError = null;
-        } else {
-          tenantUsersError = insertResult.error;
-        }
+    if (tenantUsersError && shouldFallbackToInsert(tenantUsersError)) {
+      const insertResult = await sb.from("tenant_users").insert(tenantUserPayload);
+      if (!insertResult.error || isDuplicateError(insertResult.error)) {
+        tenantUsersError = null;
+      } else {
+        tenantUsersError = insertResult.error;
       }
     }
 
     if (tenantUsersError) {
-      throw new Error(
-        `tenant_users_upsert_failed: ${tenantUsersError.message}; tenant_users_columns=[${Array.from(tenantUsersColumns).sort().join(",")}]`
-      );
+      throw new Error(`tenant_users_upsert_failed: ${tenantUsersError.message}`);
     }
 
     const { data: roleRowExact, error: roleErrExact } = await sb
@@ -797,10 +761,582 @@ adminUsersRouter.post("/users/invite", async (req: Request, res: Response) => {
   }
 });
 
-adminUsersRouter.post("/users/:user_id/deactivate", async (req: Request, res: Response) => {
-  return handleMembershipLifecycle(req, res, "deactivate");
+adminUsersRouter.post("/users", async (req: Request, res: Response) => {
+  const tenantId = String(res.locals?.tenantId || "").trim();
+  if (!tenantId) {
+    return createUserError(res, 400, "missing_tenant_id", { header: "X-Tenant-Id" }, { step: "tenant" });
+  }
+
+  const body = (req.body ?? {}) as CreateUserBody;
+  const email = String(body.email ?? "").trim().toLowerCase();
+  const password = String(body.password ?? "");
+  const roleKeyRaw = String(body.role_key ?? "").trim();
+  const fullName = typeof body.full_name === "string" ? body.full_name.trim() : "";
+
+  const details: Record<string, string> = {};
+  if (!email) {
+    details.email = "required";
+  } else if (!email.includes("@")) {
+    details.email = "invalid";
+  }
+  if (!password) {
+    details.password = "required";
+  }
+  if (!roleKeyRaw) {
+    details.role_key = "required";
+  }
+
+  if (Object.keys(details).length > 0) {
+    return createUserError(res, 400, "validation_error", details, { step: "validation" });
+  }
+
+  const supabaseUrl = process.env.SUPABASE_URL || "";
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  if (!supabaseUrl || !serviceRoleKey) {
+    const missing: string[] = [];
+    if (!supabaseUrl) missing.push("SUPABASE_URL");
+    if (!serviceRoleKey) missing.push("SUPABASE_SERVICE_ROLE_KEY");
+    return createUserError(res, 500, "missing_env", { missing }, { step: "env" });
+  }
+
+  const sb = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+
+  try {
+    const { data: createdData, error: createError } = await sb.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { full_name: fullName },
+    });
+
+    if (createError || !createdData?.user?.id) {
+      if (createError) {
+        console.error("ADMIN_USER_CREATE_AUTH_ERROR", {
+          rid: res.locals?.rid,
+          message: createError.message,
+          status: (createError as any)?.status,
+          email,
+          tenant_id: tenantId,
+        });
+      } else {
+        console.error("ADMIN_USER_CREATE_AUTH_ERROR", {
+          rid: res.locals?.rid,
+          message: "auth_admin_create_missing_user_id",
+          email,
+          tenant_id: tenantId,
+        });
+      }
+      const message = createError?.message ?? "auth_admin_create_failed";
+      const normalized = normalizeErrorMessage(createError ?? message);
+      if (isAlreadyRegisteredMessage(normalized)) {
+        return createUserError(res, 409, "user_already_exists", message, { step: "auth_create" });
+      }
+      if (isInvalidEmailMessage(normalized)) {
+        return createUserError(res, 400, "invalid_email", message, { step: "auth_create" });
+      }
+      if (isInvalidApiKeyMessage(normalized)) {
+        return createUserError(res, 502, "upstream_auth_failed", message, { step: "auth_create" });
+      }
+      return createUserError(res, 500, "auth_admin_api_failed", message, { step: "auth_create" });
+    }
+
+    const userId = createdData.user.id;
+
+    const tenantUserBase: Record<string, any> = {
+      tenant_id: tenantId,
+      user_id: userId,
+      is_active: true,
+      updated_at: new Date().toISOString(),
+    };
+
+    const lookupExistingMembership = async () => {
+      const lookup = await sb
+        .from("tenant_users")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (lookup.error) {
+        console.error("ADMIN_USER_CREATE_TENANT_LOOKUP_ERROR", {
+          rid: res.locals?.rid,
+          tenant_id: tenantId,
+          user_id: userId,
+          message: lookup.error.message,
+        });
+        return {
+          membershipRow: null,
+          errorResponse: createUserError(
+            res,
+            500,
+            "tenant_membership_lookup_failed",
+            lookup.error.message,
+            { step: "tenant_membership_lookup" }
+          ),
+        };
+      }
+      return { membershipRow: lookup.data ?? null, errorResponse: null };
+    };
+
+    let membershipRow: any = null;
+    let membershipError: any = null;
+
+    const attemptMembershipUpsert = await sb
+      .from("tenant_users")
+      .upsert(tenantUserBase, { onConflict: "tenant_id,user_id" })
+      .select()
+      .maybeSingle();
+
+    if (!attemptMembershipUpsert.error) {
+      membershipRow = attemptMembershipUpsert.data ?? null;
+    } else if (isDuplicateError(attemptMembershipUpsert.error)) {
+      console.warn("ADMIN_USER_CREATE_TENANT_UPSERT_DUPLICATE", {
+        rid: res.locals?.rid,
+        tenant_id: tenantId,
+        user_id: userId,
+        message: attemptMembershipUpsert.error.message,
+      });
+      const lookup = await lookupExistingMembership();
+      if (lookup.errorResponse) return lookup.errorResponse;
+      membershipRow = lookup.membershipRow;
+    } else if (shouldFallbackToInsert(attemptMembershipUpsert.error)) {
+      const attemptMembershipInsert = await sb.from("tenant_users").insert(tenantUserBase).select().maybeSingle();
+      if (!attemptMembershipInsert.error) {
+        membershipRow = attemptMembershipInsert.data ?? null;
+      } else if (isDuplicateError(attemptMembershipInsert.error)) {
+        console.warn("ADMIN_USER_CREATE_TENANT_INSERT_DUPLICATE", {
+          rid: res.locals?.rid,
+          tenant_id: tenantId,
+          user_id: userId,
+          message: attemptMembershipInsert.error.message,
+        });
+        const lookup = await lookupExistingMembership();
+        if (lookup.errorResponse) return lookup.errorResponse;
+        membershipRow = lookup.membershipRow;
+      } else {
+        membershipError = attemptMembershipInsert.error;
+      }
+    } else {
+      membershipError = attemptMembershipUpsert.error;
+    }
+
+    if (membershipError) {
+      console.error("ADMIN_USER_CREATE_TENANT_UPSERT_ERROR", {
+        rid: res.locals?.rid,
+        tenant_id: tenantId,
+        user_id: userId,
+        message: membershipError.message,
+      });
+      return createUserError(
+        res,
+        500,
+        "tenant_membership_upsert_failed",
+        membershipError.message,
+        { step: "tenant_membership_upsert" }
+      );
+    }
+
+    const { data: roleRowExact, error: roleErrExact } = await sb
+      .from("roles")
+      .select("id,key")
+      .eq("key", roleKeyRaw)
+      .maybeSingle();
+    if (roleErrExact) {
+      return createUserError(res, 500, "roles_lookup_failed", roleErrExact.message, { step: "role_resolution" });
+    }
+
+    let roleRow = roleRowExact as { id: string; key: string } | null;
+    if (!roleRow) {
+      const { data: roleRowCI, error: roleErrCI } = await sb
+        .from("roles")
+        .select("id,key")
+        .ilike("key", roleKeyRaw)
+        .maybeSingle();
+      if (roleErrCI) {
+        return createUserError(res, 500, "roles_lookup_failed", roleErrCI.message, { step: "role_resolution" });
+      }
+      roleRow = (roleRowCI as { id: string; key: string } | null) ?? null;
+    }
+
+    if (!roleRow) {
+      const { data: validRolesData, error: validRolesError } = await sb.from("roles").select("key").order("key", {
+        ascending: true,
+      });
+      if (validRolesError) {
+        return createUserError(res, 500, "roles_lookup_failed", validRolesError.message, {
+          step: "role_resolution",
+        });
+      }
+      const validRoleKeys = (validRolesData ?? [])
+        .map((r: any) => String(r?.key || "").trim())
+        .filter(Boolean);
+      return createUserError(
+        res,
+        400,
+        "invalid_role_key",
+        {
+          provided: roleKeyRaw,
+          valid_role_keys: validRoleKeys,
+        },
+        { step: "role_resolution" }
+      );
+    }
+
+    const { error: userRoleError } = await sb
+      .from("user_roles")
+      .upsert({ user_id: userId, role_id: roleRow.id }, { onConflict: "user_id" });
+    if (userRoleError) {
+      return createUserError(res, 500, "user_roles_upsert_failed", userRoleError.message, { step: "role_assignment" });
+    }
+
+    return res.status(200).json({
+      user_id: userId,
+      email,
+      tenant_id: tenantId,
+      role_key: roleRow.key,
+    });
+  } catch (err: any) {
+    console.error("ADMIN_USER_CREATE_ERROR", {
+      method: req.method,
+      path: req.originalUrl,
+      message: err?.message,
+      name: err?.name,
+      stack: err?.stack,
+    });
+    return createUserError(res, 500, "admin_user_create_failed", err?.message ?? String(err), {
+      step: "unhandled",
+    });
+  }
 });
 
-adminUsersRouter.post("/users/:user_id/reactivate", async (req: Request, res: Response) => {
-  return handleMembershipLifecycle(req, res, "reactivate");
+adminUsersRouter.delete("/tenant-users/:userId", async (req: Request, res: Response) => {
+  const rid = res.locals?.rid;
+  const tenantId = String(res.locals?.tenantId || "").trim();
+  if (!tenantId) {
+    return createUserError(res, 400, "missing_tenant_id", { header: "X-Tenant-Id" }, { step: "tenant" });
+  }
+  if (!isUuid(tenantId)) {
+    return createUserError(res, 400, "invalid_tenant_id", "X-Tenant-Id must be a UUID", { step: "tenant" });
+  }
+
+  const userId = String(req.params.userId || "").trim();
+  if (!isUuid(userId)) {
+    return createUserError(res, 400, "invalid_user_id", "user_id must be a UUID", { step: "validation" });
+  }
+
+  const actorUserId = resolveActorUserId(req, res);
+  // TODO(auth): derive actor UUID from validated auth token/session rather than optional headers.
+
+  const adminClient = getAdminClientOrError(res);
+  if (adminClient.errorResponse) {
+    return adminClient.errorResponse;
+  }
+  const sb = adminClient.sb;
+
+  try {
+    const { data: membershipRow, error: membershipLookupError } = await sb
+      .from("tenant_users")
+      .select("tenant_id,user_id,role")
+      .eq("tenant_id", tenantId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (membershipLookupError) {
+      return createUserError(res, 500, "tenant_membership_lookup_failed", membershipLookupError.message, {
+        step: "tenant_membership_lookup",
+      });
+    }
+    if (!membershipRow) {
+      return res.status(404).type("application/json").json({
+        error: "membership_not_found",
+        message: "User is not a member of this tenant.",
+        context: { step: "tenant_membership_lookup" },
+      });
+    }
+
+    if (actorUserId && actorUserId === userId) {
+      return res.status(409).type("application/json").json({
+        error: "cannot_remove_self",
+        message: "Cannot remove your own membership from this tenant.",
+        context: { step: "safety_guard" },
+      });
+    }
+
+    const targetIsAdminMembership = isTenantMembershipAdminRole((membershipRow as any)?.role);
+    const { count: adminCount, error: adminCountError } = await sb
+      .from("tenant_users")
+      .select("user_id", { count: "exact", head: true })
+      .eq("tenant_id", tenantId)
+      .ilike("role", "admin");
+    if (adminCountError) {
+      return createUserError(res, 500, "tenant_admin_count_failed", adminCountError.message, {
+        step: "safety_guard",
+      });
+    }
+    if (targetIsAdminMembership && (adminCount ?? 0) <= 1) {
+      return res.status(409).type("application/json").json({
+        error: "cannot_remove_last_admin",
+        details: "Tenant must have at least one admin.",
+      });
+    }
+
+    const { error: membershipDeleteError } = await sb
+      .from("tenant_users")
+      .delete()
+      .eq("tenant_id", tenantId)
+      .eq("user_id", userId);
+    if (membershipDeleteError) {
+      if (isForeignKeyConstraintError(membershipDeleteError)) {
+        return res.status(409).type("application/json").json({
+          error: "cannot_remove_membership",
+          message: "Cannot remove: user has tenant membership or related records.",
+          context: { step: "tenant_membership_delete" },
+        });
+      }
+      return createUserError(res, 500, "tenant_membership_delete_failed", membershipDeleteError.message, {
+        step: "tenant_membership_delete",
+      });
+    }
+
+    console.info("ADMIN_TENANT_USER_REMOVE_SUCCESS", {
+      rid,
+      tenant_id: tenantId,
+      user_id: userId,
+    });
+
+    return res.status(200).json({
+      success: true,
+      removed: true,
+    });
+  } catch (err: any) {
+    console.error("ADMIN_TENANT_USER_REMOVE_ERROR", {
+      rid,
+      method: req.method,
+      path: req.originalUrl,
+      tenant_id: tenantId,
+      user_id: userId,
+      message: err?.message,
+      name: err?.name,
+      stack: err?.stack,
+    });
+    return createUserError(res, 500, "admin_tenant_user_remove_failed", err?.message ?? String(err), {
+      step: "unhandled",
+    });
+  }
+});
+
+adminUsersRouter.delete("/users/:userId", async (req: Request, res: Response) => {
+  const rid = res.locals?.rid;
+  const tenantId = String(res.locals?.tenantId || "").trim();
+  if (!tenantId) {
+    return res.status(400).type("application/json").json({
+      deleted: false,
+      reason: "missing_tenant_id",
+      details: { header: "X-Tenant-Id" },
+    });
+  }
+  if (!isUuid(tenantId)) {
+    return res.status(400).type("application/json").json({
+      deleted: false,
+      reason: "invalid_tenant_id",
+      details: "X-Tenant-Id must be a UUID",
+    });
+  }
+
+  const userId = String(req.params.userId || "").trim();
+  if (!isUuid(userId)) {
+    return res.status(400).type("application/json").json({
+      deleted: false,
+      reason: "invalid_user_id",
+      details: "user_id must be a UUID",
+    });
+  }
+
+  const actorUserId = resolveActorUserId(req, res);
+
+  const adminClient = getAdminClientOrError(res);
+  if (adminClient.errorResponse) {
+    return adminClient.errorResponse;
+  }
+  const sb = adminClient.sb;
+
+  try {
+    console.info("ADMIN_USER_DELETE_REQUEST", {
+      rid,
+      tenant_id: tenantId,
+      user_id: userId,
+    });
+
+    if (actorUserId && actorUserId === userId) {
+      return res.status(409).type("application/json").json({
+        deleted: false,
+        reason: "cannot_delete_self",
+      });
+    }
+
+    const tenantAdminUserIds = await listTenantAdminUserIds(sb, tenantId);
+    const adminCountAfterDelete = tenantAdminUserIds.size - (tenantAdminUserIds.has(userId) ? 1 : 0);
+    if (adminCountAfterDelete <= 0) {
+      return res.status(409).type("application/json").json({
+        deleted: false,
+        reason: "last_active_admin_guard",
+      });
+    }
+
+    const { data: authLookupData, error: authLookupError } = await sb.auth.admin.getUserById(userId);
+    if (authLookupError || !authLookupData?.user?.id) {
+      const message = authLookupError?.message ?? "User not found";
+      const normalized = normalizeErrorMessage(authLookupError ?? message);
+      if (
+        normalized.includes("user not found") ||
+        normalized.includes("not found") ||
+        normalized.includes("unable to find user")
+      ) {
+        return res.status(404).type("application/json").json({
+          deleted: false,
+          reason: "user_not_found",
+          details: { step: "auth_user_lookup" },
+        });
+      }
+      if (isInvalidApiKeyMessage(normalized)) {
+        return res.status(502).type("application/json").json({
+          deleted: false,
+          reason: "upstream_auth_failed",
+          details: { message, step: "auth_user_lookup" },
+        });
+      }
+      return res.status(500).type("application/json").json({
+        deleted: false,
+        reason: "auth_user_lookup_failed",
+        details: { message, step: "auth_user_lookup" },
+      });
+    }
+
+    const { data: memberships, error: membershipsError } = await sb
+      .from("tenant_users")
+      .select("tenant_id")
+      .eq("user_id", userId)
+      .limit(1);
+    if (membershipsError) {
+      return res.status(500).type("application/json").json({
+        deleted: false,
+        reason: "tenant_membership_lookup_failed",
+        details: { message: membershipsError.message, step: "unused_account_check" },
+      });
+    }
+
+    if ((memberships ?? []).length > 0) {
+      return res.status(409).type("application/json").json({
+        deleted: false,
+        reason: "cannot_delete_used_account",
+        details: "Cannot delete: user has tenant membership or related records.",
+      });
+    }
+
+    const { error: membershipDeleteError } = await sb.from("tenant_users").delete().eq("user_id", userId);
+    if (membershipDeleteError) {
+      if (isForeignKeyConstraintError(membershipDeleteError)) {
+        return res.status(409).type("application/json").json({
+          deleted: false,
+          reason: "cannot_delete_used_account",
+          details: "Cannot delete: user has tenant membership or related records.",
+        });
+      }
+      return res.status(500).type("application/json").json({
+        deleted: false,
+        reason: "tenant_membership_delete_failed",
+        details: { message: membershipDeleteError.message, step: "tenant_membership_delete" },
+      });
+    }
+
+    const { error: userRolesDeleteError } = await sb.from("user_roles").delete().eq("user_id", userId);
+    if (userRolesDeleteError) {
+      if (isForeignKeyConstraintError(userRolesDeleteError)) {
+        return res.status(409).type("application/json").json({
+          deleted: false,
+          reason: "cannot_delete_used_account",
+          details: "Cannot delete: user has tenant membership or related records.",
+        });
+      }
+      return res.status(500).type("application/json").json({
+        deleted: false,
+        reason: "user_roles_delete_failed",
+        details: { message: userRolesDeleteError.message, step: "user_roles_delete" },
+      });
+    }
+
+    const { error: userProfilesDeleteError } = await sb.from("user_profiles").delete().eq("id", userId);
+    if (userProfilesDeleteError) {
+      if (isForeignKeyConstraintError(userProfilesDeleteError)) {
+        return res.status(409).type("application/json").json({
+          deleted: false,
+          reason: "cannot_delete_used_account",
+          details: "Cannot delete: user has tenant membership or related records.",
+        });
+      }
+      return res.status(500).type("application/json").json({
+        deleted: false,
+        reason: "user_profiles_delete_failed",
+        details: { message: userProfilesDeleteError.message, step: "user_profiles_delete" },
+      });
+    }
+
+    const { error: authDeleteError } = await sb.auth.admin.deleteUser(userId);
+    if (authDeleteError) {
+      const message = authDeleteError.message ?? "auth_user_delete_failed";
+      const normalized = normalizeErrorMessage(authDeleteError ?? message);
+      if (normalized.includes("user not found") || normalized.includes("not found")) {
+        return res.status(404).type("application/json").json({
+          deleted: false,
+          reason: "user_not_found",
+          details: { step: "auth_user_delete" },
+        });
+      }
+      if (isForeignKeyConstraintError(authDeleteError)) {
+        return res.status(409).type("application/json").json({
+          deleted: false,
+          reason: "cannot_delete_used_account",
+          details: "Cannot delete: user has tenant membership or related records.",
+        });
+      }
+      if (isInvalidApiKeyMessage(normalized)) {
+        return res.status(502).type("application/json").json({
+          deleted: false,
+          reason: "upstream_auth_failed",
+          details: { message, step: "auth_user_delete" },
+        });
+      }
+      return res.status(500).type("application/json").json({
+        deleted: false,
+        reason: "auth_user_delete_failed",
+        details: { message, step: "auth_user_delete" },
+      });
+    }
+
+    console.info("ADMIN_USER_DELETE_SUCCESS", {
+      rid,
+      tenant_id: tenantId,
+      user_id: userId,
+    });
+
+    return res.status(200).json({
+      deleted: true,
+    });
+  } catch (err: any) {
+    console.error("ADMIN_USER_DELETE_ERROR", {
+      rid,
+      method: req.method,
+      path: req.originalUrl,
+      tenant_id: tenantId,
+      user_id: userId,
+      message: err?.message,
+      name: err?.name,
+      stack: err?.stack,
+    });
+    return res.status(500).type("application/json").json({
+      deleted: false,
+      reason: "admin_user_delete_failed",
+      details: { message: err?.message ?? String(err), step: "unhandled" },
+    });
+  }
 });

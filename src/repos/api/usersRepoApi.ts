@@ -2,21 +2,17 @@ import { supabase } from '@/integrations/supabase/client';
 
 export type UserRow = {
   tenant_id?: string | null;
-  user_id: string;
+  id?: string | null;
+  user_id?: string | null;
   email?: string | null;
   username?: string | null;
   full_name?: string | null;
   role_key?: string | null;
   membership_role?: string | null;
-  is_active?: boolean | null;
   created_at?: string | null;
-};
-
-export type InviteUserResponse = {
-  user_id: string;
-  email: string;
-  tenant_id: string;
-  role_key: string;
+  updated_at?: string | null;
+  can_remove_from_tenant?: boolean;
+  remove_disabled_reason?: string | null;
 };
 
 export type UpdateRoleResponse = {
@@ -24,25 +20,11 @@ export type UpdateRoleResponse = {
   role_key: string;
 };
 
-export type ToggleActiveResponse = {
-  user_id: string;
-  is_active: boolean;
-};
+const ADMIN_API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL ?? 'http://localhost:4000/api/v1';
+const ADMIN_API_KEY = import.meta.env.VITE_SHOPFLOW_ADMIN_API_KEY ?? '';
 
 function isUuid(v: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
-}
-
-async function getTenantIdOrThrow() {
-  const { data: tenantData, error: tenantError } = await supabase.rpc('current_tenant_id');
-  if (tenantError) {
-    throw new Error(tenantError.message || 'No active tenant selected.');
-  }
-  const tenantId = (tenantData ?? '').toString().trim();
-  if (!tenantId || !isUuid(tenantId)) {
-    throw new Error('Invalid tenant id; expected UUID');
-  }
-  return tenantId;
 }
 
 async function extractEdgeErrorMessage(data: any, error: any): Promise<string> {
@@ -93,25 +75,58 @@ async function invokeEdge<T>(name: string, body: Record<string, unknown>): Promi
   return data as T;
 }
 
-export async function listUsers(): Promise<UserRow[]> {
-  const { data: tenantId, error: tenantError } = await supabase.rpc('current_tenant_id');
-  if (tenantError) {
-    throw new Error(tenantError.message || 'No active tenant selected');
+export async function listUsers(tenantId: string, actorUserId?: string): Promise<UserRow[]> {
+  if (!ADMIN_API_KEY) {
+    throw new Error('Missing VITE_SHOPFLOW_ADMIN_API_KEY');
   }
-  if (!tenantId) {
+  const normalizedTenantId = String(tenantId || '').trim();
+  if (!isUuid(normalizedTenantId)) {
     throw new Error('No active tenant selected');
   }
 
-  const { data, error } = await supabase
-    .from('tenant_user_directory_v')
-    .select('*')
-    .eq('tenant_id', tenantId);
-
-  if (error) {
-    throw new Error(error.message);
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    'X-Tenant-Id': normalizedTenantId,
+    'x-shopflow-admin-key': ADMIN_API_KEY,
+  };
+  if (actorUserId && isUuid(String(actorUserId))) {
+    headers['x-actor-user-id'] = String(actorUserId);
   }
 
-  return (data ?? []) as UserRow[];
+  const response = await fetch(`${ADMIN_API_BASE_URL}/admin/users`, {
+    method: 'GET',
+    headers,
+  });
+
+  const rawText = await response.text();
+  let data: any = null;
+  if (rawText) {
+    try {
+      data = JSON.parse(rawText);
+    } catch {
+      data = null;
+    }
+  }
+
+  if (!response.ok) {
+    const message =
+      (data && typeof data === 'object' && (data.message || data.error)) ||
+      rawText ||
+      response.statusText ||
+      'Failed to load users';
+    throw new Error(String(message));
+  }
+
+  const rows = Array.isArray(data) ? data : [];
+  return rows.map((row: any) => ({
+    ...(row as UserRow),
+    id: row?.id ? String(row.id) : row?.user_id ? String(row.user_id) : null,
+    user_id: row?.user_id ? String(row.user_id) : row?.id ? String(row.id) : null,
+    updated_at: row?.updated_at ? String(row.updated_at) : null,
+    can_remove_from_tenant:
+      typeof row?.can_remove_from_tenant === 'boolean' ? row.can_remove_from_tenant : undefined,
+    remove_disabled_reason: row?.remove_disabled_reason ? String(row.remove_disabled_reason) : null,
+  })) as UserRow[];
 }
 
 export async function updateUserRole(payload: {
@@ -134,46 +149,6 @@ export async function updateUserRole(payload: {
   return await invokeEdge<UpdateRoleResponse>('users-update-role', {
     tenant_id,
     user_id,
-    role_key,
-  });
-}
-
-export async function toggleUserActive(payload: {
-  user_id: string;
-  is_active: boolean;
-}): Promise<ToggleActiveResponse> {
-  const user_id = (payload.user_id ?? '').toString().trim();
-  if (!isUuid(user_id)) {
-    throw new Error('Invalid user id; expected UUID');
-  }
-  if (typeof payload.is_active !== 'boolean') {
-    throw new Error('is_active must be boolean');
-  }
-  return await invokeEdge<ToggleActiveResponse>('users-toggle-active', {
-    user_id,
-    is_active: payload.is_active,
-  });
-}
-
-export async function inviteUser(payload: {
-  tenant_id?: string;
-  email?: string;
-  role_key?: string;
-}): Promise<InviteUserResponse> {
-  const email = (payload.email ?? '').toString().trim().toLowerCase();
-  const role_key = (payload.role_key ?? '').toString().trim().toLowerCase() || 'technician';
-  const tenant_id = payload.tenant_id ?? (await getTenantIdOrThrow());
-
-  if (!email || !email.includes('@')) {
-    throw new Error('A valid email is required.');
-  }
-  if (!isUuid(tenant_id)) {
-    throw new Error('Invalid tenant id; expected UUID');
-  }
-
-  return await invokeEdge<InviteUserResponse>('users-invite', {
-    tenant_id,
-    email,
     role_key,
   });
 }

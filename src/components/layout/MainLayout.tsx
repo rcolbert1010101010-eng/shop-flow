@@ -33,13 +33,15 @@ export function MainLayout() {
         variant: 'destructive',
       });
     } finally {
-      if (isPasswordFlow) {
-        return;
-      }
-      navigate('/login', { replace: true });
-      if (location.pathname !== '/login') {
-        window.location.href = '/login';
-      }
+      setMobileNavOpen(false);
+    }
+
+    if (isPasswordFlow) {
+      return;
+    }
+    navigate('/login', { replace: true });
+    if (location.pathname !== '/login') {
+      window.location.href = '/login';
     }
   };
 
