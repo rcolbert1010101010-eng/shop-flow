@@ -1,0 +1,8 @@
+[functions.qb-query]
+verify_jwt = false
+
+[functions.qb-sender]
+verify_jwt = false
+
+[functions.qb-sender-cron]
+verify_jwt = false

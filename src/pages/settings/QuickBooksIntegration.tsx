@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,14 +13,20 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { quickbooksIntegrationHelp } from '@/help/quickbooksIntegrationHelp';
 // Roadmap: see docs/accounting/quickbooks_roadmap.md for phased implementation details.
 import { useToast } from '@/components/ui/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 import { useQuickBooksIntegration } from '@/hooks/useQuickBooksIntegration';
 import { usePermissions } from '@/security/usePermissions';
+import { useAuthStore } from '@/stores/authStore';
 
 const providerName = 'QuickBooks';
 
 export default function QuickBooksIntegration() {
   const { toast } = useToast();
   const { can, role } = usePermissions();
+  const activeTenantId = useAuthStore((state) => state.activeTenantId);
+  const ensureActiveTenant = useAuthStore((state) => state.ensureActiveTenant);
+  const authUserId = useAuthStore((state) => state.user?.id ?? state.profile?.id ?? '');
+  const isAdmin = role === 'ADMIN';
   const canEdit = can('settings.edit') || role === 'ADMIN';
   const {
     connection,
@@ -42,12 +48,64 @@ export default function QuickBooksIntegration() {
   const [payloadLoading, setPayloadLoading] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [senderRunning, setSenderRunning] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [connectError, setConnectError] = useState<string | null>(null);
+  const [connectErrorDetails, setConnectErrorDetails] = useState<string | null>(null);
+  const [oauthStartAvailable, setOauthStartAvailable] = useState<boolean | null>(null);
+  const [checkingOauthStart, setCheckingOauthStart] = useState(false);
   const transferMode = draft?.transfer_mode ?? 'IMPORT_ONLY';
   const isLiveTransfer = transferMode === 'LIVE_TRANSFER';
+  const realmMissingWhileConnected = connection?.status === 'CONNECTED' && !connection?.external_realm_id;
+
+  const resolveTenantId = useCallback(async () => {
+    let tenantId = String(activeTenantId || '').trim();
+    if (!tenantId) {
+      const ensuredTenantId = await ensureActiveTenant(authUserId || undefined);
+      tenantId = String(ensuredTenantId || '').trim();
+    }
+    return tenantId;
+  }, [activeTenantId, ensureActiveTenant, authUserId]);
+
+  const safeStringify = (value: unknown) => {
+    const seen = new WeakSet<object>();
+    try {
+      return JSON.stringify(
+        value,
+        (_key, currentValue) => {
+          if (typeof currentValue === 'object' && currentValue !== null) {
+            if (seen.has(currentValue)) return '[Circular]';
+            seen.add(currentValue);
+          }
+          return currentValue;
+        },
+        2,
+      );
+    } catch {
+      return String(value);
+    }
+  };
+
+  const buildConnectErrorDetails = (err: any) => {
+    const message = err?.message || 'Unknown error';
+    const details: Record<string, unknown> = {};
+    if (err?.response !== undefined) details.response = err.response;
+    if (err?.body !== undefined) details.body = err.body;
+    if (err?.context !== undefined) details.context = err.context;
+    if (Object.keys(details).length === 0) return message;
+    return `${message} | ${safeStringify(details)}`;
+  };
 
   const handleSave = async () => {
     if (!draft) return;
-    await saveConfig(draft);
+    const result = await saveConfig(draft);
+    if (!result.ok) {
+      toast({
+        title: 'Save failed',
+        description: result.error ?? 'Unable to save QuickBooks integration settings.',
+        variant: 'destructive',
+      });
+      return;
+    }
     toast({ title: 'Settings saved', description: 'QuickBooks integration settings updated.' });
   };
 
@@ -59,11 +117,11 @@ export default function QuickBooksIntegration() {
       customer: { shopflow_customer_id: 'TEST', display_name: 'Test Customer' },
       invoice: { invoice_number: 'TEST-001', invoice_date: new Date().toISOString() },
       lines: [
-        { kind: 'LABOR', amount: 0, account_ref: draft.income_account_labor },
-        { kind: 'PARTS', amount: 0, account_ref: draft.income_account_parts },
+        { kind: 'LABOR', amount: 100, account_ref: draft.income_account_labor },
+        { kind: 'PARTS', amount: 50, account_ref: draft.income_account_parts },
       ],
       tax: { amount: 0, liability_account_ref: draft.liability_account_sales_tax },
-      total: 0,
+      total: 150,
     };
     const result = await createTestExport(payload);
     if (!result?.success) {
@@ -90,6 +148,48 @@ export default function QuickBooksIntegration() {
     };
     void loadExports();
   }, [listRecentExports]);
+
+  useEffect(() => {
+    let mounted = true;
+    const checkOauthStart = async () => {
+      if (!supabase || !isAdmin) {
+        if (mounted) setOauthStartAvailable(false);
+        return;
+      }
+
+      setCheckingOauthStart(true);
+      try {
+        const tenantId = await resolveTenantId();
+        if (!tenantId) {
+          if (!mounted) return;
+          setOauthStartAvailable(false);
+          return;
+        }
+        const { error } = await supabase.functions.invoke('qb-oauth-start', {
+          headers: { 'x-shopflow-tenant-id': tenantId },
+          body: {},
+        });
+        if (!mounted) return;
+        if (!error) {
+          setOauthStartAvailable(true);
+          return;
+        }
+        const status = (error as any)?.context?.status ?? (error as any)?.status;
+        setOauthStartAvailable(status !== 404);
+      } catch (err: any) {
+        if (!mounted) return;
+        const status = err?.context?.status ?? err?.status;
+        setOauthStartAvailable(status !== 404);
+      } finally {
+        if (mounted) setCheckingOauthStart(false);
+      }
+    };
+
+    void checkOauthStart();
+    return () => {
+      mounted = false;
+    };
+  }, [isAdmin, resolveTenantId]);
 
   const statusBadge = useMemo(() => {
     const status = connectedStatus || 'DISCONNECTED';
@@ -146,16 +246,124 @@ export default function QuickBooksIntegration() {
   };
 
   const handleConnect = async () => {
+    if (!supabase) {
+      toast({ title: 'Supabase unavailable', description: 'Supabase client is not configured.', variant: 'destructive' });
+      return;
+    }
+
+    setConnectError(null);
+    setConnectErrorDetails(null);
+    setConnecting(true);
     try {
-      throw new Error(
-        [
-          'Browser QuickBooks Edge calls are disabled.',
-          'Run these edge functions only from server-side OR via a local admin script.',
-          'Future endpoint: /api/integrations/quickbooks/*',
-        ].join(' '),
-      );
+      const tenantId = await resolveTenantId();
+      if (!tenantId) {
+        const message = 'No active tenant selected.';
+        setConnectError(message);
+        setConnectErrorDetails(message);
+        toast({ title: 'Unable to start connect', description: message, variant: 'destructive' });
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('qb-oauth-start', {
+        headers: { 'x-shopflow-tenant-id': tenantId },
+        body: {},
+      });
+      if (error) {
+        const status = (error as any)?.context?.status ?? (error as any)?.status ?? (error as any)?.response?.status;
+        if (status === 404) {
+          setOauthStartAvailable(false);
+        }
+        const message = error.message || 'Unknown error';
+        const details = buildConnectErrorDetails(error);
+        setConnectError(message);
+        setConnectErrorDetails(details);
+        console.error('qb-oauth-start invoke error', error);
+        toast({ title: 'Unable to start connect', description: message, variant: 'destructive' });
+        return;
+      }
+
+      const returnedUrl = (data as any)?.authorize_url || (data as any)?.url;
+      if (!returnedUrl || typeof returnedUrl !== 'string') {
+        throw new Error('Missing authorize URL in response.');
+      }
+
+      window.location.href = returnedUrl;
     } catch (err: any) {
-      toast({ title: 'Unable to start connect', description: err?.message || 'Unknown error', variant: 'destructive' });
+      const status = err?.context?.status ?? err?.status;
+      if (status === 404) {
+        setOauthStartAvailable(false);
+      }
+      const message = err?.message || 'Unknown error';
+      const details = buildConnectErrorDetails(err);
+      setConnectError(message);
+      setConnectErrorDetails(details);
+      console.error('qb-oauth-start invoke failed', err);
+      toast({ title: 'Unable to start connect', description: message, variant: 'destructive' });
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const getDevAuthContext = async () => {
+    if (!supabase) {
+      toast({ title: 'Supabase unavailable', description: 'Supabase client is not configured.', variant: 'destructive' });
+      return null;
+    }
+
+    try {
+      await supabase.auth.refreshSession();
+    } catch {
+      // Ignore refresh failures and fall back to the current session.
+    }
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) {
+      toast({ title: 'Missing session token', description: 'Sign in and try again.', variant: 'destructive' });
+      return null;
+    }
+
+    const apikey = (supabase as any).supabaseKey as string | undefined;
+    if (!apikey) {
+      toast({ title: 'Missing anon key', description: 'Supabase anon key is unavailable.', variant: 'destructive' });
+      return null;
+    }
+
+    return { token, apikey };
+  };
+
+  const handleCopyQbSenderCurl = async () => {
+    const auth = await getDevAuthContext();
+    if (!auth) return;
+
+    const cmd = [
+      'curl -sS -X POST "https://qaraqoyqobqzytrnsqje.supabase.co/functions/v1/qb-sender" \\',
+      `  -H "apikey: ${auth.apikey}" \\`,
+      `  -H "Authorization: Bearer ${auth.token}" \\`,
+      '  -H "Content-Type: application/json" \\',
+      "  -d '{}'",
+    ].join('\n');
+
+    try {
+      await navigator.clipboard.writeText(cmd);
+      toast({ title: 'Copied', description: 'qb-sender curl command copied.' });
+    } catch {
+      toast({ title: 'Copy failed', description: 'Unable to write to clipboard.', variant: 'destructive' });
+    }
+  };
+
+  const handleCopyAuthProbeCurl = async () => {
+    const auth = await getDevAuthContext();
+    if (!auth) return;
+
+    const cmd = `curl -sS -i "https://qaraqoyqobqzytrnsqje.supabase.co/auth/v1/user" -H "apikey: ${auth.apikey}" -H "Authorization: Bearer ${auth.token}"`;
+    try {
+      await navigator.clipboard.writeText(cmd);
+      toast({ title: 'Copied', description: 'Auth probe curl command copied.' });
+    } catch {
+      toast({ title: 'Copy failed', description: 'Unable to write to clipboard.', variant: 'destructive' });
     }
   };
 
@@ -194,35 +402,50 @@ export default function QuickBooksIntegration() {
           <AlertDescription>Contact an administrator to configure QuickBooks integration.</AlertDescription>
         </Alert>
       )}
+      {realmMissingWhileConnected && (
+        <Alert variant="destructive">
+          <AlertTitle>Connected but realm missing — reconnect required</AlertTitle>
+          <AlertDescription>The QuickBooks connection is missing realm context. Reconnect to repair this integration.</AlertDescription>
+        </Alert>
+      )}
 
       <Card>
         <CardHeader>
           <CardTitle>Connection</CardTitle>
         </CardHeader>
           <CardContent className="space-y-3">
+            {connectError && (
+              <Alert variant="destructive">
+                <AlertTitle>Unable to start connect</AlertTitle>
+                <AlertDescription>
+                  <div>{connectError}</div>
+                  <div className="mt-1 text-xs">Details: {connectErrorDetails ?? connectError}</div>
+                </AlertDescription>
+              </Alert>
+            )}
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-sm font-semibold">{providerName}</div>
                 <div className="text-xs text-muted-foreground">Status: {statusBadge}</div>
               </div>
               <div className="flex gap-2">
-                {canEdit && connectedStatus !== 'CONNECTED' && (
+                {isAdmin && oauthStartAvailable !== false && (
                   <Button
                     variant="default"
                     size="sm"
                     onClick={handleConnect}
-                    disabled={saving}
+                    disabled={saving || connecting || checkingOauthStart}
                   >
-                    Connect to QuickBooks
+                    {checkingOauthStart ? 'Checking OAuth...' : connecting ? 'Connecting...' : 'Connect to QuickBooks'}
                   </Button>
                 )}
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
                   onClick={() => setConnectedStatus('CONNECTED')}
                   disabled={saving || !canEdit}
                 >
-                  Simulate Connect
+                  Simulate Connect (Dev)
                 </Button>
                 <Button
                   variant="outline"
@@ -487,6 +710,22 @@ export default function QuickBooksIntegration() {
           )}
         </CardContent>
       </Card>
+
+      {import.meta.env.DEV && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Dev Tools</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-3">
+            <Button size="sm" variant="outline" onClick={handleCopyQbSenderCurl}>
+              Copy qb-sender curl
+            </Button>
+            <Button size="sm" variant="outline" onClick={handleCopyAuthProbeCurl}>
+              Copy auth probe curl
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <Dialog open={payloadDialogOpen} onOpenChange={setPayloadDialogOpen}>
         <DialogContent className="max-w-3xl">

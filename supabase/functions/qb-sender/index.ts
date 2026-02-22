@@ -1,18 +1,13 @@
 // QuickBooks sender worker: claims accounting_exports and posts invoices
-// Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, QUICKBOOKS_ENV, QUICKBOOKS_TOKEN_ENC_KEY, QUICKBOOKS_CLIENT_ID, QUICKBOOKS_CLIENT_SECRET
+// Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, QUICKBOOKS_ENVIRONMENT, QUICKBOOKS_TOKEN_ENC_KEY, QUICKBOOKS_CLIENT_ID, QUICKBOOKS_CLIENT_SECRET, SHOPFLOW_SERVICE_KEY
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-import { decryptToken } from '../_shared/qb_crypto.ts';
+import { getQboApiBase } from '../_shared/qb_env.ts';
 import { refreshQuickBooksAccessToken } from '../_shared/qb_refresh.ts';
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const tokenKey = Deno.env.get('QUICKBOOKS_TOKEN_ENC_KEY')!;
-const qbEnv = (Deno.env.get('QUICKBOOKS_ENV') || 'sandbox').toLowerCase();
-
-const qbApiBase =
-  qbEnv === 'production'
-    ? 'https://quickbooks.api.intuit.com'
-    : 'https://sandbox-quickbooks.api.intuit.com';
+const shopflowServiceKey = (Deno.env.get('SHOPFLOW_SERVICE_KEY') ?? '').trim();
+const qbApiBase = getQboApiBase();
 
 const supabase = createClient(supabaseUrl, serviceRoleKey, {
   auth: { autoRefreshToken: false, persistSession: false },
@@ -20,7 +15,7 @@ const supabase = createClient(supabaseUrl, serviceRoleKey, {
 
 const corsHeaders = {
   'access-control-allow-origin': '*',
-  'access-control-allow-headers': 'authorization, x-client-info, apikey, content-type',
+  'access-control-allow-headers': 'authorization, x-client-info, apikey, content-type, x-shopflow-service-key',
 };
 
 const backoffMs = (attempt: number) => {
@@ -57,29 +52,6 @@ type IntegrationConfig = {
   qb_item_ref_fees_sublet?: string | null;
 };
 
-const parseJwt = (token: string) => {
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
-    return payload;
-  } catch {
-    return null;
-  }
-};
-
-const isAdminOrService = (req: Request) => {
-  const authHeader = req.headers.get('authorization') || '';
-  if (authHeader.startsWith('Bearer ')) {
-    const token = authHeader.slice('Bearer '.length).trim();
-    if (token === serviceRoleKey) return true;
-    const payload = parseJwt(token);
-    const role = payload?.role || payload?.app_metadata?.role || payload?.user_metadata?.role;
-    return role === 'ADMIN' || role === 'service_role';
-  }
-  return false;
-};
-
 const parseLimit = async (req: Request) => {
   const url = new URL(req.url);
   const fromQuery = Number(url.searchParams.get('limit'));
@@ -112,7 +84,7 @@ const normalizeClaimedIds = (data: unknown): string[] => {
 };
 
 const claimExports = async (limit: number) => {
-  const { data, error } = await supabase.rpc('claim_accounting_exports', {
+  const { data, error } = await supabase.rpc('claim_accounting_exports_service', {
     p_provider: 'quickbooks',
     p_limit: limit,
   });
@@ -133,13 +105,14 @@ const loadExports = async (ids: string[]) => {
 const loadConnection = async (tenantId: string | null) => {
   if (!tenantId) return { error: 'tenant_id missing on export' } as const;
   const { data, error } = await supabase
-    .from('quickbooks_connections')
+    .from('integration_connections')
     .select('*')
     .eq('tenant_id', tenantId)
-    .eq('status', 'CONNECTED')
+    .eq('provider', 'quickbooks')
+    .in('status', ['CONNECTED', 'ACTIVE'])
     .maybeSingle();
   if (error || !data) return { error: 'QB not connected' } as const;
-  if (!data.realm_id) return { error: 'QB realm missing' } as const;
+  if (!data.external_realm_id) return { error: 'QB realm missing' } as const;
   return { conn: data } as const;
 };
 
@@ -153,30 +126,23 @@ const loadConfig = async (tenantId: string | null) => {
     .maybeSingle();
   if (error || !data) return { error: 'QuickBooks config missing' } as const;
   if (data.is_enabled !== true) return { error: 'QuickBooks config disabled' } as const;
-  if (data.transfer_mode !== 'LIVE_TRANSFER') {
-    return { error: 'QuickBooks transfer_mode is not LIVE_TRANSFER' } as const;
+  const tm = (data.transfer_mode ?? 'IMPORT_ONLY').toString().toUpperCase();
+  if (tm !== 'LIVE_TRANSFER' && tm !== 'IMPORT_ONLY') {
+    return { error: `QuickBooks transfer_mode is invalid: ${data.transfer_mode}` } as const;
   }
   return { cfg: data as IntegrationConfig } as const;
 };
 
 const ensureAccessToken = async (conn: any) => {
-  const expiresAt = conn.expires_at ? new Date(conn.expires_at).getTime() : null;
+  const expiresAt = conn.access_token_expires_at ? new Date(conn.access_token_expires_at).getTime() : null;
   const needsRefresh = expiresAt !== null && expiresAt - Date.now() <= 2 * 60 * 1000;
   if (!needsRefresh) {
-    return { accessToken: await decryptToken(tokenKey, conn.access_token_enc), connUpdated: false };
+    if (!conn.access_token) throw new Error('Access token missing');
+    return { accessToken: conn.access_token as string, connUpdated: false };
   }
-  if (!conn.refresh_token_enc) throw new Error('Refresh token missing');
-  const refreshed = await refreshQuickBooksAccessToken(conn.refresh_token_enc);
-  await supabase
-    .from('quickbooks_connections')
-    .update({
-      access_token_enc: refreshed.accessEnc,
-      refresh_token_enc: refreshed.refreshEnc,
-      expires_at: refreshed.expiresAt,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('tenant_id', conn.tenant_id);
-  return { accessToken: await decryptToken(tokenKey, refreshed.accessEnc), connUpdated: true };
+  if (!conn.refresh_token) throw new Error('Refresh token missing');
+  const refreshed = await refreshQuickBooksAccessToken(supabase, conn.tenant_id);
+  return { accessToken: refreshed.accessToken, connUpdated: true };
 };
 
 const buildInvoiceBody = (payload: any, cfg: IntegrationConfig) => {
@@ -321,7 +287,7 @@ const processRow = async (row: ExportRow) => {
     return { failed: true };
   }
 
-  const realmId = conn.realm_id;
+  const realmId = conn.external_realm_id;
   const url = `${qbApiBase}/v3/company/${realmId}/invoice?minorversion=73`;
 
   const resp = await fetch(url, {
@@ -369,8 +335,13 @@ const processRow = async (row: ExportRow) => {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
-  if (!isAdminOrService(req)) {
-    return new Response('Unauthorized', { status: 401, headers: corsHeaders });
+  console.log('SHOPFLOW_SERVICE_KEY:', shopflowServiceKey);
+  const incomingServiceKey = (req.headers.get('x-shopflow-service-key') ?? '').trim();
+  if (!shopflowServiceKey || !incomingServiceKey || incomingServiceKey !== shopflowServiceKey) {
+    return new Response(JSON.stringify({ error: 'unauthorized' }), {
+      status: 401,
+      headers: { 'content-type': 'application/json', ...corsHeaders },
+    });
   }
 
   const limit = await parseLimit(req);

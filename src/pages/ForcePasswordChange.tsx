@@ -16,7 +16,6 @@ export default function ForcePasswordChange() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const session = useAuthStore((state) => state.session);
-  const setMustChangePassword = useAuthStore((state) => state.setMustChangePassword);
   const withTimeout = async <T,>(
     promise: Promise<T>,
     ms = 15000,
@@ -100,7 +99,6 @@ export default function ForcePasswordChange() {
       if (profileError) {
         throw profileError;
       }
-      setMustChangePassword(false);
       toast({ title: 'Password updated' });
       navigate('/dashboard', { replace: true });
       setTimeout(() => {

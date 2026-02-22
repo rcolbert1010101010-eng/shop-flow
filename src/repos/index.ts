@@ -48,6 +48,7 @@ const apiBackedRepos: Repos = {
       invoiceCounter += 1;
       const invoice_number = `INV-${String(invoiceCounter).padStart(6, '0')}`;
       const invoiceId = `inv_${Date.now()}_${invoiceCounter}`;
+      const issuedAt = new Date().toISOString();
 
       const invoice: import('@/types').Invoice = {
         id: invoiceId,
@@ -56,8 +57,8 @@ const apiBackedRepos: Repos = {
         source_id: input.salesOrderId,
         customer_id: order.customer_id,
         unit_id: order.unit_id ?? null,
-        status: 'DRAFT',
-        issued_at: null,
+        status: 'ISSUED',
+        issued_at: issuedAt,
         due_at: null,
         subtotal_parts,
         subtotal_labor: 0,
@@ -122,6 +123,7 @@ const apiBackedRepos: Repos = {
       invoiceCounter += 1;
       const invoice_number = `INV-${String(invoiceCounter).padStart(6, '0')}`;
       const invoiceId = `inv_${Date.now()}_${invoiceCounter}`;
+      const issuedAt = new Date().toISOString();
 
       const invoice: import('@/types').Invoice = {
         id: invoiceId,
@@ -130,8 +132,8 @@ const apiBackedRepos: Repos = {
         source_id: input.workOrderId,
         customer_id: workOrder.customer_id,
         unit_id: workOrder.unit_id ?? null,
-        status: 'DRAFT',
-        issued_at: null,
+        status: 'ISSUED',
+        issued_at: issuedAt,
         due_at: null,
         subtotal_parts,
         subtotal_labor,

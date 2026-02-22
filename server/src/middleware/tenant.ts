@@ -6,6 +6,11 @@ export function tenantMiddleware(req: Request, res: Response, next: NextFunction
     return next();
   }
 
+  // Bootstrap route uses tenant id from URL params by design.
+  if (req.method === "POST" && /^\/(?:api\/v1\/admin\/)?tenants\/[^/]+\/bootstrap-membership$/i.test(req.path)) {
+    return next();
+  }
+
   const tenantId =
     req.header("X-Tenant-Id") ||
     req.header("x-tenant-id");

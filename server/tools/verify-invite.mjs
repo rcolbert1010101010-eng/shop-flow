@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const baseUrl = (process.env.SHOPFLOW_API_BASE_URL || process.env.API_BASE_URL || "http://localhost:4000").replace(/\/+$/, "");
+const baseUrl = (process.env.SHOPFLOW_API_BASE_URL || process.env.API_BASE_URL || "http://127.0.0.1:4000").replace(/\/+$/, "");
 const adminKey = process.env.SHOPFLOW_ADMIN_API_KEY || "";
 const tenantId = process.env["X-Tenant-Id"] || process.env.X_TENANT_ID || process.env.TENANT_ID || "";
 const email = String(process.env.VERIFY_INVITE_EMAIL || `verify.${Date.now()}@example.com`)

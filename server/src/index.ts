@@ -1,4 +1,3 @@
-import "dotenv/config";
 import type { NextFunction, Request, Response } from "express";
 
 import { tenantMiddleware } from "./middleware/tenant";
@@ -12,10 +11,56 @@ import { categoriesRouter } from "./routes/categories";
 import { partsRouter } from "./routes/parts";
 import { techniciansRouter } from "./routes/technicians";
 import { adminUsersRouter } from "./routes/adminUsers";
+import { quickbooksIntegrationRouter } from "./routes/quickbooksIntegration";
+
+const fs = require("fs");
+const dotenv = require("dotenv");
+const path = require("path") as typeof import("path");
 
 const express = require("express") as typeof import("express");
 const cors = require("cors") as typeof import("cors");
-const { createClient } = require("@supabase/supabase-js") as typeof import("@supabase/supabase-js");
+const { execSync } = require("child_process") as typeof import("child_process");
+
+const resolveExistingPath = (candidate: string): string | null => {
+  const trimmed = String(candidate || "").trim();
+  if (!trimmed) return null;
+
+  const attempts = path.isAbsolute(trimmed)
+    ? [trimmed]
+    : [
+        trimmed,
+        path.resolve(process.cwd(), trimmed),
+        path.resolve(__dirname, "..", trimmed),
+        path.resolve(__dirname, "..", "..", trimmed),
+      ];
+
+  for (const attempt of attempts) {
+    if (fs.existsSync(attempt)) return attempt;
+  }
+  return null;
+};
+
+const envCandidates = [
+  String(process.env.SHOPFLOW_ENV_FILE || "").trim(),
+  "../.env.widner.local",
+  ".env.widner.local",
+  "server/.env",
+  "server/.env.local",
+];
+
+let chosenPath: string | null = null;
+for (const candidate of envCandidates) {
+  if (!candidate) continue;
+  const resolvedPath = resolveExistingPath(candidate);
+  if (resolvedPath) {
+    chosenPath = resolvedPath;
+    break;
+  }
+}
+
+if (chosenPath) {
+  dotenv.config({ path: chosenPath, override: false });
+}
 
 const app = express();
 const API_PREFIX = "/api/v1";
@@ -23,51 +68,30 @@ const adminRouter = express.Router();
 
 const supabaseUrlEnv = process.env.SUPABASE_URL || process.env.SUPABASE_PROJECT_URL || "";
 const serviceRoleKeyEnv = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE || "";
-const adminApiKeyEnv = process.env.SHOPFLOW_ADMIN_API_KEY || "";
+const adminApiKeyEnv = process.env.SHOPFLOW_ADMIN_API_KEY || process.env.X_SHOPFLOW_ADMIN_KEY || "";
+const shopflowServiceKeyEnv = process.env.SHOPFLOW_SERVICE_KEY || "";
 const serviceRoleFingerprint = serviceRoleKeyEnv
   ? `${serviceRoleKeyEnv.slice(0, 10)}...${serviceRoleKeyEnv.slice(-6)}`
   : null;
-
-async function logAdminSchemaDiscovery() {
-  if (process.env.NODE_ENV === "production") return;
-  if (!supabaseUrlEnv || !serviceRoleKeyEnv) {
-    console.warn("SCHEMA_DISCOVERY_SKIPPED", { reason: "missing_supabase_env" });
-    return;
+const supabaseHost = (() => {
+  if (!supabaseUrlEnv) return null;
+  try {
+    return new URL(supabaseUrlEnv).hostname || null;
+  } catch {
+    return null;
   }
-
-  const sb = createClient(supabaseUrlEnv, serviceRoleKeyEnv, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-
-  const tables = ["tenant_users", "profiles", "user_roles", "roles", "audit_log"];
-  for (const tableName of tables) {
-    try {
-      const { data, error } = await sb
-        .schema("information_schema")
-        .from("columns")
-        .select("column_name,ordinal_position")
-        .eq("table_schema", "public")
-        .eq("table_name", tableName)
-        .order("ordinal_position", { ascending: true });
-
-      if (error) {
-        console.warn("SCHEMA_DISCOVERY_TABLE_ERROR", { table: tableName, message: error.message });
-        continue;
-      }
-
-      const columns = (data ?? [])
-        .map((row: any) => String(row?.column_name || "").trim())
-        .filter(Boolean);
-
-      console.log("SCHEMA_DISCOVERY_TABLE", { table: tableName, columns });
-    } catch (err: any) {
-      console.warn("SCHEMA_DISCOVERY_TABLE_ERROR", {
-        table: tableName,
-        message: err?.message ?? String(err),
-      });
-    }
+})();
+const gitBranch = (() => {
+  const envBranch = String(process.env.GIT_BRANCH || "").trim();
+  if (envBranch) {
+    return envBranch;
   }
-}
+  try {
+    return execSync("git rev-parse --abbrev-ref HEAD", { encoding: "utf8" }).trim() || null;
+  } catch {
+    return null;
+  }
+})();
 
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
@@ -176,6 +200,7 @@ app.use(`${API_PREFIX}/admin`, adminRouter);
 
 app.use(authStubMiddleware);
 app.use(tenantMiddleware);
+app.use("/api/integrations", adminKeyGate, quickbooksIntegrationRouter);
 
 // Mount settings router under the API prefix
 app.use(API_PREFIX, settingsRouter);
@@ -190,7 +215,9 @@ app.get(`${API_PREFIX}/health`, (req: Request, res: Response) => {
   res.json({
     status: "ok",
     service: "repair-hub-pro-api",
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    supabase_host: supabaseHost,
+    git_branch: gitBranch,
   });
 });
 
@@ -225,9 +252,9 @@ app.listen(PORT, () => {
     supabase_url_present: Boolean(supabaseUrlEnv),
     supabase_service_role_key_present: Boolean(serviceRoleKeyEnv),
     shopflow_admin_api_key_present: Boolean(adminApiKeyEnv),
+    shopflow_service_key_present: Boolean(shopflowServiceKeyEnv),
     supabase_service_role_key_fingerprint: serviceRoleFingerprint,
   });
   // eslint-disable-next-line no-console
   console.log(`API server listening on http://localhost:${PORT}${API_PREFIX}/health`);
-  void logAdminSchemaDiscovery();
 });

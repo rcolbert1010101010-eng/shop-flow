@@ -1,5 +1,8 @@
 import fs from 'fs';
 import path from 'path';
+import { getAdminEnv } from './_env.mjs';
+
+getAdminEnv();
 
 const envName = process.argv[2];
 

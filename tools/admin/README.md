@@ -28,3 +28,25 @@ node tools/admin/create-user.mjs --username tech1 --tenant 11111111-1111-1111-11
 ```bash
 node tools/admin/create-user.mjs --email user@example.com --send-invite --tenant 11111111-1111-1111-1111-111111111111
 ```
+
+## Widner isolated runtime
+
+1. Copy template env file:
+
+```bash
+cp .env.widner.local.example .env.widner.local
+```
+
+2. Fill placeholders in `.env.widner.local` (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, owner credentials, and admin key).
+
+3. Provision tenant + owner (safe to run repeatedly):
+
+```bash
+SHOPFLOW_ENV_FILE=.env.widner.local node tools/admin/widner-provision-owner.mjs
+```
+
+4. Start frontend + backend in Widner mode:
+
+```bash
+npm run dev:widner
+```
