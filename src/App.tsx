@@ -33,6 +33,7 @@ import ReturnsWarrantyReportDocs from "@/pages/docs/ReturnsWarrantyReportDocs";
 import PlasmaProjectsDocs from "@/pages/docs/PlasmaProjectsDocs";
 import PlasmaTemplatesDocs from "@/pages/docs/PlasmaTemplatesDocs";
 import DocsHome from "@/pages/docs/DocsHome";
+import QuickBooksIntegrationDocs from "@/pages/docs/QuickBooksIntegrationDocs";
 import Units from "@/pages/Units";
 import UnitForm from "@/pages/UnitForm";
 import UnitTypes from "@/pages/UnitTypes";
@@ -123,6 +124,7 @@ const App = () => {
               <Route path="/docs/scheduling" element={<SchedulingDocs />} />
               <Route path="/docs/users" element={<UsersDocs />} />
               <Route path="/docs/settings" element={<SettingsDocs />} />
+              <Route path="/docs/quickbooks-integration" element={<QuickBooksIntegrationDocs />} />
               <Route path="/docs/parts" element={<PartsDocs />} />
               <Route path="/docs/vendors" element={<VendorsDocs />} />
               <Route path="/docs/returns-warranty" element={<ReturnsWarrantyDocs />} />

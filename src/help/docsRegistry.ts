@@ -32,6 +32,7 @@ export const docMetaByModuleKey: Record<string, DocMeta> = {
   vendors: { path: '/docs/vendors', title: 'Vendors', updatedAt: UPDATED_AT },
   settings: { path: '/docs/settings', title: 'Settings', updatedAt: UPDATED_AT },
   users: { path: '/docs/users', title: 'Users', updatedAt: UPDATED_AT },
+  quickbooks_integration: { path: '/docs/quickbooks-integration', title: 'QuickBooks Integration', updatedAt: UPDATED_AT },
 };
 
 export const getDocMeta = (moduleKey: string) => docMetaByModuleKey[moduleKey] ?? null;

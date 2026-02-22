@@ -20,6 +20,7 @@ import { partCategoriesHelp } from './modules/part_categories';
 import { cycleCountsHelp } from './modules/cycle_counts';
 import { returnsWarrantyReportHelp } from './modules/returns_warranty_report';
 import { settingsHelp } from './modules/settings';
+import { quickbooksIntegrationHelp } from './modules/quickbooks_integration';
 
 export interface ModuleHelpContent {
   title: string;
@@ -51,6 +52,7 @@ export const helpByModule: Record<string, ModuleHelpContent> = {
   cycle_counts: cycleCountsHelp,
   returns_warranty_report: returnsWarrantyReportHelp,
   settings: settingsHelp,
+  quickbooks_integration: quickbooksIntegrationHelp,
 };
 
 export function getModuleHelp(moduleKey: string): ModuleHelpContent | null {

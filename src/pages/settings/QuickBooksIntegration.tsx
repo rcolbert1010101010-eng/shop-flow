@@ -14,6 +14,8 @@ import { useQuickBooksIntegration } from '@/hooks/useQuickBooksIntegration';
 import { usePermissions } from '@/security/usePermissions';
 import { useAuthStore } from '@/stores/authStore';
 import { CheckCircle, XCircle, AlertCircle, RefreshCw, Download, Eye } from 'lucide-react';
+import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
+import { useNavigate } from 'react-router-dom';
 
 export default function QuickBooksIntegration() {
   const { toast } = useToast();
@@ -126,7 +128,7 @@ export default function QuickBooksIntegration() {
   if (loading || !draft) {
     return (
       <div className="page-container">
-        <PageHeader title="QuickBooks Integration" backTo="/settings" />
+        <PageHeader title="QuickBooks Integration" backTo="/settings" actions={<div className="flex gap-2"><ModuleHelpButton moduleKey="quickbooks_integration" /><button className="text-xs text-muted-foreground underline" onClick={() => navigate('/docs/quickbooks-integration')}>Full Docs</button></div>} />
         <Card><CardContent className="p-6 text-muted-foreground">Loading...</CardContent></Card>
       </div>
     );
@@ -134,7 +136,7 @@ export default function QuickBooksIntegration() {
 
   return (
     <div className="page-container space-y-6">
-      <PageHeader title="QuickBooks Integration" backTo="/settings" />
+      <PageHeader title="QuickBooks Integration" backTo="/settings" actions={<div className="flex gap-2"><ModuleHelpButton moduleKey="quickbooks_integration" /><button className="text-xs text-muted-foreground underline" onClick={() => navigate('/docs/quickbooks-integration')}>Full Docs</button></div>} />
 
       {error && (
         <Alert variant="destructive">
