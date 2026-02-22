@@ -1,394 +1,140 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Switch } from '@/components/ui/switch';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Separator } from '@/components/ui/separator';
+import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { quickbooksIntegrationHelp } from '@/help/quickbooksIntegrationHelp';
-// Roadmap: see docs/accounting/quickbooks_roadmap.md for phased implementation details.
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuickBooksIntegration } from '@/hooks/useQuickBooksIntegration';
 import { usePermissions } from '@/security/usePermissions';
 import { useAuthStore } from '@/stores/authStore';
-
-const providerName = 'QuickBooks';
+import { CheckCircle, XCircle, AlertCircle, RefreshCw, Download, Eye } from 'lucide-react';
 
 export default function QuickBooksIntegration() {
   const { toast } = useToast();
-  const { can, role } = usePermissions();
+  const { role } = usePermissions();
   const activeTenantId = useAuthStore((state) => state.activeTenantId);
   const ensureActiveTenant = useAuthStore((state) => state.ensureActiveTenant);
   const authUserId = useAuthStore((state) => state.user?.id ?? state.profile?.id ?? '');
   const isAdmin = role === 'ADMIN';
-  const canEdit = can('settings.edit') || role === 'ADMIN';
+
   const {
-    connection,
-    config,
-    loading,
-    saving,
-    error,
-    saveConfig,
-    createTestExport,
-    listRecentExports,
-    getExportPayload,
-    retryExport,
+    connection, config, loading, saving, error,
+    saveConfig, listRecentExports, getExportPayload, retryExport,
   } = useQuickBooksIntegration();
-  const [connectedStatus, setConnectedStatus] = useState(connection?.status ?? 'DISCONNECTED');
-  const [draft, setDraft] = useState(config);
-  const [exports, setExports] = useState<any[]>([]);
-  const [payloadDialogOpen, setPayloadDialogOpen] = useState(false);
-  const [payloadContent, setPayloadContent] = useState<string>('');
-  const [payloadLoading, setPayloadLoading] = useState(false);
-  const [helpOpen, setHelpOpen] = useState(false);
-  const [senderRunning, setSenderRunning] = useState(false);
+
+  const [exports, setExports] = useState([]);
   const [connecting, setConnecting] = useState(false);
-  const [connectError, setConnectError] = useState<string | null>(null);
-  const [connectErrorDetails, setConnectErrorDetails] = useState<string | null>(null);
-  const [oauthStartAvailable, setOauthStartAvailable] = useState<boolean | null>(null);
-  const [checkingOauthStart, setCheckingOauthStart] = useState(false);
-  const transferMode = draft?.transfer_mode ?? 'IMPORT_ONLY';
-  const isLiveTransfer = transferMode === 'LIVE_TRANSFER';
-  const realmMissingWhileConnected = connection?.status === 'CONNECTED' && !connection?.external_realm_id;
+  const [connectError, setConnectError] = useState(null);
+  const [payloadDialogOpen, setPayloadDialogOpen] = useState(false);
+  const [payloadContent, setPayloadContent] = useState('');
+  const [draft, setDraft] = useState(config);
+  const [savingConfig, setSavingConfig] = useState(false);
+
+  const isConnected = connection?.status === 'CONNECTED' || connection?.status === 'ACTIVE';
+
+  useEffect(() => { setDraft(config); }, [config]);
+
+  useEffect(() => {
+    listRecentExports(50).then(setExports);
+  }, [listRecentExports]);
 
   const resolveTenantId = useCallback(async () => {
     let tenantId = String(activeTenantId || '').trim();
     if (!tenantId) {
-      const ensuredTenantId = await ensureActiveTenant(authUserId || undefined);
-      tenantId = String(ensuredTenantId || '').trim();
+      const ensured = await ensureActiveTenant(authUserId || undefined);
+      tenantId = String(ensured || '').trim();
     }
     return tenantId;
   }, [activeTenantId, ensureActiveTenant, authUserId]);
 
-  const safeStringify = (value: unknown) => {
-    const seen = new WeakSet<object>();
-    try {
-      return JSON.stringify(
-        value,
-        (_key, currentValue) => {
-          if (typeof currentValue === 'object' && currentValue !== null) {
-            if (seen.has(currentValue)) return '[Circular]';
-            seen.add(currentValue);
-          }
-          return currentValue;
-        },
-        2,
-      );
-    } catch {
-      return String(value);
-    }
-  };
-
-  const buildConnectErrorDetails = (err: any) => {
-    const message = err?.message || 'Unknown error';
-    const details: Record<string, unknown> = {};
-    if (err?.response !== undefined) details.response = err.response;
-    if (err?.body !== undefined) details.body = err.body;
-    if (err?.context !== undefined) details.context = err.context;
-    if (Object.keys(details).length === 0) return message;
-    return `${message} | ${safeStringify(details)}`;
-  };
-
-  const handleSave = async () => {
-    if (!draft) return;
-    const result = await saveConfig(draft);
-    if (!result.ok) {
-      toast({
-        title: 'Save failed',
-        description: result.error ?? 'Unable to save QuickBooks integration settings.',
-        variant: 'destructive',
-      });
-      return;
-    }
-    toast({ title: 'Settings saved', description: 'QuickBooks integration settings updated.' });
-  };
-
-  const handleTestExport = async () => {
-    if (!draft) return;
-    const payload = {
-      schema_version: 1,
-      source: { type: 'WORK_ORDER', id: 'TEST', number: 'TEST' },
-      customer: { shopflow_customer_id: 'TEST', display_name: 'Test Customer' },
-      invoice: { invoice_number: 'TEST-001', invoice_date: new Date().toISOString() },
-      lines: [
-        { kind: 'LABOR', amount: 100, account_ref: draft.income_account_labor },
-        { kind: 'PARTS', amount: 50, account_ref: draft.income_account_parts },
-      ],
-      tax: { amount: 0, liability_account_ref: draft.liability_account_sales_tax },
-      total: 150,
-    };
-    const result = await createTestExport(payload);
-    if (!result?.success) {
-      toast({ title: 'Test export failed', description: result?.error ?? 'Unknown error', variant: 'destructive' });
-      return;
-    }
-    toast({ title: 'Test export queued', description: 'A test export payload was written to accounting_exports.' });
-    const rows = await listRecentExports(25);
-    setExports(rows);
-  };
-
-  useEffect(() => {
-    setConnectedStatus(connection?.status ?? 'DISCONNECTED');
-  }, [connection?.status]);
-
-  useEffect(() => {
-    setDraft(config);
-  }, [config]);
-
-  useEffect(() => {
-    const loadExports = async () => {
-      const rows = await listRecentExports(25);
-      setExports(rows);
-    };
-    void loadExports();
-  }, [listRecentExports]);
-
-  useEffect(() => {
-    let mounted = true;
-    const checkOauthStart = async () => {
-      if (!supabase || !isAdmin) {
-        if (mounted) setOauthStartAvailable(false);
-        return;
-      }
-
-      setCheckingOauthStart(true);
-      try {
-        const tenantId = await resolveTenantId();
-        if (!tenantId) {
-          if (!mounted) return;
-          setOauthStartAvailable(false);
-          return;
-        }
-        const { error } = await supabase.functions.invoke('qb-oauth-start', {
-          headers: { 'x-shopflow-tenant-id': tenantId },
-          body: {},
-        });
-        if (!mounted) return;
-        if (!error) {
-          setOauthStartAvailable(true);
-          return;
-        }
-        const status = (error as any)?.context?.status ?? (error as any)?.status;
-        setOauthStartAvailable(status !== 404);
-      } catch (err: any) {
-        if (!mounted) return;
-        const status = err?.context?.status ?? err?.status;
-        setOauthStartAvailable(status !== 404);
-      } finally {
-        if (mounted) setCheckingOauthStart(false);
-      }
-    };
-
-    void checkOauthStart();
-    return () => {
-      mounted = false;
-    };
-  }, [isAdmin, resolveTenantId]);
-
-  const statusBadge = useMemo(() => {
-    const status = connectedStatus || 'DISCONNECTED';
-    const color =
-      status === 'CONNECTED' ? 'bg-green-100 text-green-700' : status === 'EXPIRED' || status === 'ERROR' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700';
-    return <span className={`px-2 py-1 rounded-md text-xs font-semibold ${color}`}>{status}</span>;
-  }, [connectedStatus]);
-
-  const handleViewPayload = async (exportId: string) => {
-    setPayloadLoading(true);
-    const payload = await getExportPayload(exportId);
-    setPayloadLoading(false);
-    setPayloadContent(payload ? JSON.stringify(payload, null, 2) : 'No payload found.');
-    setPayloadDialogOpen(true);
-  };
-
-  const handleRetry = async (exportId: string) => {
-    if (!canEdit) {
-      toast({ title: 'Admin required', variant: 'destructive' });
-      return;
-    }
-    const result = await retryExport(exportId);
-    if (!result?.success) {
-      toast({ title: 'Retry failed', description: result?.error ?? 'Unable to retry', variant: 'destructive' });
-      return;
-    }
-    toast({ title: 'Export reset', description: 'Status set to PENDING.' });
-    const rows = await listRecentExports();
-    setExports(rows);
-  };
-
-  const renderStatus = (status?: string) => {
-    if (!status) return '';
-    if (status === 'skipped') return 'Skipped (disabled)';
-    if (status === 'failed') return 'Failed';
-    return status;
-  };
-
-  const handleRunSender = async () => {
-    setSenderRunning(true);
-    try {
-      throw new Error(
-        [
-          'Browser QuickBooks Edge calls are disabled.',
-          'Run these edge functions only from server-side OR via a local admin script.',
-          'Future endpoint: /api/integrations/quickbooks/*',
-        ].join(' '),
-      );
-    } catch (err: any) {
-      toast({ title: 'Live transfer failed', description: err?.message || 'Unknown error', variant: 'destructive' });
-    } finally {
-      setSenderRunning(false);
-    }
-  };
-
   const handleConnect = async () => {
-    if (!supabase) {
-      toast({ title: 'Supabase unavailable', description: 'Supabase client is not configured.', variant: 'destructive' });
-      return;
-    }
-
+    if (!supabase) return;
     setConnectError(null);
-    setConnectErrorDetails(null);
     setConnecting(true);
     try {
       const tenantId = await resolveTenantId();
-      if (!tenantId) {
-        const message = 'No active tenant selected.';
-        setConnectError(message);
-        setConnectErrorDetails(message);
-        toast({ title: 'Unable to start connect', description: message, variant: 'destructive' });
-        return;
-      }
-
+      if (!tenantId) { setConnectError('No active tenant found.'); return; }
       const { data, error } = await supabase.functions.invoke('qb-oauth-start', {
         headers: { 'x-shopflow-tenant-id': tenantId },
         body: {},
       });
-      if (error) {
-        const status = (error as any)?.context?.status ?? (error as any)?.status ?? (error as any)?.response?.status;
-        if (status === 404) {
-          setOauthStartAvailable(false);
-        }
-        const message = error.message || 'Unknown error';
-        const details = buildConnectErrorDetails(error);
-        setConnectError(message);
-        setConnectErrorDetails(details);
-        console.error('qb-oauth-start invoke error', error);
-        toast({ title: 'Unable to start connect', description: message, variant: 'destructive' });
-        return;
-      }
-
-      const returnedUrl = (data as any)?.authorize_url || (data as any)?.url;
-      if (!returnedUrl || typeof returnedUrl !== 'string') {
-        throw new Error('Missing authorize URL in response.');
-      }
-
-      window.location.href = returnedUrl;
-    } catch (err: any) {
-      const status = err?.context?.status ?? err?.status;
-      if (status === 404) {
-        setOauthStartAvailable(false);
-      }
-      const message = err?.message || 'Unknown error';
-      const details = buildConnectErrorDetails(err);
-      setConnectError(message);
-      setConnectErrorDetails(details);
-      console.error('qb-oauth-start invoke failed', err);
-      toast({ title: 'Unable to start connect', description: message, variant: 'destructive' });
+      if (error) { setConnectError(error.message); return; }
+      const url = data?.url;
+      if (!url) { setConnectError('No authorization URL returned.'); return; }
+      window.location.href = url;
+    } catch (err) {
+      setConnectError(err?.message || 'Unknown error');
     } finally {
       setConnecting(false);
     }
   };
 
-  const getDevAuthContext = async () => {
-    if (!supabase) {
-      toast({ title: 'Supabase unavailable', description: 'Supabase client is not configured.', variant: 'destructive' });
-      return null;
+  const handleSaveConfig = async () => {
+    if (!draft) return;
+    setSavingConfig(true);
+    const result = await saveConfig(draft);
+    setSavingConfig(false);
+    if (!result.ok) {
+      toast({ title: 'Save failed', description: result.error, variant: 'destructive' });
+      return;
     }
-
-    try {
-      await supabase.auth.refreshSession();
-    } catch {
-      // Ignore refresh failures and fall back to the current session.
-    }
-
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    const token = session?.access_token;
-    if (!token) {
-      toast({ title: 'Missing session token', description: 'Sign in and try again.', variant: 'destructive' });
-      return null;
-    }
-
-    const apikey = (supabase as any).supabaseKey as string | undefined;
-    if (!apikey) {
-      toast({ title: 'Missing anon key', description: 'Supabase anon key is unavailable.', variant: 'destructive' });
-      return null;
-    }
-
-    return { token, apikey };
+    toast({ title: 'Settings saved' });
   };
 
-  const handleCopyQbSenderCurl = async () => {
-    const auth = await getDevAuthContext();
-    if (!auth) return;
-
-    const cmd = [
-      'curl -sS -X POST "https://qaraqoyqobqzytrnsqje.supabase.co/functions/v1/qb-sender" \\',
-      `  -H "apikey: ${auth.apikey}" \\`,
-      `  -H "Authorization: Bearer ${auth.token}" \\`,
-      '  -H "Content-Type: application/json" \\',
-      "  -d '{}'",
-    ].join('\n');
-
-    try {
-      await navigator.clipboard.writeText(cmd);
-      toast({ title: 'Copied', description: 'qb-sender curl command copied.' });
-    } catch {
-      toast({ title: 'Copy failed', description: 'Unable to write to clipboard.', variant: 'destructive' });
-    }
+  const handleViewPayload = async (exportId) => {
+    const payload = await getExportPayload(exportId);
+    setPayloadContent(payload ? JSON.stringify(payload, null, 2) : 'No payload found.');
+    setPayloadDialogOpen(true);
   };
 
-  const handleCopyAuthProbeCurl = async () => {
-    const auth = await getDevAuthContext();
-    if (!auth) return;
-
-    const cmd = `curl -sS -i "https://qaraqoyqobqzytrnsqje.supabase.co/auth/v1/user" -H "apikey: ${auth.apikey}" -H "Authorization: Bearer ${auth.token}"`;
-    try {
-      await navigator.clipboard.writeText(cmd);
-      toast({ title: 'Copied', description: 'Auth probe curl command copied.' });
-    } catch {
-      toast({ title: 'Copy failed', description: 'Unable to write to clipboard.', variant: 'destructive' });
+  const handleRetry = async (exportId) => {
+    const result = await retryExport(exportId);
+    if (!result?.success) {
+      toast({ title: 'Retry failed', description: result?.error, variant: 'destructive' });
+      return;
     }
+    toast({ title: 'Export reset to PENDING' });
+    listRecentExports(50).then(setExports);
+  };
+
+  const handleDownloadExport = async (exportId) => {
+    const payload = await getExportPayload(exportId);
+    if (!payload) { toast({ title: 'No payload found', variant: 'destructive' }); return; }
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'shopflow-export-' + exportId.slice(0, 8) + '.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const statusBadge = (status) => {
+    const s = (status || '').toUpperCase();
+    if (s === 'SENT') return <Badge className="bg-green-100 text-green-700 border-0">Sent</Badge>;
+    if (s === 'PENDING' || s === 'PROCESSING') return <Badge className="bg-amber-100 text-amber-700 border-0">Pending</Badge>;
+    if (s === 'FAILED') return <Badge className="bg-red-100 text-red-700 border-0">Failed</Badge>;
+    return <Badge variant="outline">{status}</Badge>;
   };
 
   if (loading || !draft) {
     return (
       <div className="page-container">
         <PageHeader title="QuickBooks Integration" backTo="/settings" />
-        <Card>
-          <CardContent className="p-6 text-muted-foreground">Loading…</CardContent>
-        </Card>
+        <Card><CardContent className="p-6 text-muted-foreground">Loading...</CardContent></Card>
       </div>
     );
   }
 
   return (
-    <div className="page-container space-y-4">
-      <PageHeader
-        title="QuickBooks Integration"
-        backTo="/settings"
-        actions={
-          <Button variant="outline" size="sm" onClick={() => setHelpOpen(true)}>
-            Help
-          </Button>
-        }
-      />
+    <div className="page-container space-y-6">
+      <PageHeader title="QuickBooks Integration" backTo="/settings" />
 
       {error && (
         <Alert variant="destructive">
@@ -396,333 +142,159 @@ export default function QuickBooksIntegration() {
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
-      {!canEdit && (
-        <Alert variant="default">
-          <AlertTitle>Admin required</AlertTitle>
-          <AlertDescription>Contact an administrator to configure QuickBooks integration.</AlertDescription>
-        </Alert>
-      )}
-      {realmMissingWhileConnected && (
-        <Alert variant="destructive">
-          <AlertTitle>Connected but realm missing — reconnect required</AlertTitle>
-          <AlertDescription>The QuickBooks connection is missing realm context. Reconnect to repair this integration.</AlertDescription>
-        </Alert>
-      )}
 
       <Card>
         <CardHeader>
-          <CardTitle>Connection</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            {isConnected ? <CheckCircle className="text-green-500 w-5 h-5" /> : <XCircle className="text-red-500 w-5 h-5" />}
+            Step 1 — Connect to QuickBooks
+          </CardTitle>
+          <CardDescription>Authorize ShopFlow to send invoices to your QuickBookOnline account.</CardDescription>
         </CardHeader>
-          <CardContent className="space-y-3">
-            {connectError && (
-              <Alert variant="destructive">
-                <AlertTitle>Unable to start connect</AlertTitle>
-                <AlertDescription>
-                  <div>{connectError}</div>
-                  <div className="mt-1 text-xs">Details: {connectErrorDetails ?? connectError}</div>
-                </AlertDescription>
-              </Alert>
+        <CardContent className="space-y-4">
+          {connectError && <Alert variant="destructive"><AlertDescription>{connectError}</AlertDescription></Alert>}
+          <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/30">
+            <div>
+              <div className="font-medium">QuickBooks Online</div>
+              <div className="text-sm text-muted-foreground">
+                Status: <span className={isConnected ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'}>{isConnected ? 'Connected' : 'Not Connected'}</span>
+              </div>
+              {connection?.external_realm_id && <div className="text-xs text-muted-foreground mt-1">Company ID: {connection.external_realm_id}</div>}
+            </div>
+            {isAdmin && (
+              <Button onClick={handleConnect} disabled={connecting} variant={isConnected ? 'outline' : 'default'}>
+                {connecting ? 'Connecting...' : isConnected ? 'Reconnect' : 'Connect to QuickBooks'}
+              </Button>
             )}
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-semibold">{providerName}</div>
-                <div className="text-xs text-muted-foreground">Status: {statusBadge}</div>
+          </div>
+          {!isAdmin && <p className="text-sm text-muted-foreground">Only administrators can connect QuickBooks.</p>}
+        </CardContent>
+      </Card>
+
+      {isConnected && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <AlertCircle className="text-amber-500 w-5 h-5" />
+              Step 2 — Map QuickBooks Items
+            </CardTitle>
+            <CardDescription>
+              Tell ShopFlow which QuickBooks Products and Services items to use for each charge type.
+              In QuickBooks go to Sal then Products and Services to find item IDs.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <Label>Labor Item ID</Label>
+                <Input placeholder="e.g. 19" value={draft.qb_item_ref_labor ?? ''} onChange={(e) => setDraft((p) => ({ ...p, qb_item_ref_labor: e.target.value }))} disabled={!isAdmin} />
+                <p className="text-xs text-muted-foreground">Used for all labor charges</p>
               </div>
-              <div className="flex gap-2">
-                {isAdmin && oauthStartAvailable !== false && (
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={handleConnect}
-                    disabled={saving || connecting || checkingOauthStart}
-                  >
-                    {checkingOauthStart ? 'Checking OAuth...' : connecting ? 'Connecting...' : 'Connect to QuickBooks'}
-                  </Button>
-                )}
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setConnectedStatus('CONNECTED')}
-                  disabled={saving || !canEdit}
-                >
-                  Simulate Connect (Dev)
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setConnectedStatus('DISCONNECTED')}
-                  disabled={saving || !canEdit}
-                >
-                  Disconnect
-                </Button>
+              <div className="space-y-1">
+                <Label>Parts Item ID</Label>
+                <Input placeholder="e.g. 20" value={draft.qb_item_ref_parts ?? ''} onChange={(e) => setDraft((p) => ({ ...p, qb_item_ref_parts: e.target.value }))} disabled={!isAdmin} />
+                <p className="text-xs text-muted-foreground">Used for all parts charges</p>
               </div>
+              <div className="space-y-1">
+                <Label>Fees / Sublet Item ID</Label>
+                <Input placeholder="e.g. 21" value={draft.qb_item_ref_fees_sublet ?? ''} onChange={(e) => setDraft((p) => ({ ...p, qb_item_ref_fees_sublet: e.target.value }))} disabled={!isAdmin} />
+                <p className="text-xs text-muted-foreground">Used for fees and sublet charges</p>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label>Default Customer ID</Label>
+              <Input placeholder="e.g. 1" value={draft.qb_customer_ref ?? ''} onChange={(e) => setDraft((p) => ({ ...p, qb_customer_ref: e.target.value }))} disabled={!isAdmin} />
+              <p className="text-xs text-muted-foreground">Fallback QuickBooks customer when no match is found.</p>
             </div>
           </CardContent>
         </Card>
+      )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Configuration</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4 text-sm">
-          {!isLiveTransfer && (
-            <Alert variant="default" className="text-xs">
-              <AlertTitle>Import mode enabled</AlertTitle>
-              <AlertDescription>
-                Live Transfer is disabled. Exports will be skipped and the sender will not run until you switch back to
-                Live Transfer.
-              </AlertDescription>
-            </Alert>
-          )}
-          <p className="text-xs text-muted-foreground">
-            When an invoice is issued, ShopFlow automatically queues an export (no QuickBooks connection needed).
-            Payments queue when recorded if mode is set to Invoice + Payments.
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Transfer Mode</Label>
-              <RadioGroup
-                value={transferMode}
-                onValueChange={(val) => setDraft((prev) => (prev ? { ...prev, transfer_mode: val as any } : prev))}
-                className="grid gap-2"
-                disabled={!canEdit}
-              >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="IMPORT_ONLY" id="transfer-import" />
-                  <Label htmlFor="transfer-import">Import (manual)</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="LIVE_TRANSFER" id="transfer-live" />
-                  <Label htmlFor="transfer-live">Live Transfer (automatic)</Label>
-                </div>
-              </RadioGroup>
-              {isLiveTransfer && (
-                <p className="text-xs text-muted-foreground">
-                  Live Transfer will automatically send invoices and payments to QuickBooks.
-                </p>
-              )}
-            </div>
-            <div className="space-y-2">
-              <Label>Mode</Label>
-                <Select
-                  value={draft.mode}
-                  onValueChange={(val) => setDraft((prev) => (prev ? { ...prev, mode: val } : prev))}
-                  disabled={!canEdit}
-                >
-                <SelectTrigger>
-                  <SelectValue placeholder="Mode" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="INVOICE_ONLY">Invoice only</SelectItem>
-                  <SelectItem value="INVOICE_AND_PAYMENTS">Invoice + payments</SelectItem>
-                  <SelectItem value="EXPORT_ONLY">Export-only</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Calculation source</Label>
-                <Select
-                  value={draft.calculation_source}
-                  onValueChange={(val) => setDraft((prev) => (prev ? { ...prev, calculation_source: val } : prev))}
-                  disabled={!canEdit}
-                >
-                <SelectTrigger>
-                  <SelectValue placeholder="Source" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="SHOPFLOW">ShopFlow</SelectItem>
-                  <SelectItem value="QUICKBOOKS">QuickBooks</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Line item strategy</Label>
-                <Select
-                  value={draft.line_item_strategy}
-                  onValueChange={(val) => setDraft((prev) => (prev ? { ...prev, line_item_strategy: val } : prev))}
-                  disabled={!canEdit}
-                >
-                <SelectTrigger>
-                  <SelectValue placeholder="Strategy" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ROLLUP">Roll-up</SelectItem>
-                  <SelectItem value="DETAILED">Detailed</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Customer match strategy</Label>
-                <Select
-                  value={draft.customer_match_strategy}
-                  onValueChange={(val) => setDraft((prev) => (prev ? { ...prev, customer_match_strategy: val } : prev))}
-                  disabled={!canEdit}
-                >
-                <SelectTrigger>
-                  <SelectValue placeholder="Strategy" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="DISPLAY_NAME">Display Name</SelectItem>
-                  <SelectItem value="NAME_PLUS_PHONE">Name + Phone</SelectItem>
-                  <SelectItem value="EXTERNAL_REF_ONLY">External Ref Only</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <Separator />
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Income Account (Labor)</Label>
-              <Input
-                value={draft.income_account_labor ?? ''}
-                onChange={(e) => setDraft((prev) => (prev ? { ...prev, income_account_labor: e.target.value } : prev))}
-                disabled={!canEdit}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Income Account (Parts)</Label>
-              <Input
-                value={draft.income_account_parts ?? ''}
-                onChange={(e) => setDraft((prev) => (prev ? { ...prev, income_account_parts: e.target.value } : prev))}
-                disabled={!canEdit}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Income Account (Fees/Sublet)</Label>
-              <Input
-                value={draft.income_account_fees ?? ''}
-                onChange={(e) => setDraft((prev) => (prev ? { ...prev, income_account_fees: e.target.value } : prev))}
-                disabled={!canEdit}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Liability Account (Sales Tax)</Label>
-              <Input
-                value={draft.liability_account_sales_tax ?? ''}
-                onChange={(e) =>
-                  setDraft((prev) => (prev ? { ...prev, liability_account_sales_tax: e.target.value } : prev))
-                }
-                disabled={!canEdit}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Clearing Account (Undeposited Funds)</Label>
-              <Input
-                value={draft.clearing_account_undeposited_funds ?? ''}
-                onChange={(e) =>
-                  setDraft((prev) =>
-                    prev ? { ...prev, clearing_account_undeposited_funds: e.target.value } : prev
-                  )
-                }
-                disabled={!canEdit}
-              />
-            </div>
-          </div>
-
-          <Separator />
-
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <Label className="text-sm">Enable Integration</Label>
-              <p className="text-xs text-muted-foreground">Toggle to enable QuickBooks export</p>
-            </div>
-            <Switch
-              checked={draft.is_enabled}
-              onCheckedChange={(checked) => setDraft((prev) => (prev ? { ...prev, is_enabled: checked } : prev))}
-              disabled={!canEdit}
-            />
-          </div>
-
-          <div className="flex flex-wrap gap-3 pt-2">
-            <Button onClick={handleSave} disabled={saving || !canEdit}>
-              Save
-            </Button>
-            <Button variant="outline" onClick={handleTestExport} disabled={saving || !canEdit || !isLiveTransfer}>
-              Test Export
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Live Transfer</CardTitle>
-          {canEdit && (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={handleRunSender}
-              disabled={senderRunning || !isLiveTransfer}
-            >
-              {senderRunning ? 'Running...' : 'Run Live Transfer Now'}
-            </Button>
-          )}
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          {draft?.is_enabled === false && (
-            <Alert variant="default" className="text-xs">
-              <AlertTitle>Exports are currently disabled</AlertTitle>
-              <AlertDescription>Enable the integration to queue new exports.</AlertDescription>
-            </Alert>
-          )}
-          {exports.length === 0 ? (
-            <div className="text-muted-foreground text-sm">No exports yet.</div>
-          ) : (
-            <table className="w-full text-xs">
-              <thead className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                <tr>
-                  <th className="text-left py-1">Status</th>
-                  <th className="text-left py-1">Type</th>
-                  <th className="text-left py-1">Source</th>
-                  <th className="text-left py-1">Attempts</th>
-                  <th className="text-left py-1">Created</th>
-                  <th className="text-left py-1">Error</th>
-                  <th className="text-left py-1 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {exports.map((exp) => (
-                  <tr key={exp.id} className="align-top">
-                    <td className="py-1">{renderStatus(exp.status)}</td>
-                    <td className="py-1">{exp.export_type}</td>
-                    <td className="py-1">
-                      {exp.source_entity_type ?? ''} {exp.source_entity_id ?? ''}
-                    </td>
-                    <td className="py-1">{exp.attempt_count ?? 0}</td>
-                    <td className="py-1">{exp.created_at ? new Date(exp.created_at).toLocaleString() : ''}</td>
-                    <td className="py-1 max-w-[180px] truncate">{exp.last_error ?? ''}</td>
-                    <td className="py-1">
-                      <div className="flex justify-end gap-2">
-                        <Button size="xs" variant="outline" onClick={() => handleViewPayload(exp.id)}>
-                          View JSON
-                        </Button>
-                        <Button size="xs" variant="secondary" onClick={() => handleRetry(exp.id)} disabled={!canEdit}>
-                          Retry
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </CardContent>
-      </Card>
-
-      {import.meta.env.DEV && (
+      {isConnected && (
         <Card>
           <CardHeader>
-            <CardTitle>Dev Tools</CardTitle>
+            <CardTitle>Step 3 — Choose How to Send Invoices</CardTitle>
+            <CardDescription>Choose whether ShopFlow sends invoices automatically or you export them manually.</CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-wrap gap-3">
-            <Button size="sm" variant="outline" onClick={handleCopyQbSenderCurl}>
-              Copy qb-sender curl
-            </Button>
-            <Button size="sm" variant="outline" onClick={handleCopyAuthProbeCurl}>
-              Copy auth probe curl
-            </Button>
+          <CardContent className="space-y-4">
+            <div className="grigrid-cols-1 md:grid-cols-2 gap-4">
+              <div
+                className={"p-4 border-2 rounded-lg cursor-pointer transition-colors " + (draft.transfer_mode === 'IMPORT_ONLY' ? 'border-primary bg-primary/5' : 'border-muted hover:border-primary/50')}
+                onClick={() => isAdmin && setDraft((p) => ({ ...p, transfer_mode: 'IMPORT_ONLY' }))}
+              >
+                <div className="font-semibold mb-1">Manual Export</div>
+                <div className="text-sm text-muted-foreground">You control when invoices are sent. Download and review exports before sending. Best for shops that want full control.</div>
+              </div>
+              <div
+                className={"p-4 border-2 rounded-lg cursor-pointer transition-colors " + (draft.transfer_mode === 'LIVE_TRANSFER' ? 'border-primary bg-primary/5' : 'border-muted hover:border-primary/50')}
+                onClick={() => isAdmin && setDraft((p) => ({ ...p, transfer_mode: 'LIVE_TRANSFER' }))}
+              >
+                <div className="font-semibold mb-1">Live Transfer (Automatic)</div>
+                <div className="text-sm text-muted-foreground">Invoices are automatically sent to QuickBooks when finalized. Best for high-volume shops.</div>
+              </div>
+            </div>
+            <div className="flex items-center justify-between pt-2 border-t">
+              <div>
+                <Label className="text-sm font-medium">Enable Integration</Label>
+                <p className="text-xs text-muted-foreground">Turn off to pause all exports without losing your settings</p>
+              </div>
+              <Switch checked={draft.is_enabled} onCheckedChange={(checked) => setDraft((p) => ({ ...p, is_enabled: checked }))} disabled={!isAdmin} />
+            </div>
+            {isAdmin && (
+              <Button onClick={handleSaveConfig} disabled={savingConfig || saving}>
+                {savingConfig ? 'Saving...' : 'Save Settings'}
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {isConnected && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Export History</CardTitle>
+            <CardDescription>
+              Recent invoices queued for QuickBooks.{' '}
+              {draft.transfer_mode === 'IMPORT_ONLY' ? 'Download exports to send them manually.' : 'Live Transfer sends these automatically every 5 minutes.'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {exports.length === 0 ? (
+              <div className="text-sm text-muted-foreground py-4 text-center">No exports yet. Exports appear here when invoices are finalized.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-xs uppercase tracking-wide text-muted-foreground border-b">
+                      <th className="text-left py-2">Status</th>
+                      <th className="text-left py-2">Type</th>
+                      <th className="text-left py-2">Created</th>
+                      <th className="text-left py-2">Attempts</th>
+                      <th className="text-left py-2">Error</th>
+                      <th className="text-right py-2">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {exports.map((exp) => (
+                      <tr key={exp.id} className="align-middle">
+                        <td className="py-2">{statusBadge(exp.status)}</td>
+                        <td className="py-2">{exp.export_type}</td>
+                        <td className="py-2 text-muted-foreground text-xs">{exp.created_at ? new Date(exp.created_at).toLocaleString() : ''}</td>
+                        <td className="py-2">{exp.attempt_count ?? 0}</td>
+                        <td className="py-2 max-w-xs truncate text-xs text-red-600">{exp.last_error ?? ''}</td>
+                        <td className="py-2">
+                          <div className="flex justify-end gap-2">
+                            <Button size="sm" variant="ghost" onClick={() => handleViewPayload(exp.id)}><Eye className="w-4 h-4" /></Button>
+                            <Button size="sm" variant="ghost" onClick={() => handleDownloadExport(exp.id)}><Download className="w-4 h-4" /></Button>
+                            {isAdmin && exp.status !== 'SENT' && <Button size="sm" variant="ghost" onClick={() => handleRetry(exp.id)}><RefreshCw className="w-4 h-4" /></Button>}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -731,53 +303,12 @@ export default function QuickBooksIntegration() {
         <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>Export Payload</DialogTitle>
-            <DialogDescription>JSON payload saved to accounting_exports</DialogDescription>
+            <DialogDescription>JSON payload for this export</DialogDescription>
           </DialogHeader>
-          <div className="flex justify-between items-center pb-2">
-            <span className="text-xs text-muted-foreground">{payloadLoading ? 'Loading…' : ''}</span>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                if (payloadContent) {
-                  void navigator.clipboard.writeText(payloadContent);
-                  toast({ title: 'Copied' });
-                }
-              }}
-              disabled={!payloadContent}
-            >
-              Copy
-            </Button>
+          <div className="flex justify-end pb-2">
+            <Button size="sm" variant="outline" onClick={() => navigator.clipboard.writeText(payloadContent)}>Copy</Button>
           </div>
-          <div className="border rounded-md bg-muted/40 max-h-[400px] overflow-auto p-3 font-mono text-xs whitespace-pre-wrap">
-            {payloadContent || (payloadLoading ? 'Loading…' : 'No payload')}
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{quickbooksIntegrationHelp.title}</DialogTitle>
-            <DialogDescription>How to set up and use the offline export queue</DialogDescription>
-          </DialogHeader>
-          <div className="max-h-[60vh] overflow-auto space-y-4 text-sm">
-            {quickbooksIntegrationHelp.sections.map((section) => (
-              <div key={section.heading} className="space-y-1">
-                <div className="font-semibold">{section.heading}</div>
-                <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
-                  {section.bullets.map((bullet) => (
-                    <li key={bullet}>{bullet}</li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-          <div className="flex justify-end">
-            <Button variant="outline" onClick={() => setHelpOpen(false)}>
-              Close
-            </Button>
-          </div>
+          <div className="border rounded-md bg-muted/40 max-h-96 overflow-auto p-3 font-mono text-xs whitespace-pre-wrap">{payloadContent || 'No payload'}</div>
         </DialogContent>
       </Dialog>
     </div>
