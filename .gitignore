@@ -32,3 +32,4 @@ scripts/
 supabase/.temp/
 server/.env
 .env.admin
+.env
