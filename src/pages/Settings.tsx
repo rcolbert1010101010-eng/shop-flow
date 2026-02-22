@@ -67,6 +67,9 @@ export default function Settings() {
   const [tenantLoading, setTenantLoading] = useState(false);
   const [tenantName, setTenantName] = useState('');
   const [tenantCreating, setTenantCreating] = useState(false);
+  // TEMP: QuickBooks OAuth start button state for onboarding.
+  const [qbTempLoading, setQbTempLoading] = useState(false);
+  const [qbTempError, setQbTempError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isReady) return;
@@ -199,6 +202,43 @@ export default function Settings() {
 
   const handleFieldChange = (key: SystemSettingKey, newValue: any) => {
     setDraft((prev) => ({ ...prev, [key]: newValue }));
+  };
+
+  const handleTempQuickBooksConnect = async () => {
+    if (!supabase || qbTempLoading) return;
+    setQbTempLoading(true);
+    setQbTempError(null);
+
+    try {
+      const tenantId = String(activeTenantId ?? (tenantMemberships.length > 0 ? tenantMemberships[0].tenant_id : '')).trim();
+      if (!tenantId) {
+        throw new Error('No active tenant selected.');
+      }
+
+      const { data, error } = await supabase.functions.invoke('qb-oauth-start', {
+        headers: { 'x-shopflow-tenant-id': tenantId },
+        body: {},
+      });
+      if (error) throw error;
+
+      const returnedUrl = (data as any)?.authorize_url || (data as any)?.url || (data as any)?.authUrl;
+      if (!returnedUrl || typeof returnedUrl !== 'string') {
+        throw new Error('Missing authorize URL in response.');
+      }
+
+      window.location.href = returnedUrl;
+    } catch (err: any) {
+      const message = err?.message || 'Unable to start QuickBooks connect.';
+      setQbTempError(message);
+      console.error('TEMP QuickBooks connect failed', { err });
+      toast({
+        title: 'QuickBooks connect failed',
+        description: message,
+        variant: 'destructive',
+      });
+    } finally {
+      setQbTempLoading(false);
+    }
   };
 
   const parseNumberMaybe = (v: any): number | undefined => {
@@ -966,10 +1006,17 @@ export default function Settings() {
             <div>
               <p className="font-medium">QuickBooks</p>
               <p className="text-xs text-muted-foreground">Configure accounting export settings.</p>
+              {qbTempError && <p className="text-xs text-destructive mt-1">TEMP connect error: {qbTempError}</p>}
             </div>
-            <Button variant="outline" size="sm" onClick={() => navigate('/settings/integrations/quickbooks')}>
-              Open
-            </Button>
+            <div className="flex items-center gap-2">
+              {/* TEMP: remove after OAuth flow is fully wired. */}
+              <Button variant="outline" size="sm" onClick={handleTempQuickBooksConnect} disabled={qbTempLoading}>
+                {qbTempLoading ? 'Connecting QuickBooks (TEMP)...' : 'Connect QuickBooks (TEMP)'}
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => navigate('/settings/integrations/quickbooks')}>
+                Open
+              </Button>
+            </div>
           </div>
         </div>
       </div>

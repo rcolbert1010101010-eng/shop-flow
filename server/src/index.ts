@@ -11,44 +11,56 @@ import { categoriesRouter } from "./routes/categories";
 import { partsRouter } from "./routes/parts";
 import { techniciansRouter } from "./routes/technicians";
 import { adminUsersRouter } from "./routes/adminUsers";
+import { quickbooksIntegrationRouter } from "./routes/quickbooksIntegration";
+
+const fs = require("fs");
+const dotenv = require("dotenv");
+const path = require("path") as typeof import("path");
 
 const express = require("express") as typeof import("express");
 const cors = require("cors") as typeof import("cors");
 const { execSync } = require("child_process") as typeof import("child_process");
-const path = require("path") as typeof import("path");
-const fs = require("fs") as typeof import("fs");
-const dotenv = require("dotenv") as typeof import("dotenv");
 
-function loadEnvFile(filePath: string) {
-  if (!fs.existsSync(filePath)) return false;
-  dotenv.config({ path: filePath, override: false });
-  return true;
-}
+const resolveExistingPath = (candidate: string): string | null => {
+  const trimmed = String(candidate || "").trim();
+  if (!trimmed) return null;
 
-function resolveEnvPath(repoRoot: string, candidate: string): string {
-  if (path.isAbsolute(candidate)) return candidate;
-  const fromRepoRoot = path.resolve(repoRoot, candidate);
-  if (fs.existsSync(fromRepoRoot)) return fromRepoRoot;
-  return path.resolve(process.cwd(), candidate);
-}
+  const attempts = path.isAbsolute(trimmed)
+    ? [trimmed]
+    : [
+        trimmed,
+        path.resolve(process.cwd(), trimmed),
+        path.resolve(__dirname, "..", trimmed),
+        path.resolve(__dirname, "..", "..", trimmed),
+      ];
 
-function initializeEnv() {
-  const repoRoot = path.resolve(__dirname, "..", "..");
-  const selectedEnvFile = String(process.env.SHOPFLOW_ENV_FILE || "").trim();
-  if (selectedEnvFile) {
-    const selectedPath = resolveEnvPath(repoRoot, selectedEnvFile);
-    if (!loadEnvFile(selectedPath)) {
-      console.warn("ENV_FILE_NOT_FOUND", { selected: selectedEnvFile, resolved: selectedPath });
-    }
+  for (const attempt of attempts) {
+    if (fs.existsSync(attempt)) return attempt;
   }
+  return null;
+};
 
-  // Fallback defaults only fill missing values (no override).
-  loadEnvFile(path.join(repoRoot, ".env.local"));
-  loadEnvFile(path.join(repoRoot, "server", ".env"));
-  loadEnvFile(path.join(repoRoot, ".env"));
+const envCandidates = [
+  String(process.env.SHOPFLOW_ENV_FILE || "").trim(),
+  "../.env.widner.local",
+  ".env.widner.local",
+  "server/.env",
+  "server/.env.local",
+];
+
+let chosenPath: string | null = null;
+for (const candidate of envCandidates) {
+  if (!candidate) continue;
+  const resolvedPath = resolveExistingPath(candidate);
+  if (resolvedPath) {
+    chosenPath = resolvedPath;
+    break;
+  }
 }
 
-initializeEnv();
+if (chosenPath) {
+  dotenv.config({ path: chosenPath, override: false });
+}
 
 const app = express();
 const API_PREFIX = "/api/v1";
@@ -57,6 +69,7 @@ const adminRouter = express.Router();
 const supabaseUrlEnv = process.env.SUPABASE_URL || process.env.SUPABASE_PROJECT_URL || "";
 const serviceRoleKeyEnv = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE || "";
 const adminApiKeyEnv = process.env.SHOPFLOW_ADMIN_API_KEY || process.env.X_SHOPFLOW_ADMIN_KEY || "";
+const shopflowServiceKeyEnv = process.env.SHOPFLOW_SERVICE_KEY || "";
 const serviceRoleFingerprint = serviceRoleKeyEnv
   ? `${serviceRoleKeyEnv.slice(0, 10)}...${serviceRoleKeyEnv.slice(-6)}`
   : null;
@@ -187,6 +200,7 @@ app.use(`${API_PREFIX}/admin`, adminRouter);
 
 app.use(authStubMiddleware);
 app.use(tenantMiddleware);
+app.use("/api/integrations", adminKeyGate, quickbooksIntegrationRouter);
 
 // Mount settings router under the API prefix
 app.use(API_PREFIX, settingsRouter);
@@ -238,6 +252,7 @@ app.listen(PORT, () => {
     supabase_url_present: Boolean(supabaseUrlEnv),
     supabase_service_role_key_present: Boolean(serviceRoleKeyEnv),
     shopflow_admin_api_key_present: Boolean(adminApiKeyEnv),
+    shopflow_service_key_present: Boolean(shopflowServiceKeyEnv),
     supabase_service_role_key_fingerprint: serviceRoleFingerprint,
   });
   // eslint-disable-next-line no-console

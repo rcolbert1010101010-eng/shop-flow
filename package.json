@@ -18,7 +18,8 @@
     "admin:create-user": "node tools/admin/create-user.mjs",
     "env:widner": "node tools/admin/use-env.mjs widner",
     "bootstrap:customer": "node tools/admin/customer-bootstrap.mjs",
-    "bootstrap:widner": "node tools/admin/widner-bootstrap.mjs"
+    "bootstrap:widner": "node tools/admin/widner-bootstrap.mjs",
+    "probe:sales-order": "node tools/debug/probe-sales-order.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

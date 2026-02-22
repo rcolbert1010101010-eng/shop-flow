@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuthStore } from '@/stores/authStore';
 
 type IntegrationConnection = {
   provider: string;
   status: string;
   display_name?: string | null;
+  external_realm_id?: string | null;
   updated_at?: string | null;
 };
 
@@ -71,6 +73,7 @@ const uuid = () => {
 };
 
 export function useQuickBooksIntegration() {
+  const tenantId = useAuthStore((state) => state.activeTenantId);
   const [connection, setConnection] = useState<IntegrationConnection | null>(null);
   const [config, setConfig] = useState<AccountingConfig | null>(null);
   const [loading, setLoading] = useState(true);
@@ -81,14 +84,24 @@ export function useQuickBooksIntegration() {
     if (!supabase) return;
     setLoading(true);
     setError(null);
-    const [{ data: connectionRows }, { data: configRows }] = await Promise.all([
-      supabase.from('integration_connections').select('*').eq('provider', PROVIDER).maybeSingle(),
-      supabase.from('accounting_integration_config').select('*').eq('provider', PROVIDER).maybeSingle(),
+    const [{ data: connectionRows, error: connectionError }, { data: configRows, error: configError }] = await Promise.all([
+      supabase.from('integration_connections_safe').select('*').eq('provider', PROVIDER).eq('tenant_id', tenantId).maybeSingle(),
+      supabase.from('accounting_integration_config').select('*').eq('provider', PROVIDER).eq('tenant_id', tenantId).maybeSingle(),
     ]);
+    const loadError = connectionError ?? configError;
+    if (loadError) {
+      setError(loadError.message);
+    } else {
+      setError(null);
+    }
     setConnection(connectionRows ? (connectionRows as IntegrationConnection) : null);
     setConfig(
       configRows
-        ? ({ ...configRows, transfer_mode: (configRows as any).transfer_mode ?? 'IMPORT_ONLY' } as AccountingConfig)
+        ? ({
+            ...configRows,
+            transfer_mode: (configRows as any).transfer_mode ?? 'IMPORT_ONLY',
+            customer_match_strategy: (configRows as any).customer_match_strategy ?? 'DISPLAY_NAME',
+          } as AccountingConfig)
         : {
             provider: PROVIDER,
             is_enabled: false,
@@ -114,35 +127,51 @@ export function useQuickBooksIntegration() {
           }
     );
     setLoading(false);
-  }, []);
+  }, [tenantId]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
   const saveConfig = useCallback(
-    async (next: AccountingConfig) => {
-      if (!supabase) return;
+    async (next: AccountingConfig): Promise<{ ok: boolean; error?: string }> => {
+      if (!supabase) return { ok: false, error: 'Supabase not configured' };
       setSaving(true);
       setError(null);
+      const { tenant_id: _tenantId, provider: _provider, ...nextWithoutTenantAndProvider } = next as AccountingConfig & {
+        tenant_id?: string;
+      };
       const payload = {
-        ...next,
+        ...nextWithoutTenantAndProvider,
         provider: PROVIDER,
         transfer_mode: next.transfer_mode ?? 'IMPORT_ONLY',
+        customer_match_strategy: next.customer_match_strategy ?? 'DISPLAY_NAME',
       };
-      const { data, error: upsertError } = await supabase
-        .from('accounting_integration_config')
-        .upsert(payload)
-        .select()
-        .maybeSingle();
-      if (upsertError) {
-        setError(upsertError.message);
+      const query = config?.id
+        ? supabase
+            .from('accounting_integration_config')
+            .update(payload)
+            .eq('id', config.id)
+            .select()
+            .maybeSingle()
+        : supabase.from('accounting_integration_config').insert(payload).select().maybeSingle();
+      const { data, error: saveError } = await query;
+      if (saveError) {
+        setError(saveError.message);
+        setSaving(false);
+        return { ok: false, error: saveError.message };
       } else if (data) {
-        setConfig({ ...data, transfer_mode: (data as any).transfer_mode ?? 'IMPORT_ONLY' } as AccountingConfig);
+        setConfig({
+          ...data,
+          transfer_mode: (data as any).transfer_mode ?? 'IMPORT_ONLY',
+          customer_match_strategy: (data as any).customer_match_strategy ?? 'DISPLAY_NAME',
+        } as AccountingConfig);
       }
+      setError(null);
       setSaving(false);
+      return { ok: true };
     },
-    []
+    [config]
   );
 
   const createTestExport = useCallback(
@@ -150,7 +179,7 @@ export function useQuickBooksIntegration() {
       if (!supabase) return { success: false, error: 'Supabase not configured' };
       const payloadString = stableStringify(payload);
       const payloadHash = await hashSha256(payloadString);
-      const { error: insertError } = await supabase.from('accounting_exports').insert({
+      const { data, error } = await supabase.from('accounting_exports').insert({
         provider: PROVIDER,
         export_type: 'INVOICE',
         source_entity_type: payload?.source?.type?.toLowerCase() || 'invoice',
@@ -158,8 +187,10 @@ export function useQuickBooksIntegration() {
         payload_json: payload,
         payload_hash: payloadHash,
       });
-      if (insertError) {
-        return { success: false, error: insertError.message };
+      console.log('QB INSERT RESULT:', { data, error });
+      if (error) {
+        console.error('QB INSERT ERROR:', error);
+        return { success: false, error: error.message };
       }
       return { success: true };
     },
@@ -172,14 +203,19 @@ export function useQuickBooksIntegration() {
       .from('accounting_integration_config')
       .select('*')
       .eq('provider', PROVIDER)
+      .eq('tenant_id', tenantId)
       .maybeSingle();
     if (data) {
-      const hydrated = { ...data, transfer_mode: (data as any).transfer_mode ?? 'IMPORT_ONLY' } as AccountingConfig;
+      const hydrated = {
+        ...data,
+        transfer_mode: (data as any).transfer_mode ?? 'IMPORT_ONLY',
+        customer_match_strategy: (data as any).customer_match_strategy ?? 'DISPLAY_NAME',
+      } as AccountingConfig;
       setConfig(hydrated);
       return hydrated;
     }
     return null;
-  }, [config]);
+  }, [config, tenantId]);
 
   const createInvoiceExport = useCallback(
     async (invoice: any, invoiceLines: any[] = []) => {
@@ -257,13 +293,16 @@ export function useQuickBooksIntegration() {
 
       const payloadHash = await hashSha256(stableStringify(payload));
       const { data, error: rpcError } = await supabase.rpc('queue_accounting_export_v1', {
-        provider: PROVIDER,
-        export_type: 'INVOICE',
-        source_entity_type: 'invoice',
-        source_entity_id: invoice.id,
-        payload_json: payload,
-        payload_hash: payloadHash,
+        p_provider: PROVIDER,
+        p_export_type: 'INVOICE',
+        p_source_entity_type: 'invoice',
+        p_source_entity_id: invoice.id,
+        p_payload_json: payload,
+        p_payload_hash: payloadHash,
       });
+      if (import.meta.env.DEV) {
+        console.log('queue_accounting_export_v1 result:', { data, rpcError });
+      }
       if (rpcError) {
         return { success: false, error: rpcError.message };
       }
@@ -350,23 +389,24 @@ export function useQuickBooksIntegration() {
     if (!supabase) return null;
     const { data } = await supabase
       .from('accounting_exports')
-      .select('payload_json')
+      .select('payload_json,created_at')
       .eq('provider', PROVIDER)
       .eq('id', exportId)
-      .maybeSingle();
-    return data?.payload_json ?? null;
+      .order('created_at', { ascending: false });
+    return data?.[0]?.payload_json ?? null;
   }, []);
 
   const retryExport = useCallback(
     async (exportId: string) => {
       if (!supabase) return { success: false, error: 'Supabase not configured' };
-      const { data: existing, error: fetchError } = await supabase
+      const { data: existingRows, error: fetchError } = await supabase
         .from('accounting_exports')
-        .select('attempt_count')
+        .select('attempt_count,created_at')
         .eq('provider', PROVIDER)
         .eq('id', exportId)
-        .maybeSingle();
+        .order('created_at', { ascending: false });
       if (fetchError) return { success: false, error: fetchError.message };
+      const existing = existingRows?.[0] ?? null;
       const nextAttempt = (existing?.attempt_count ?? 0) + 1;
 
       const { error: updateError } = await supabase

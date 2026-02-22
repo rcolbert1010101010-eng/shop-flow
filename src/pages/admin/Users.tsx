@@ -31,7 +31,7 @@ const createRoleOptions = [
   { value: 'technician', label: 'Technician' },
 ];
 
-const ADMIN_API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL ?? 'http://localhost:4000/api/v1';
+const ADMIN_API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL ?? '/api/v1';
 const ADMIN_API_KEY = import.meta.env.VITE_SHOPFLOW_ADMIN_API_KEY ?? '';
 
 type CreateUserResponse = {

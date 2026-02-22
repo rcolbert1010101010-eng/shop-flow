@@ -67,8 +67,8 @@ export default function PurchaseOrderDetail() {
     getPurchaseOrderLines,
     updatePurchaseOrderLinks,
   } = repos.purchaseOrders;
-  const { vendors } = repos.vendors;
-  const { categories } = repos.categories;
+  const { vendors, addVendor } = repos.vendors;
+  const { categories, addCategory } = repos.categories;
   const { parts, addPart } = repos.parts;
   const { salesOrders } = repos.salesOrders;
   const { workOrders } = repos.workOrders;
@@ -95,6 +95,12 @@ export default function PurchaseOrderDetail() {
     cost: '',
     selling_price: '',
   });
+  const [quickAddVendorOpen, setQuickAddVendorOpen] = useState(false);
+  const [newVendorName, setNewVendorName] = useState('');
+  const [newVendorPhone, setNewVendorPhone] = useState('');
+  const [newVendorEmail, setNewVendorEmail] = useState('');
+  const [quickAddCategoryOpen, setQuickAddCategoryOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
   const [isBrowsePartsOpen, setIsBrowsePartsOpen] = useState(false);
   const [browsePartsInStockOnly, setBrowsePartsInStockOnly] = useState(false);
   const [browsePartsPage, setBrowsePartsPage] = useState(0);
@@ -115,6 +121,7 @@ export default function PurchaseOrderDetail() {
 
   const currentOrder = order || purchaseOrders.find((o) => o.id === id);
   const activeVendors = vendors.filter((v) => v.is_active);
+  const activeCategories = categories.filter((c) => c.is_active);
   const activeParts = parts.filter((p) => p.is_active);
   const isClosed = currentOrder?.status === 'CLOSED';
   const poPartPickerItems = useMemo(
@@ -289,6 +296,76 @@ export default function PurchaseOrderDetail() {
       selling_price: '',
     });
     setSelectedPartId(newPart.id);
+  };
+
+  const resetQuickAddVendorForm = () => {
+    setNewVendorName('');
+    setNewVendorPhone('');
+    setNewVendorEmail('');
+  };
+
+  const handleQuickAddVendor = () => {
+    const vendorName = newVendorName.trim();
+    if (!vendorName) {
+      toast({
+        title: 'Validation Error',
+        description: 'Vendor name is required',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      const vendor = addVendor({
+        vendor_name: vendorName,
+        phone: newVendorPhone.trim() || null,
+        email: newVendorEmail.trim() || null,
+        notes: null,
+      });
+      setNewPartData((prev) => ({ ...prev, vendor_id: vendor.id }));
+      setQuickAddVendorOpen(false);
+      resetQuickAddVendorForm();
+      toast({ title: 'Vendor Added', description: `${vendor.vendor_name} has been created` });
+    } catch (error) {
+      toast({
+        title: 'Unable to add vendor',
+        description: error instanceof Error ? error.message : 'Please try again',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const resetQuickAddCategoryForm = () => {
+    setNewCategoryName('');
+  };
+
+  const handleQuickAddCategory = () => {
+    const categoryName = newCategoryName.trim();
+    if (!categoryName) {
+      toast({
+        title: 'Validation Error',
+        description: 'Category name is required',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      const category = addCategory({
+        category_name: categoryName,
+        description: null,
+      });
+      setNewPartData((prev) => ({ ...prev, category_id: category.id }));
+      setQuickAddCategoryOpen(false);
+      resetQuickAddCategoryForm();
+      toast({ title: 'Category Added', description: `${category.category_name} has been created` });
+    } catch (error) {
+      toast({
+        title: 'Unable to add category',
+        description: error instanceof Error ? error.message : 'Please try again',
+        variant: 'destructive',
+      });
+    }
   };
 
   const lines = useMemo(
@@ -1246,9 +1323,21 @@ export default function PurchaseOrderDetail() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="flex items-center gap-1">
-                Vendor *
-              </Label>
+              <div className="mb-2 flex items-center justify-between">
+                <Label className="flex items-center gap-1">
+                  Vendor *
+                </Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => setQuickAddVendorOpen(true)}
+                  aria-label="Quick add vendor"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </Button>
+              </div>
               <Select
                 value={newPartData.vendor_id}
                 onValueChange={(value) => setNewPartData({ ...newPartData, vendor_id: value })}
@@ -1266,9 +1355,21 @@ export default function PurchaseOrderDetail() {
               </Select>
             </div>
             <div>
-              <Label className="flex items-center gap-1">
-                Category *
-              </Label>
+              <div className="mb-2 flex items-center justify-between">
+                <Label className="flex items-center gap-1">
+                  Category *
+                </Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => setQuickAddCategoryOpen(true)}
+                  aria-label="Quick add category"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </Button>
+              </div>
               <Select
                 value={newPartData.category_id}
                 onValueChange={(value) => setNewPartData({ ...newPartData, category_id: value })}
@@ -1277,13 +1378,11 @@ export default function PurchaseOrderDetail() {
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent>
-                  {categories
-                    .filter((c) => c.is_active)
-                    .map((category) => (
-                      <SelectItem key={category.id} value={category.id}>
-                        {category.category_name}
-                      </SelectItem>
-                    ))}
+                  {activeCategories.map((category) => (
+                    <SelectItem key={category.id} value={category.id}>
+                      {category.category_name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -1314,6 +1413,75 @@ export default function PurchaseOrderDetail() {
               />
             </div>
           </div>
+        </div>
+      </QuickAddDialog>
+
+      <QuickAddDialog
+        open={quickAddVendorOpen}
+        onOpenChange={(open) => {
+          setQuickAddVendorOpen(open);
+          if (!open) resetQuickAddVendorForm();
+        }}
+        title="Quick Add Vendor"
+        onSave={handleQuickAddVendor}
+        onCancel={() => {
+          setQuickAddVendorOpen(false);
+          resetQuickAddVendorForm();
+        }}
+      >
+        <div className="space-y-3">
+          <div>
+            <Label htmlFor="quick_vendor_name">Vendor Name *</Label>
+            <Input
+              id="quick_vendor_name"
+              value={newVendorName}
+              onChange={(e) => setNewVendorName(e.target.value)}
+              placeholder="Enter vendor name"
+            />
+          </div>
+          <div>
+            <Label htmlFor="quick_vendor_phone">Phone</Label>
+            <Input
+              id="quick_vendor_phone"
+              value={newVendorPhone}
+              onChange={(e) => setNewVendorPhone(e.target.value)}
+              placeholder="Optional"
+            />
+          </div>
+          <div>
+            <Label htmlFor="quick_vendor_email">Email</Label>
+            <Input
+              id="quick_vendor_email"
+              type="email"
+              value={newVendorEmail}
+              onChange={(e) => setNewVendorEmail(e.target.value)}
+              placeholder="Optional"
+            />
+          </div>
+        </div>
+      </QuickAddDialog>
+
+      <QuickAddDialog
+        open={quickAddCategoryOpen}
+        onOpenChange={(open) => {
+          setQuickAddCategoryOpen(open);
+          if (!open) resetQuickAddCategoryForm();
+        }}
+        title="Quick Add Category"
+        onSave={handleQuickAddCategory}
+        onCancel={() => {
+          setQuickAddCategoryOpen(false);
+          resetQuickAddCategoryForm();
+        }}
+      >
+        <div>
+          <Label htmlFor="quick_category_name">Category Name *</Label>
+          <Input
+            id="quick_category_name"
+            value={newCategoryName}
+            onChange={(e) => setNewCategoryName(e.target.value)}
+            placeholder="Enter category name"
+          />
         </div>
       </QuickAddDialog>
 

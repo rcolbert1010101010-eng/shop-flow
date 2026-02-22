@@ -61,6 +61,7 @@ import { AddUnitDialog } from '@/components/units/AddUnitDialog';
 import { useRepos } from '@/repos';
 import { summarizeFabJob } from '@/services/fabJobSummary';
 import { usePayments } from '@/hooks/usePayments';
+import { useQuickBooksIntegration } from '@/hooks/useQuickBooksIntegration';
 import { AIAssistPanel } from '@/components/ai/AIAssistPanel';
 import { suggestParts } from '@/services/aiAssist/aiAssistPreview';
 import { AdaptiveDialog } from '@/components/common/AdaptiveDialog';
@@ -72,6 +73,7 @@ import { ModuleHelpButton } from '@/components/help/ModuleHelpButton';
 import { supabase } from '@/integrations/supabase/client';
 import { usePermissions } from '@/security/usePermissions';
 import { ProfitabilityPanel } from '@/components/orders/ProfitabilityPanel';
+import { useWorkOrderLock } from '@/hooks/useWorkOrderLock';
 import type {
   FabJobLine,
   PlasmaJobLine,
@@ -280,11 +282,13 @@ export default function WorkOrderDetail() {
   const { toast } = useToast();
   const { can } = usePermissions();
   const canCreateInvoices = can('invoices.create');
+  const { autoExportOnFinalize } = useQuickBooksIntegration();
   const repos = useRepos();
   const fabricationRepo = repos.fabrication;
   const plasmaRepo = repos.plasma;
   const workOrderRepo = repos.workOrders;
   const schedulingRepo = repos.scheduling;
+  const { addCategory } = repos.categories;
   const formatNumber = (value: number | string | null | undefined, digits = 2) =>
     toNumeric(value).toFixed(digits);
   const formatMoney = (value: number | string | null | undefined) => toNumeric(value).toFixed(2);
@@ -318,6 +322,12 @@ export default function WorkOrderDetail() {
     cost: '',
     selling_price: '',
   });
+  const [quickAddVendorOpen, setQuickAddVendorOpen] = useState(false);
+  const [newVendorName, setNewVendorName] = useState('');
+  const [newVendorPhone, setNewVendorPhone] = useState('');
+  const [newVendorEmail, setNewVendorEmail] = useState('');
+  const [quickAddCategoryOpen, setQuickAddCategoryOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
   const [editingPriceLineId, setEditingPriceLineId] = useState<string | null>(null);
   const [priceDraft, setPriceDraft] = useState<string>('');
   const [printMode, setPrintMode] = useState<'invoice' | 'picklist'>('invoice');
@@ -382,6 +392,12 @@ export default function WorkOrderDetail() {
   const currentOrderId = currentOrder?.id ?? null;
   const currentOrderUpdatedAt =
     (currentOrder as any)?.updated_at ?? (currentOrder as any)?.updatedAt ?? null;
+  const {
+    isLocked: isInvoiced,
+    lockMessage: workOrderLockMessage,
+    notifyLocked: notifyWorkOrderLocked,
+    guardLockedAction,
+  } = useWorkOrderLock(currentOrder);
 
   useEffect(() => {
     const prev = lastTenantSettingsIdRef.current;
@@ -416,11 +432,11 @@ export default function WorkOrderDetail() {
     navigate(`/scheduling?focusScheduleItemId=${res.item.id}&open=1`);
   };
   useEffect(() => {
-    if (currentOrder) {
+    if (currentOrder && !isInvoiced) {
       plasmaRepo.createForWorkOrder(currentOrder.id);
       fabricationRepo.createForWorkOrder(currentOrder.id);
     }
-  }, [currentOrder, fabricationRepo, plasmaRepo]);
+  }, [currentOrder, fabricationRepo, isInvoiced, plasmaRepo]);
   useEffect(() => {
     setBrowsePartsPage(0);
   }, [browsePartsInStockOnly]);
@@ -561,7 +577,7 @@ export default function WorkOrderDetail() {
     jobLines.length === 1 ? jobLines[0] : jobLines.find((job) => job.title === 'General') ?? null;
   const isFirstJobBlocking =
     firstJobToSave && jobLines.length === 1 && (jobEditingMode[firstJobToSave.id] ?? false);
-  const addJobDisabled = !currentOrder || Boolean(isFirstJobBlocking);
+  const addJobDisabled = isInvoiced || !currentOrder || Boolean(isFirstJobBlocking);
 
   const fetchJobCCC = useCallback(
     async (jobId: string) => {
@@ -757,6 +773,10 @@ export default function WorkOrderDetail() {
   };
 
   const handleSaveJob = async (jobId: string) => {
+    if (isInvoiced) {
+      notifyWorkOrderLocked();
+      return;
+    }
     const job = jobLines.find((j) => j.id === jobId);
     const workOrderId = job?.work_order_id ?? currentOrder?.id ?? order?.id;
     const fallbackDraft: JobDraft = {
@@ -781,9 +801,21 @@ export default function WorkOrderDetail() {
       });
       return;
     }
+    const selectedTechnicianId = jobTechnicianSelection[jobId] || '';
+    const hasValidTechnician = Boolean(
+      selectedTechnicianId && technicians.some((technician) => technician.id === selectedTechnicianId)
+    );
+    const title = effectiveDraft.title.trim();
+    if (!title || !hasValidTechnician) {
+      toast({
+        title: 'Missing required fields',
+        description: 'Select a technician and enter a job title before saving.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setJobSaving((prev) => ({ ...prev, [jobId]: true }));
     const cccDraft = jobCccDrafts[jobId] ?? { complaint: '', cause: '', correction: '' };
-    const title = effectiveDraft.title.trim() || job?.title || 'Job';
     const status = effectiveDraft.status;
     try {
       const cccSaved = await upsertJobCCC(jobId, workOrderId, cccDraft, title, status);
@@ -923,29 +955,31 @@ export default function WorkOrderDetail() {
 
   const handleAddJob = () => {
     if (!currentOrder || !newJobTitle.trim()) return;
-    const job = woCreateJobLine(currentOrder.id, newJobTitle.trim());
-    setNewJobTitle('');
-    setJobDrafts((prev) => ({
-      ...prev,
-      [job.id]: {
-        title: job.title,
-        status: job.status,
-      },
-    }));
-    const blankCcc = { complaint: '', cause: '', correction: '' };
-    setJobCccDrafts((prev) => ({
-      ...prev,
-      [job.id]: blankCcc,
-    }));
-    setJobCccPersisted((prev) => ({
-      ...prev,
-      [job.id]: blankCcc,
-    }));
-    setJobCccFetched((prev) => ({ ...prev, [job.id]: true }));
-    // New jobs start in editing mode
-    setJobEditingMode((prev) => ({ ...prev, [job.id]: true }));
-    setActiveTab('jobs');
-    setSelectedJobId(job.id);
+    guardLockedAction(() => {
+      const job = woCreateJobLine(currentOrder.id, newJobTitle.trim());
+      setNewJobTitle('');
+      setJobDrafts((prev) => ({
+        ...prev,
+        [job.id]: {
+          title: job.title,
+          status: job.status,
+        },
+      }));
+      const blankCcc = { complaint: '', cause: '', correction: '' };
+      setJobCccDrafts((prev) => ({
+        ...prev,
+        [job.id]: blankCcc,
+      }));
+      setJobCccPersisted((prev) => ({
+        ...prev,
+        [job.id]: blankCcc,
+      }));
+      setJobCccFetched((prev) => ({ ...prev, [job.id]: true }));
+      // New jobs start in editing mode
+      setJobEditingMode((prev) => ({ ...prev, [job.id]: true }));
+      setActiveTab('jobs');
+      setSelectedJobId(job.id);
+    });
   };
   const handleJobClockIn = (jobId: string) => {
     if (!currentOrder) return;
@@ -1117,7 +1151,6 @@ export default function WorkOrderDetail() {
   const activeVendors = vendors.filter((v) => v.is_active);
   const activeCategories = categories.filter((c) => c.is_active);
 
-  const isInvoiced = currentOrder?.status === 'INVOICED';
   const isEstimate = currentOrder?.status === 'ESTIMATE';
   const showMobileActionBar = isMobile && !!currentOrder && !isInvoiced;
   const workOrderClaims = useMemo(
@@ -1454,6 +1487,76 @@ export default function WorkOrderDetail() {
     setSelectedPartId(newPart.id);
   };
 
+  const resetQuickAddVendorForm = () => {
+    setNewVendorName('');
+    setNewVendorPhone('');
+    setNewVendorEmail('');
+  };
+
+  const handleQuickAddVendor = () => {
+    const vendorName = newVendorName.trim();
+    if (!vendorName) {
+      toast({
+        title: 'Validation Error',
+        description: 'Vendor name is required',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      const newVendor = repos.vendors.addVendor({
+        vendor_name: vendorName,
+        phone: newVendorPhone.trim() || null,
+        email: newVendorEmail.trim() || null,
+        notes: null,
+      });
+      setNewPartData((prev) => ({ ...prev, vendor_id: newVendor.id }));
+      setQuickAddVendorOpen(false);
+      resetQuickAddVendorForm();
+      toast({ title: 'Vendor Added', description: `${newVendor.vendor_name} has been created` });
+    } catch (error) {
+      toast({
+        title: 'Unable to add vendor',
+        description: error instanceof Error ? error.message : 'Please try again',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const resetQuickAddCategoryForm = () => {
+    setNewCategoryName('');
+  };
+
+  const handleQuickAddCategory = () => {
+    const categoryName = newCategoryName.trim();
+    if (!categoryName) {
+      toast({
+        title: 'Validation Error',
+        description: 'Category name is required',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      const category = addCategory({
+        category_name: categoryName,
+        description: null,
+      });
+      setNewPartData((prev) => ({ ...prev, category_id: category.id }));
+      setQuickAddCategoryOpen(false);
+      resetQuickAddCategoryForm();
+      toast({ title: 'Category Added', description: `${category.category_name} has been created` });
+    } catch (error) {
+      toast({
+        title: 'Unable to add category',
+        description: error instanceof Error ? error.message : 'Please try again',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const handleUpdateQty = (lineId: string, newQty: number | string) => {
     const line = partLines.find((l) => l.id === lineId);
     if (!line) return;
@@ -1482,6 +1585,17 @@ export default function WorkOrderDetail() {
 
   const handleAddLabor = () => {
     if (!laborDescription.trim() || !currentOrder) return;
+    const hasValidTechnician = Boolean(
+      laborTechnicianId && technicians.some((technician) => technician.id === laborTechnicianId)
+    );
+    if (!hasValidTechnician) {
+      toast({
+        title: 'Validation Error',
+        description: 'Select a valid technician before adding labor.',
+        variant: 'destructive',
+      });
+      return;
+    }
     const hours = parseFloat(laborHours) || 1;
     const result = woAddLaborLine(
       currentOrder.id,
@@ -1571,13 +1685,42 @@ export default function WorkOrderDetail() {
     try {
       const { invoiceId } = await repos.invoices.createFromWorkOrder({ workOrderId: currentOrder.id });
 
-      const result = woInvoice(currentOrder.id);
-      if (result.success) {
+      const invoiceResult = woInvoice(currentOrder.id);
+      if (invoiceResult.success) {
+        try {
+          const invoiceForExport = await repos.invoices.getById({ invoiceId });
+          const invoiceLinesForExport = await repos.invoices.listLines({ invoiceId });
+          const exportResult = await autoExportOnFinalize(invoiceForExport, invoiceLinesForExport);
+          if (exportResult.status === 'queued') {
+            toast({ title: 'Export queued', description: 'Invoice export saved to accounting_exports.' });
+          } else if (exportResult.status === 'duplicate') {
+            toast({ title: 'Export already generated', description: 'Duplicate invoice export detected.' });
+          } else if (exportResult.status === 'skipped') {
+            toast({
+              title: 'Export skipped',
+              description: exportResult.reason ?? 'QuickBooks export trigger/config skipped this invoice.',
+              variant: 'destructive',
+            });
+          } else if (exportResult.status === 'failed') {
+            toast({
+              title: 'Export failed',
+              description: exportResult.error ?? 'Unable to queue QuickBooks export.',
+              variant: 'destructive',
+            });
+          }
+        } catch (exportErr: any) {
+          toast({
+            title: 'Export failed',
+            description: exportErr?.message ?? 'Unable to queue QuickBooks export.',
+            variant: 'destructive',
+          });
+        }
+
         toast({ title: 'Order Invoiced', description: 'Work order has been invoiced and locked' });
         setShowInvoiceDialog(false);
         navigate(`/invoices/${invoiceId}`);
       } else {
-        toast({ title: 'Error', description: result.error, variant: 'destructive' });
+        toast({ title: 'Error', description: invoiceResult.error, variant: 'destructive' });
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -1720,10 +1863,43 @@ export default function WorkOrderDetail() {
     setCoreReturnLineId(null);
   };
 
+  const handleOpenFabricationTab = () => {
+    guardLockedAction(() => {
+      setActiveTab('fabrication');
+    });
+  };
+
+  const handleOpenPlasmaTab = () => {
+    guardLockedAction(() => {
+      setActiveTab('plasma');
+    });
+  };
+
+  const handleAddOverviewFabricationLine = () => {
+    guardLockedAction(() => {
+      if (currentOrder && !fabJob) {
+        fabricationRepo.createForWorkOrder(currentOrder.id);
+      }
+      setActiveTab('fabrication');
+    });
+  };
+
+  const handleAddOverviewPlasmaLine = () => {
+    guardLockedAction(() => {
+      if (currentOrder && !plasmaJob) {
+        plasmaRepo.createForWorkOrder(currentOrder.id);
+      }
+      setActiveTab('plasma');
+    });
+  };
+
   const handleAddFabLine = () => {
-    if (!currentOrder || fabLocked) return;
-    const job = fabricationRepo.createForWorkOrder(currentOrder.id);
-    fabricationRepo.upsertLine(job.id, { operation_type: 'PRESS_BRAKE', qty: 1 });
+    if (!currentOrder) return;
+    guardLockedAction(() => {
+      if (fabLocked) return;
+      const job = fabricationRepo.createForWorkOrder(currentOrder.id);
+      fabricationRepo.upsertLine(job.id, { operation_type: 'PRESS_BRAKE', qty: 1 });
+    });
   };
 
   const handleFabNumberChange = (
@@ -1815,7 +1991,12 @@ export default function WorkOrderDetail() {
   };
 
   const handleAddPlasmaLine = () => {
-    if (!plasmaJob || plasmaLocked) return;
+    if (!plasmaJob) return;
+    if (isInvoiced) {
+      notifyWorkOrderLocked();
+      return;
+    }
+    if (plasmaLocked) return;
     plasmaRepo.upsertLine(plasmaJob.id, {
       qty: 1,
       material_type: '',
@@ -1898,6 +2079,28 @@ export default function WorkOrderDetail() {
 
   const handleAttachmentNoteChange = (attachmentId: string, notes: string) => {
     plasmaRepo.attachments.update(attachmentId, { notes });
+  };
+
+  const handleCreateClaimOpenChange = (open: boolean) => {
+    if (open && isInvoiced) {
+      notifyWorkOrderLocked();
+      return;
+    }
+    setCreateClaimOpen(open);
+  };
+
+  const handleCreateWarrantyClaim = () => {
+    if (!currentOrder) return;
+    guardLockedAction(() => {
+      const vendorId = selectedClaimVendor || vendors[0]?.id;
+      if (!vendorId) return;
+      const claim = createWarrantyClaim({ vendor_id: vendorId, work_order_id: currentOrder.id });
+      if (claim) {
+        setCreateClaimOpen(false);
+        setSelectedClaimVendor('');
+        navigate(`/warranty/${claim.id}`);
+      }
+    });
   };
 
   const customer = customers.find((c) => c.id === (currentOrder?.customer_id || selectedCustomerId));
@@ -2328,18 +2531,30 @@ export default function WorkOrderDetail() {
               <div className="pt-2 border-t border-border space-y-2">
                 <p className="text-sm font-medium">Fabrication</p>
                 <p className="text-xs text-muted-foreground">No fabrication lines yet. Add a line to start pricing fabrication.</p>
-                <Button size="sm" variant="outline" onClick={() => setActiveTab('fabrication')}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleOpenFabricationTab}
+                  disabled={isInvoiced || fabLocked}
+                >
                   Add Fabrication Line
                 </Button>
+                {isInvoiced && <p className="text-xs text-muted-foreground">{workOrderLockMessage}</p>}
               </div>
             )}
             {plasmaJob && plasmaLines.length === 0 && (
               <div className="pt-2 border-t border-border space-y-2">
                 <p className="text-sm font-medium">Plasma</p>
                 <p className="text-xs text-muted-foreground">No plasma lines yet. Add a line to start pricing plasma.</p>
-                <Button size="sm" variant="outline" onClick={() => setActiveTab('plasma')}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleOpenPlasmaTab}
+                  disabled={isInvoiced || plasmaLocked}
+                >
                   Add Plasma Line
                 </Button>
+                {isInvoiced && <p className="text-xs text-muted-foreground">{workOrderLockMessage}</p>}
               </div>
             )}
             <div className="pt-2 border-t border-border space-y-2">
@@ -2678,16 +2893,12 @@ export default function WorkOrderDetail() {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  onClick={() => {
-                                    if (currentOrder && !fabJob) {
-                                      const newJob = fabricationRepo.createForWorkOrder(currentOrder.id);
-                                      // newJob is captured for future starter-line insertion if needed
-                                    }
-                                    setActiveTab('fabrication');
-                                  }}
+                                  onClick={handleAddOverviewFabricationLine}
+                                  disabled={isInvoiced || fabLocked}
                                 >
                                   Add Fabrication Line
                                 </Button>
+                                {isInvoiced && <div className="text-xs text-muted-foreground">{workOrderLockMessage}</div>}
                               </div>
                             </TableCell>
                           </TableRow>
@@ -2732,15 +2943,12 @@ export default function WorkOrderDetail() {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  onClick={() => {
-                                    if (currentOrder && !plasmaJob) {
-                                      plasmaRepo.createForWorkOrder(currentOrder.id);
-                                    }
-                                    setActiveTab('plasma');
-                                  }}
+                                  onClick={handleAddOverviewPlasmaLine}
+                                  disabled={isInvoiced || plasmaLocked}
                                 >
                                   Add Plasma Line
                                 </Button>
+                                {isInvoiced && <div className="text-xs text-muted-foreground">{workOrderLockMessage}</div>}
                               </div>
                             </TableCell>
                           </TableRow>
@@ -2811,6 +3019,7 @@ export default function WorkOrderDetail() {
                     Add Job
                   </Button>
                 </div>
+                {isInvoiced && <p className="text-xs text-muted-foreground">{workOrderLockMessage}</p>}
                 {jobLines.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No jobs created yet.</p>
                 ) : (
@@ -2846,6 +3055,12 @@ export default function WorkOrderDetail() {
                       const activeTimer = activeJobTimers.find((entry) => entry.job_line_id === job.id);
                       // Tech dropdown: empty by default, only show selection if explicitly chosen
                       const selectedTechnicianId = jobTechnicianSelection[job.id] || '';
+                      const hasValidSaveTechnician = Boolean(
+                        selectedTechnicianId &&
+                        technicians.some((technician) => technician.id === selectedTechnicianId)
+                      );
+                      const hasSaveTitle = Boolean((draft?.title ?? job.title ?? '').trim());
+                      const saveJobDisabled = isInvoiced || isSaving || !hasSaveTitle || !hasValidSaveTechnician;
                       // Clock In gating: disabled if no tech selected
                       const clockInDisabled = !selectedTechnicianId || activeTechnicians.length === 0;
                       const clockInHelperText = !selectedTechnicianId 
@@ -2867,12 +3082,14 @@ export default function WorkOrderDetail() {
                                     onChange={(event) => handleJobDraftChange(job.id, 'title', event.target.value)}
                                     placeholder="Job Title"
                                     className="flex-1 min-w-[180px] h-10"
+                                    disabled={isInvoiced || isSaving}
                                   />
                                   <Select
                                     value={(draft?.status ?? job.status) as WorkOrderJobStatus}
                                     onValueChange={(value) =>
                                       handleJobDraftChange(job.id, 'status', value as WorkOrderJobStatus)
                                     }
+                                    disabled={isInvoiced || isSaving}
                                   >
                                     <SelectTrigger className="h-10 w-40">
                                       <SelectValue />
@@ -2893,7 +3110,7 @@ export default function WorkOrderDetail() {
                                       event.stopPropagation();
                                       handleSaveJob(job.id);
                                     }}
-                                    disabled={isSaving}
+                                    disabled={saveJobDisabled}
                                   >
                                     <Save className="w-4 h-4 mr-1" />
                                     Save
@@ -2954,14 +3171,14 @@ export default function WorkOrderDetail() {
                                 }
                                 placeholder="Complaint"
                                 className="h-24"
-                                disabled={!isEditing}
+                                disabled={isInvoiced || !isEditing}
                               />
                               <Textarea
                                 value={ccc.cause}
                                 onChange={(event) => handleJobCccChange(job.id, 'cause', event.target.value)}
                                 placeholder="Cause"
                                 className="h-24"
-                                disabled={!isEditing}
+                                disabled={isInvoiced || !isEditing}
                               />
                               <Textarea
                                 value={ccc.correction}
@@ -2970,7 +3187,7 @@ export default function WorkOrderDetail() {
                                 }
                                 placeholder="Correction"
                                 className="h-24"
-                                disabled={!isEditing}
+                                disabled={isInvoiced || !isEditing}
                               />
                             </div>
                             {!isEditing && (
@@ -2996,6 +3213,7 @@ export default function WorkOrderDetail() {
                                   onValueChange={(value) =>
                                     setJobTechnicianSelection((prev) => ({ ...prev, [job.id]: value }))
                                   }
+                                  disabled={isInvoiced}
                                 >
                                   <SelectTrigger className="h-9 min-w-[170px]">
                                     <SelectValue placeholder="Select tech…" />
@@ -4016,12 +4234,13 @@ export default function WorkOrderDetail() {
                 )}
               </div>
               <div className="mt-3 flex items-center justify-between">
-                {!fabLocked && (
-                  <Button variant="outline" size="sm" onClick={handleAddFabLine}>
+                <div className="space-y-1">
+                  <Button variant="outline" size="sm" onClick={handleAddFabLine} disabled={isInvoiced || fabLocked}>
                     <Plus className="w-4 h-4 mr-2" />
                     Add Line
                   </Button>
-                )}
+                  {isInvoiced && <p className="text-xs text-muted-foreground">{workOrderLockMessage}</p>}
+                </div>
                 <div className="text-sm text-right space-y-1">
                   <div className="font-medium">Fabrication Total: ${formatNumber(fabTotal)}</div>
                   <div className="text-xs text-muted-foreground">
@@ -4325,12 +4544,16 @@ export default function WorkOrderDetail() {
                           className="text-center py-8"
                         >
                           <div className="text-muted-foreground mb-3">No plasma lines yet</div>
-                          {!plasmaLocked && (
-                            <Button variant="default" size="sm" onClick={handleAddPlasmaLine}>
-                              <Plus className="w-4 h-4 mr-2" />
-                              Add First Line
-                            </Button>
-                          )}
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={handleAddPlasmaLine}
+                            disabled={isInvoiced || plasmaLocked}
+                          >
+                            <Plus className="w-4 h-4 mr-2" />
+                            Add First Line
+                          </Button>
+                          {isInvoiced && <p className="mt-2 text-xs text-muted-foreground">{workOrderLockMessage}</p>}
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -4457,11 +4680,14 @@ export default function WorkOrderDetail() {
                 </Table>
               </div>
               <div className="mt-3 flex items-center justify-between">
-                {!plasmaLocked && plasmaLines.length > 0 && (
-                  <Button variant="outline" size="sm" onClick={handleAddPlasmaLine}>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Line
-                  </Button>
+                {plasmaLines.length > 0 && (
+                  <div className="space-y-1">
+                    <Button variant="outline" size="sm" onClick={handleAddPlasmaLine} disabled={isInvoiced || plasmaLocked}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Line
+                    </Button>
+                    {isInvoiced && <p className="text-xs text-muted-foreground">{workOrderLockMessage}</p>}
+                  </div>
                 )}
                   <div className="text-sm text-right space-y-1">
                     <div className="font-medium flex items-center justify-end gap-1">
@@ -4756,9 +4982,9 @@ export default function WorkOrderDetail() {
         <div className="form-section mt-6">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-lg font-semibold">Warranty Claims</h2>
-            <Dialog open={createClaimOpen} onOpenChange={setCreateClaimOpen}>
+            <Dialog open={createClaimOpen} onOpenChange={handleCreateClaimOpenChange}>
               <DialogTrigger asChild>
-                <Button size="sm">
+                <Button size="sm" disabled={isInvoiced}>
                   <Plus className="w-4 h-4 mr-2" />
                   Create Warranty Claim
                 </Button>
@@ -4785,17 +5011,8 @@ export default function WorkOrderDetail() {
                     Cancel
                   </Button>
                   <Button
-                    onClick={() => {
-                      const vendorId = selectedClaimVendor || vendors[0]?.id;
-                      if (!vendorId) return;
-                      const claim = createWarrantyClaim({ vendor_id: vendorId, work_order_id: currentOrder.id });
-                      if (claim) {
-                        setCreateClaimOpen(false);
-                        setSelectedClaimVendor('');
-                        navigate(`/warranty/${claim.id}`);
-                      }
-                    }}
-                    disabled={!selectedClaimVendor && vendors.length === 0}
+                    onClick={handleCreateWarrantyClaim}
+                    disabled={isInvoiced || (!selectedClaimVendor && vendors.length === 0)}
                   >
                     Create
                   </Button>
@@ -4803,6 +5020,7 @@ export default function WorkOrderDetail() {
               </DialogContent>
             </Dialog>
           </div>
+          {isInvoiced && <p className="mb-2 text-xs text-muted-foreground">{workOrderLockMessage}</p>}
           {workOrderClaims.length === 0 ? (
             <p className="text-sm text-muted-foreground">No warranty claims linked to this work order.</p>
           ) : (
@@ -5260,7 +5478,19 @@ export default function WorkOrderDetail() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label>Vendor *</Label>
+              <div className="mb-2 flex items-center justify-between">
+                <Label>Vendor *</Label>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="outline"
+                  className="h-7 w-7"
+                  onClick={() => setQuickAddVendorOpen(true)}
+                  aria-label="Quick add vendor"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </Button>
+              </div>
               <Select
                 value={newPartData.vendor_id}
                 onValueChange={(value) => setNewPartData({ ...newPartData, vendor_id: value })}
@@ -5278,7 +5508,19 @@ export default function WorkOrderDetail() {
               </Select>
             </div>
             <div>
-              <Label>Category *</Label>
+              <div className="mb-2 flex items-center justify-between">
+                <Label>Category *</Label>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="outline"
+                  className="h-7 w-7"
+                  onClick={() => setQuickAddCategoryOpen(true)}
+                  aria-label="Quick add category"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </Button>
+              </div>
               <Select
                 value={newPartData.category_id}
                 onValueChange={(value) => setNewPartData({ ...newPartData, category_id: value })}
@@ -5319,6 +5561,75 @@ export default function WorkOrderDetail() {
         </div>
       </QuickAddDialog>
 
+      <QuickAddDialog
+        open={quickAddVendorOpen}
+        onOpenChange={(open) => {
+          setQuickAddVendorOpen(open);
+          if (!open) resetQuickAddVendorForm();
+        }}
+        title="Quick Add Vendor"
+        onSave={handleQuickAddVendor}
+        onCancel={() => {
+          setQuickAddVendorOpen(false);
+          resetQuickAddVendorForm();
+        }}
+      >
+        <div className="space-y-3">
+          <div>
+            <Label htmlFor="quick_add_vendor_name">Vendor Name *</Label>
+            <Input
+              id="quick_add_vendor_name"
+              value={newVendorName}
+              onChange={(e) => setNewVendorName(e.target.value)}
+              placeholder="Enter vendor name"
+            />
+          </div>
+          <div>
+            <Label htmlFor="quick_add_vendor_phone">Phone</Label>
+            <Input
+              id="quick_add_vendor_phone"
+              value={newVendorPhone}
+              onChange={(e) => setNewVendorPhone(e.target.value)}
+              placeholder="Optional"
+            />
+          </div>
+          <div>
+            <Label htmlFor="quick_add_vendor_email">Email</Label>
+            <Input
+              id="quick_add_vendor_email"
+              type="email"
+              value={newVendorEmail}
+              onChange={(e) => setNewVendorEmail(e.target.value)}
+              placeholder="Optional"
+            />
+          </div>
+        </div>
+      </QuickAddDialog>
+
+      <QuickAddDialog
+        open={quickAddCategoryOpen}
+        onOpenChange={(open) => {
+          setQuickAddCategoryOpen(open);
+          if (!open) resetQuickAddCategoryForm();
+        }}
+        title="Quick Add Category"
+        onSave={handleQuickAddCategory}
+        onCancel={() => {
+          setQuickAddCategoryOpen(false);
+          resetQuickAddCategoryForm();
+        }}
+      >
+        <div>
+          <Label htmlFor="quick_add_category_name">Category Name *</Label>
+          <Input
+            id="quick_add_category_name"
+            value={newCategoryName}
+            onChange={(e) => setNewCategoryName(e.target.value)}
+            placeholder="Enter category name"
+          />
+        </div>
+      </QuickAddDialog>
+
       {/* Add Labor Dialog */}
       <AdaptiveDialog
         open={addLaborDialogOpen}
@@ -5329,7 +5640,12 @@ export default function WorkOrderDetail() {
             <Button variant="outline" onClick={() => handleLaborDialogOpenChange(false)}>
               Cancel
             </Button>
-            <Button onClick={handleAddLabor}>Save</Button>
+            <Button
+              onClick={handleAddLabor}
+              disabled={!laborTechnicianId || !technicians.some((technician) => technician.id === laborTechnicianId)}
+            >
+              Save
+            </Button>
           </div>
         }
       >
@@ -5340,7 +5656,7 @@ export default function WorkOrderDetail() {
           </div>
           <div>
             <Label className="flex items-center gap-1">
-              Work Type
+              Technician
             </Label>
             <Select value={laborTechnicianId} onValueChange={setLaborTechnicianId}>
               <SelectTrigger><SelectValue placeholder="Select technician (optional)" /></SelectTrigger>
