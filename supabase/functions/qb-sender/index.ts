@@ -199,8 +199,12 @@ const buildInvoiceBody = (payload: any, cfg: IntegrationConfig) => {
       throw new Error(`Unsupported invoice line kind: ${line?.kind ?? 'UNKNOWN'}`);
     });
   if (qbLines.length === 0) throw new Error('No billable lines (all amounts <= 0)');
+  const rawDocNumber = payload.source?.number || payload.source?.id;
+  const docNumber = (!rawDocNumber || rawDocNumber === 'TEST-001' || String(rawDocNumber).startsWith('TEST'))
+    ? undefined
+    : rawDocNumber;
   return {
-    DocNumber: payload.source?.number || payload.source?.id,
+    ...(docNumber !== undefined ? { DocNumber: docNumber } : {}),
     TxnDate: payload.source?.date || new Date().toISOString().slice(0, 10),
     CustomerRef: { value: cfg.qb_customer_ref },
     Line: qbLines,
@@ -328,6 +332,24 @@ const processRow = async (row: ExportRow) => {
     // ignore
   }
   const remoteId = respJson?.Invoice?.Id || null;
+
+  // Persist QB remote mapping before marking SENT
+  if (remoteId && row.tenant_id && row.source_entity_type && row.source_entity_id) {
+    const { error: upsertErr } = await supabase
+      .from('external_references')
+      .upsert({
+        tenant_id: row.tenant_id,
+        provider: 'quickbooks',
+        entity_type: row.source_entity_type,
+        entity_id: row.source_entity_id,
+        remote_id: remoteId,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'provider,entity_type,entity_id' });
+    if (upsertErr) {
+      await markFailure(row, 'PENDING', `external_references upsert failed: ${upsertErr.message}`);
+      return { retried: true };
+    }
+  }
 
   await markSuccess(row, remoteId, respJson);
   return { sent: true };
