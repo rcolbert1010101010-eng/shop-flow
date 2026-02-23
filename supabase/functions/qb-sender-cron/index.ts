@@ -3,7 +3,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const cronSecret = Deno.env.get('SHOPFLOW_CRON_SECRET')!;
-const serviceKey = Deno.env.get('SHOPFLOW_SERVICE_KEY')!;
+const serviceKey = Deno.env.get('SHOPFLOW_SERVICE_KEY')!
+const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
 const corsHeaders = {
   'access-control-allow-origin': '*',
   'access-control-allow-headers': 'authorization, x-client-info, apikey, content-type, x-shopflow-cron-secret',
@@ -19,6 +20,7 @@ Deno.serve(async (req) => {
     const resp = await fetch(senderUrl, {
       method: 'POST',
       headers: {
+        'apikey': anonKey,
         'x-shopflow-service-key': serviceKey,
         Accept: 'application/json',
         'Content-Type': 'application/json',
